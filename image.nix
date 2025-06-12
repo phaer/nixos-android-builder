@@ -56,8 +56,8 @@
       enable = true;
       # TODO we need better way to find the right disk, which might e.g. be /dev/sdb, sdc or nvme0n1p0.
       # maybe a custom udev rule?
-      device = "/dev/vdb";
-      empty = "require";
+      device = lib.mkDefault "/dev/vdb";
+      empty = lib.mkDefault "require";
     };
     systemd.repart.partitions."var" = {
       Type = "var";
