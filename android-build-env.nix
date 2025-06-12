@@ -19,7 +19,7 @@ let
   buildAndroid = pkgs.writeShellScriptBin "build-android" ''
     set -e
     cd $SOURCE_DIR
-    source build/envsetup.sh
+    source build/envsetup.sh || true
     lunch aosp_cf_x86_64_only_phone-aosp_current-userdebug
     m
   '';
