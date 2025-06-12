@@ -1,4 +1,4 @@
-{lib, config, modulesPath, ...}: {
+{lib, pkgs, config, modulesPath, ...}: {
   imports = [
     "${modulesPath}/image/repart.nix"
     "${modulesPath}/profiles/minimal.nix"
@@ -12,6 +12,11 @@
         device = "none";
         fsType = "tmpfs";
         options = [ "size=20%" "mode=0755" ];
+      };
+      "/var/lib" = {
+        device = "/dev/disk/by-partlabel/${config.systemd.repart.partitions."var".Label}";
+        fsType = config.systemd.repart.partitions."var".Format;
+        neededForBoot = true;
       };
       "/boot" = {
         device = "/dev/disk/by-partlabel/${parts."esp".repartConfig.Label}";
@@ -45,6 +50,22 @@
 
     # Updating the random seed on /boot can not work with a read-only /boot.
     systemd.services.systemd-boot-random-seed.enable = lib.mkForce false;
+
+    boot.initrd.systemd.extraBin."mkfs.ext4" = lib.getExe' pkgs.e2fsprogs "mkfs.ext4";
+    boot.initrd.systemd.repart = {
+      enable = true;
+      # TODO we need better way to find the right disk, which might e.g. be /dev/sdb, sdc or nvme0n1p0.
+      # maybe a custom udev rule?
+      device = "/dev/vdb";
+      empty = "require";
+    };
+    systemd.repart.partitions."var" = {
+      Type = "var";
+      UUID = "4d21b016-b534-45c2-a9fb-5c16e091fd2d"; # Well known
+      Format = "ext4";
+      Label = "var";
+      Minimize = "off";
+    };
 
     image = {
       repart = {
@@ -85,7 +106,6 @@
               Type = "linux-generic";
               Label = "store";
               Format = "erofs";
-              ReadOnly = "yes";
               Minimize = "best";
             };
           };

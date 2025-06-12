@@ -20,6 +20,8 @@
         isNormalUser = true;
         group = "user";
         extraGroups = [ "kvm" "wheel"];
+        home = "/var/lib/build";
+        createHome = true;
       };
       groups.user = {};
     };
