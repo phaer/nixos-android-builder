@@ -3,6 +3,8 @@
   imports = [ "${modulesPath}/virtualisation/qemu-vm.nix" ];
   config = {
     virtualisation = {
+      memorySize = 64 * 1024;
+
       # Don't use direct boot for the VM to verify that the bootloader is working.
       directBoot.enable = false;
       installBootLoader = false;
@@ -47,10 +49,6 @@
 
       # Start a headless VM with serial console.
       graphics = false;
-      #sharedDirectories.androidSource = {
-      #  source = "$PRJ_ROOT/android/source";
-      #  target = "/mnt/source";
-      #};
     };
   };
 }
