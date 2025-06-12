@@ -13,6 +13,11 @@
         fsType = "tmpfs";
         options = [ "size=20%" "mode=0755" ];
       };
+      "/boot" = {
+        device = "/dev/disk/by-partlabel/${parts."esp".repartConfig.Label}";
+        fsType = parts."esp".repartConfig.Format;
+        options = [ "ro" ];
+      };
       "/nix/store" = {
         overlay = {
           lowerdir = [ "/nix/.ro-store" ];
@@ -24,6 +29,7 @@
         device = "/dev/disk/by-partlabel/${parts."store".repartConfig.Label}";
         fsType = parts."store".repartConfig.Format;
         options = [ "ro" ];
+        neededForBoot = true;
       };
       "/nix/.rw-store" = {
         device = "none";
@@ -32,15 +38,13 @@
       };
     };
 
-    # By not providing an entry in fileSystems for the ESP, systemd will
-    # automount it to `/efi`.
-    boot.loader.efi.efiSysMountPoint = "/efi";
-
     system.image = {
       id = config.system.name;
       version = config.system.nixos.version;
     };
 
+    # Updating the random seed on /boot can not work with a read-only /boot.
+    systemd.services.systemd-boot-random-seed.enable = lib.mkForce false;
 
     image = {
       repart = {
@@ -68,6 +72,7 @@
                 };
             repartConfig = {
               Type = "esp";
+              Label = "boot";
               UUID = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"; # Well known
               Format = "vfat";
               SizeMinBytes = if config.nixpkgs.hostPlatform.isx86_64 then "64M" else "96M";
