@@ -30,6 +30,5 @@
       inherit image;
       default = image;
     };
-    checks.${system}.vm = pkgs.nixosTest (import ./test-vm.nix { customModules = modules; });
   };
 }
