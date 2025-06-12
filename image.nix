@@ -1,40 +1,21 @@
-{lib, config, pkgs, modulesPath, ...}: {
+{lib, config, modulesPath, ...}: {
   imports = [
     "${modulesPath}/image/repart.nix"
     "${modulesPath}/profiles/minimal.nix"
   ];
 
-  config = let
-    closureInfo = pkgs.closureInfo {
-      rootPaths = [ config.system.build.toplevel ];
-    };
-
-    # Build the nix state at /nix/var/nix for the image
-    #
-    # This does two things:
-    # (1) Setup the initial profile
-    # (2) Create an initial Nix DB so that the nix tools work
-    nixState = pkgs.runCommand "nix-state" { nativeBuildInputs = [ pkgs.buildPackages.nix ]; } ''
-      mkdir -p $out/profiles
-    ln -s ${config.system.build.toplevel} $out/profiles/system-1-link
-    ln -s /nix/var/nix/profiles/system-1-link $out/profiles/system
-
-    export NIX_STATE_DIR=$out
-    nix-store --load-db < ${closureInfo}/registration
-    '';
-
-  in {
-    #fileSystems = {
-    #  "/" = lib.mkForce {
-    #    device = "none";
-    #    fsType = "tmpfs";
-    #    options = [ "defaults" "size=2G" "mode=755" ];
-    #  };
-    #};
-    fileSystems = {
+  config = {
+    fileSystems = let
+      parts = config.image.repart.partitions;
+    in {
       "/" = {
-        device = "/dev/disk/by-partlabel/nixos";
-        fsType = "ext4";
+        device = "none";
+        fsType = "tmpfs";
+        options = [ "defaults" "size=2G" "mode=755" ];
+      };
+      "/nix/store" = {
+        device = "/dev/disk/by-partlabel/${parts."store".repartConfig.Label}";
+        fsType = parts."store".repartConfig.Format;
       };
     };
 
@@ -74,20 +55,20 @@
                 };
             repartConfig = {
               Type = "esp";
+              UUID = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"; # Well known
               Format = "vfat";
               SizeMinBytes = if config.nixpkgs.hostPlatform.isx86_64 then "64M" else "96M";
             };
           };
-          "root" = {
+          "store" = {
             storePaths = [ config.system.build.toplevel ];
-            contents = {
-              "/nix/var/nix".source = nixState;
-            };
+            stripNixStorePrefix = true;
             repartConfig = {
-              Type = "root";
-              Format = config.fileSystems."/".fsType;
-              Label = "nixos";
-              Minimize = "guess";
+              Type = "linux-generic";
+              Label = "store";
+              Format = "erofs";
+              ReadOnly = "yes";
+              Minimize = "best";
             };
           };
         };
