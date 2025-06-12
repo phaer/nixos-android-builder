@@ -21,12 +21,14 @@
     vm = pkgs.nixos { imports = modules; };
 
     run-vm = vm.config.system.build.vm;
+    image = vm.config.system.build.image;
   in {
     inherit nixosModules;
     nixosConfigurations = { inherit vm; };
     packages.${system} = {
       inherit run-vm;
-      default = run-vm;
+      inherit image;
+      default = image;
     };
     checks.${system}.vm = pkgs.nixosTest (import ./test-vm.nix { customModules = modules; });
   };

@@ -6,6 +6,8 @@
     nixpkgs.hostPlatform = { system = "x86_64-linux"; };
     system.stateVersion = "25.05";
 
+    system.name = "android-builder";
+
     environment.systemPackages = with pkgs; [
       vim htop tmux gitMinimal
 
