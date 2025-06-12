@@ -11,11 +11,24 @@
       "/" = {
         device = "none";
         fsType = "tmpfs";
-        options = [ "defaults" "size=2G" "mode=755" ];
+        options = [ "size=20%" "mode=0755" ];
       };
       "/nix/store" = {
+        overlay = {
+          lowerdir = [ "/nix/.ro-store" ];
+          upperdir = "/nix/.rw-store/upper";
+          workdir = "/nix/.rw-store/work";
+        };
+      };
+      "/nix/.ro-store" = {
         device = "/dev/disk/by-partlabel/${parts."store".repartConfig.Label}";
         fsType = parts."store".repartConfig.Format;
+        options = [ "ro" ];
+      };
+      "/nix/.rw-store" = {
+        device = "none";
+        fsType = "tmpfs";
+        options = [ "size=20%" "mode=0755" ];
       };
     };
 
