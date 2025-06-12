@@ -6,7 +6,11 @@
     nixpkgs.hostPlatform = { system = "x86_64-linux"; };
     system.stateVersion = "25.05";
 
-    environment.systemPackages = with pkgs; [ vim htop tmux gitMinimal ];
+    environment.systemPackages = with pkgs; [
+      vim htop tmux gitMinimal
+
+      (import ./android-build-env.nix { inherit pkgs; })
+    ];
 
     users = {
       users."user" = {
