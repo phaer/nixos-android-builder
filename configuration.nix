@@ -38,6 +38,11 @@
     ++ (lib.optional (
       pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64
     ) "console=ttyAMA0,115200");
+
+    # TODO: This might be good to upstream. systemd-oomd starts too early,
+    # so fails twice and spams log before succeeding.
+    systemd.services."systemd-oomd".unitConfig.After = "systemd-sysusers.service";
+
   };
 }
 
