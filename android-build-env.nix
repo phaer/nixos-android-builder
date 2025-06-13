@@ -43,6 +43,7 @@ in
       gnumake
       python3
       git-repo
+      rsync
     ];
   }
 
