@@ -8,7 +8,10 @@
 
     system.name = "android-builder";
 
-    boot.initrd.systemd.repart.device = "/dev/nvme0n1";
+    boot.initrd.systemd.repart = {
+      device = "/dev/nvme0n1";
+      empty = "force";
+    };
 
     environment.systemPackages = with pkgs; [
       vim htop tmux gitMinimal
