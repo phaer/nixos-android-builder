@@ -11,6 +11,7 @@
     boot.initrd.systemd.repart = {
       device = "/dev/nvme0n1";
       empty = "force";
+      discard = false;
     };
 
     environment.systemPackages = with pkgs; [
