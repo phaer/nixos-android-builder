@@ -13,6 +13,7 @@
       empty = "force";
       discard = false;
     };
+    boot.initrd.systemd.repart.device = "/dev/nvme0n1";
 
     environment.systemPackages = with pkgs; [
       vim htop tmux gitMinimal
