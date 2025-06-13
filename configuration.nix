@@ -16,7 +16,7 @@
 
     users = {
       users."user" = {
-        initialPassword = "demo";
+        initialHashedPassword = "";
         isNormalUser = true;
         group = "user";
         extraGroups = [ "kvm" "wheel"];
@@ -26,7 +26,13 @@
       groups.user = {};
     };
 
+    # Allow root to login without password
+    users.users.root.initialHashedPassword = "";
+
+    # Allow password-less sudo for wheel users
     security.sudo.wheelNeedsPassword = false;
+
+    # Auto-login user
     services.getty.autologinUser = "user";
 
     nix = {
@@ -40,9 +46,24 @@
     services.userborn.enable = true;
     networking.useNetworkd = true;
 
+    # Add available, freely licensed firmware.
+    hardware.enableRedistributableFirmware = true;
+
+    # Enable unauthenticated shell if early boot fails
+    boot.initrd.systemd.emergencyAccess = true;
+
 
     boot.kernelParams =
-      [ "console=tty0"  "console=ttyS0,115200" ]
+      [
+        # Add verbose log output, to aid debugging boot issues. log_level=debug is available as well.
+        "systemd.show_status=true"
+        "systemd.log_level=info"
+        "systemd.log_target=console"
+        "systemd.journald.forward_to_console=1"
+
+        # Console on tty0 and serial output.
+        "console=tty0"  "console=ttyS0,115200"
+      ]
     ++ (lib.optional (
       pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64
     ) "console=ttyAMA0,115200");
