@@ -22,12 +22,14 @@
 
     run-vm = vm.config.system.build.vm;
     image = vm.config.system.build.image;
+    android-build-env = import ./android-build-env.nix { inherit pkgs; };
   in {
     inherit nixosModules;
     nixosConfigurations = { inherit vm; };
     packages.${system} = {
       inherit run-vm;
       inherit image;
+      inherit android-build-env;
       default = image;
     };
   };
