@@ -51,7 +51,7 @@
     # Updating the random seed on /boot can not work with a read-only /boot.
     systemd.services.systemd-boot-random-seed.enable = lib.mkForce false;
 
-    boot.initrd.systemd.extraBin."mkfs.ext4" = lib.getExe' pkgs.e2fsprogs "mkfs.ext4";
+    boot.initrd.systemd.initrdBin = [ pkgs.e2fsprogs ];
     boot.initrd.systemd.repart = {
       enable = true;
       # TODO we need better way to find the right disk, which might e.g. be /dev/sdb, sdc or nvme0n1p0.
