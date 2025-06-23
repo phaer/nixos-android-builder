@@ -1,8 +1,6 @@
 # NixOS Android Builder
 
-This repository contains a Proof-of-Concept Nix flake setup to build NixOS images that boot from a read-only
-disk - such as an USB stick - into memory while formatting a physical disk to persist
-build artifacts and other data in `/var/lib` as they might be bigger than available memory.
+This repository contains a Proof-of-Concept Nix flake setup to build NixOS images that boot into memory while keeping state in a persitent `/var/` partition, which is expanded on first boot..
 
 It's not hardnened by default. To the contrary: It includes a single account `users` that is automatically logged in on `tty1` and `ttyS0` and has password-less sudo permission and a persistent home in `/var/lib/build`.
 
@@ -23,9 +21,10 @@ build has finished.
 
 # Usage in a Virtual Machine
 
-It is possible to test the whole setup in a [qemu](http://qemu.org/) virtual machine using Nix (currently only tested from `x86_64-linux`):
+It is possible to test the whole setup in a [qemu](http://qemu.org/) virtual machine using Nix (currently only tested from `x86_64-linux`), after preparing a writable disk image, `android-builder.qcow2` in the current working directory.
 
 ```bash
+nix run .#create-vm-disk
 nix run .#run-vm
 ```
 
@@ -44,6 +43,6 @@ android-builder_25.11pre-git.raw
 
 This image can then be copied to a USB stick or hard-drive with `dd` or other utils and booted on EFI-enabled x86_64 machines. It will format an empty disk on first boot.
 
-That disk is `/dev/vdb` by default, and needs to be adapted for bare metal deployments by setting `boot.initrd.systemd.repart.device` to the device path of your target disk.
+That disk is `/dev/vda` by default, and needs to be adapted for bare metal deployments by setting `boot.initrd.systemd.repart.device` to the device path of your target disk.
 
 You may also set `boot.initrd.systemd.repart.empty = "force"` to always ERASE all contents of the disk on each boot to effectively opt out of persistence.
