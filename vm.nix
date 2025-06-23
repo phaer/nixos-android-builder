@@ -5,6 +5,7 @@
     virtualisation = {
       diskSize = 251 * 1024;
       memorySize = 64 * 1024;
+      cores = 32;
 
       # Don't use direct boot for the VM to verify that the bootloader is working.
       directBoot.enable = false;
