@@ -31,6 +31,8 @@ in
     profile = ''
       export ANDROID_JAVA_HOME=${pkgs.jdk.home}
       export SOURCE_DIR=$HOME/source
+      # We don't seem to have /lib in the linker cache by default here.
+      export LD_LIBRARY_PATH=/lib
     '';
     targetPkgs = pkgs: with pkgs; [
       fetchAndroid
