@@ -33,6 +33,8 @@ in
       export SOURCE_DIR=$HOME/source
       # We don't seem to have /lib in the linker cache by default here.
       export LD_LIBRARY_PATH=/lib
+      # Set a custom prompt to more easily see in which shell we are.
+      export PROMPT_COMMAND='PS1="\e[0;32mandroid-build-env\$ \e[0m"'
     '';
     targetPkgs = pkgs: with pkgs; [
       fetchAndroid
