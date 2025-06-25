@@ -14,8 +14,8 @@
         options = [ "size=20%" "mode=0755" ];
       };
       "/var/lib" = {
-        device = "/dev/disk/by-partlabel/${parts."var".repartConfig.Label}";
-        fsType = parts."var".repartConfig.Format;
+        device = "/dev/disk/by-partlabel/${parts."var-lib".repartConfig.Label}";
+        fsType = parts."var-lib".repartConfig.Format;
         neededForBoot = true;
       };
       "/boot" = {
@@ -93,11 +93,11 @@
               Minimize = "best";
             };
           };
-          "var".repartConfig = {
+          "var-lib".repartConfig = {
             Type = "var";
             UUID = "4d21b016-b534-45c2-a9fb-5c16e091fd2d"; # Well known
             Format = "ext4";
-            Label = "var";
+            Label = "var-lib";
             SizeMinBytes = "250G";
             };
         };
