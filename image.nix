@@ -14,8 +14,8 @@
         options = [ "size=20%" "mode=0755" ];
       };
       "/var/lib" = {
-        device = "/dev/disk/by-partlabel/${config.systemd.repart.partitions."var".Label}";
-        fsType = config.systemd.repart.partitions."var".Format;
+        device = "/dev/disk/by-partlabel/${parts."var".repartConfig.Label}";
+        fsType = parts."var".repartConfig.Format;
         neededForBoot = true;
       };
       "/boot" = {
@@ -50,20 +50,6 @@
 
     # Updating the random seed on /boot can not work with a read-only /boot.
     systemd.services.systemd-boot-random-seed.enable = lib.mkForce false;
-
-    boot.initrd.systemd.initrdBin = [ pkgs.e2fsprogs ];
-    boot.initrd.systemd.repart = {
-      enable = true;
-    };
-    systemd.repart.partitions."var" = {
-      Type = "var";
-      UUID = "4d21b016-b534-45c2-a9fb-5c16e091fd2d"; # Well known
-      Format = "ext4";
-      Label = "var";
-      SizeMinBytes = "250G";
-      # FIXME: hack to avoid formatting for too long on large disks.
-      SizeMaxBytes = "300G";
-    };
 
     image = {
       repart = {

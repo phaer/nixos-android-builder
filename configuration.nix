@@ -8,9 +8,6 @@
 
     system.name = "android-builder";
 
-    boot.initrd.systemd.repart = {
-      device = "/dev/vda";
-    };
 
     environment.systemPackages = with pkgs; [
       vim htop tmux gitMinimal
