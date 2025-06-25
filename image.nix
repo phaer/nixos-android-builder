@@ -60,7 +60,7 @@
       UUID = "4d21b016-b534-45c2-a9fb-5c16e091fd2d"; # Well known
       Format = "ext4";
       Label = "var";
-      SizeMinBytes = "200G";
+      SizeMinBytes = "250G";
       # FIXME: hack to avoid formatting for too long on large disks.
       SizeMaxBytes = "300G";
     };
@@ -112,7 +112,7 @@
             UUID = "4d21b016-b534-45c2-a9fb-5c16e091fd2d"; # Well known
             Format = "ext4";
             Label = "var";
-            SizeMinBytes = "200G";
+            SizeMinBytes = "250G";
             };
         };
       };
