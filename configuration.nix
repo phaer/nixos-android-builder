@@ -69,6 +69,17 @@
       pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64
     ) "console=ttyAMA0,115200");
 
+  boot.initrd.availableKernelModules = [
+    "xhci_pci"
+    "ehci_pci"
+    "ohci_pci"
+    "usb_storage"
+    "sd_mod"
+    "vfat"
+    "ext4"
+    "erofs"
+  ];
+
     # TODO: This might be good to upstream. systemd-oomd starts too early,
     # so fails twice and spams log before succeeding.
     systemd.services."systemd-oomd".unitConfig.After = "systemd-sysusers.service";
