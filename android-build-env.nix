@@ -15,6 +15,8 @@ let
 
     repo sync -c -j4 || true
     repo sync -c -j4
+
+    patch -p1 < ${./fix_nsjail.patch}
   '';
   buildAndroid = pkgs.writeShellScriptBin "build-android" ''
     set -e
