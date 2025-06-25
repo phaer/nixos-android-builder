@@ -3,7 +3,7 @@
   imports = [ "${modulesPath}/virtualisation/qemu-vm.nix" ];
   config = {
     virtualisation = {
-      diskSize = 251 * 1024;
+      diskSize = 256 * 1024;
       memorySize = 64 * 1024;
       cores = 32;
 
