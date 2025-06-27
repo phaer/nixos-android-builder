@@ -64,7 +64,14 @@
           "esp" = {
             # Populate the ESP statically so that we can boot this image.
             contents =
+              let
+                efiArch = config.nixpkgs.hostPlatform.efiArch;
+              in
                 {
+                  "/EFI/BOOT/BOOT${lib.toUpper efiArch}.EFI".source =
+                    "${config.systemd.package}/lib/systemd/boot/efi/systemd-boot${efiArch}.efi";
+                  "/EFI/systemd/systemd-boot${efiArch}.efi".source =
+                    "${config.systemd.package}/lib/systemd/boot/efi/systemd-boot${efiArch}.efi";
                   "/EFI/Linux/${config.system.boot.loader.ukiFile}".source =
                     "${config.system.build.uki}/${config.system.boot.loader.ukiFile}";
                 };
