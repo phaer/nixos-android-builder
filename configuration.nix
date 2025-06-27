@@ -49,6 +49,7 @@
 
     # Add available, freely licensed firmware.
     hardware.enableRedistributableFirmware = true;
+    hardware.enableAllHardware = true;
 
     # Enable unauthenticated shell if early boot fails
     boot.initrd.systemd.emergencyAccess = true;
