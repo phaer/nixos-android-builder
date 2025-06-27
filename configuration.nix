@@ -3,7 +3,10 @@
 }: {
 
   config = {
+    # Name our system. Image file names and metadata is derived from this
+    system.name = "android-builder";
 
+    # Target architecture of this NixOS instance
     nixpkgs.hostPlatform = { system = "x86_64-linux"; };
 
     ## Set the following to the device path of your boot disk in your target system
@@ -11,18 +14,16 @@
     ## Leave it unset (or set to null) to build a large image with a static /var/lib partition.
     boot.initrd.systemd.repart.device = "/dev/vda";
 
-    system.stateVersion = "25.05";
-    system.name = "android-builder";
-
+    # Add extra software from nixpkgs, as well as a custom shell to build Android
     environment.systemPackages = with pkgs; [
       vim htop tmux gitMinimal
 
       (import ./android-build-env.nix { inherit pkgs; })
     ];
 
+    # Configure a build user
     users = {
       users."user" = {
-        initialHashedPassword = "";
         isNormalUser = true;
         group = "user";
         extraGroups = [ "kvm" "wheel"];
@@ -32,43 +33,26 @@
       groups.user = {};
     };
 
-    # Allow root to login without password
-    users.users.root.initialHashedPassword = "";
-
-    # Allow password-less sudo for wheel users
-    security.sudo.wheelNeedsPassword = false;
-
-    # Auto-login user
-    services.getty.autologinUser = "user";
-
+    # Configure nix with flake support, but no channels.
     nix = {
       enable = true;
       channel.enable = false;
       settings.experimental-features = ["nix-command" "flakes"];
     };
 
+    # Opt-in into systemd-based initrd, declarative user management and networking.
     boot.loader.systemd-boot.enable = true;
     boot.initrd.systemd.enable = true;
     services.userborn.enable = true;
     networking.useNetworkd = true;
 
-    # Add available, freely licensed firmware.
+    # Add all available firmware.
     hardware.enableRedistributableFirmware = true;
     hardware.enableAllHardware = true;
 
-    # Enable unauthenticated shell if early boot fails
-    boot.initrd.systemd.emergencyAccess = true;
-
-
+    # Console on tty0 for bare-metal and serial output for VMS.
     boot.kernelParams =
       [
-        # Add verbose log output, to aid debugging boot issues. log_level=debug is available as well.
-        "systemd.show_status=true"
-        "systemd.log_level=info"
-        "systemd.log_target=console"
-        "systemd.journald.forward_to_console=1"
-
-        # Console on tty0 and serial output.
         "console=tty0"  "console=ttyS0,115200"
       ]
     ++ (lib.optional (
@@ -79,6 +63,8 @@
     # so fails twice and spams log before succeeding.
     systemd.services."systemd-oomd".unitConfig.After = "systemd-sysusers.service";
 
+    # Define a stateVersion to supress eval warnings. As we don't keep state, it's irrelevant
+    system.stateVersion = "25.05";
   };
 }
 
