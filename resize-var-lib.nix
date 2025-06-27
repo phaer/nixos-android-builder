@@ -14,8 +14,9 @@
       SizeMaxBytes = "300G";
     };
 
-    # Avoid fsck failures by correctly waiting until systemd-repart is done
-    boot.initrd.systemd.services."systemd-repart.service".before = ["systemd-fsck@.service"];
+    # systemd-fsck fails, probably due to timing issues, with our repart setup. As we are re-creating
+    # the only writable file system on each boot, we don't really need it anyway.
+    boot.initrd.systemd.suppressedUnits = [ "systemd-fsck@.service" ];
   };
 }
 
