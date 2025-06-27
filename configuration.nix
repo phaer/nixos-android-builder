@@ -41,7 +41,6 @@
     };
 
     # Opt-in into systemd-based initrd, declarative user management and networking.
-    boot.loader.systemd-boot.enable = true;
     boot.initrd.systemd.enable = true;
     services.userborn.enable = true;
     networking.useNetworkd = true;

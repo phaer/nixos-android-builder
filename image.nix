@@ -69,9 +69,7 @@
               in
                 {
                   "/EFI/BOOT/BOOT${lib.toUpper efiArch}.EFI".source =
-                    "${config.systemd.package}/lib/systemd/boot/efi/systemd-boot${efiArch}.efi";
-                  "/EFI/systemd/systemd-boot${efiArch}.efi".source =
-                    "${config.systemd.package}/lib/systemd/boot/efi/systemd-boot${efiArch}.efi";
+                    "${config.system.build.uki}/${config.system.boot.loader.ukiFile}";
                   "/EFI/Linux/${config.system.boot.loader.ukiFile}".source =
                     "${config.system.build.uki}/${config.system.boot.loader.ukiFile}";
                 };
@@ -80,7 +78,7 @@
               Label = "boot";
               UUID = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"; # Well known
               Format = "vfat";
-              SizeMinBytes = if config.nixpkgs.hostPlatform.isx86_64 then "64M" else "96M";
+              SizeMinBytes = "128M";
             };
           };
           "store" = {
