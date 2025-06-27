@@ -15,6 +15,7 @@
       vm = ./vm.nix;
       epehmeral = ./ephemeral.nix;
       image = ./image.nix;
+      resize-var-lib = ./resize-var-lib.nix;
     };
     modules = lib.attrValues nixosModules;
 

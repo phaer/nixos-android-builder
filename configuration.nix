@@ -3,11 +3,16 @@
 }: {
 
   config = {
+
     nixpkgs.hostPlatform = { system = "x86_64-linux"; };
+
+    ## Set the following to the device path of your boot disk in your target system
+    ## to generate a smaller image and resize /var/lib on first boot.
+    ## Leave it unset (or set to null) to build a large image with a static /var/lib partition.
+    boot.initrd.systemd.repart.device = "/dev/vda";
+
     system.stateVersion = "25.05";
-
     system.name = "android-builder";
-
 
     environment.systemPackages = with pkgs; [
       vim htop tmux gitMinimal
