@@ -51,6 +51,18 @@
     # Updating the random seed on /boot can not work with a read-only /boot.
     systemd.services.systemd-boot-random-seed.enable = lib.mkForce false;
 
+    # Link /var/run to /run to appease systemd
+    boot.initrd.systemd.tmpfiles.settings = {
+      "1-var-run" = {
+        "/var/run" = {
+          L = {
+            argument = "/run";
+          };
+        };
+      };
+    };
+
+
     image = {
       repart = {
         # OVMF does not work with the default repart sector size of 4096
@@ -96,8 +108,7 @@
             UUID = "4d21b016-b534-45c2-a9fb-5c16e091fd2d"; # Well known
             Format = "ext4";
             Label = "var-lib";
-            SizeMinBytes = "250G";
-            };
+          };
         };
       };
     };
