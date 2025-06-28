@@ -13,10 +13,6 @@
       # FIXME: hack to avoid formatting for too long on large disks.
       SizeMaxBytes = "300G";
     };
-
-    # systemd-fsck fails, probably due to timing issues, with our repart setup. As we are re-creating
-    # the only writable file system on each boot, we don't really need it anyway.
-    boot.initrd.systemd.suppressedUnits = [ "systemd-fsck@.service" ];
   };
 }
 
