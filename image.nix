@@ -52,7 +52,7 @@ in {
       "/nix/.ro-store" = {
         device = "/dev/disk/by-partlabel/${parts."store".repartConfig.Label}";
         fsType = parts."store".repartConfig.Format;
-        options = [ "ro" ];
+        options = [ "ro" "x-systemd.after=systemd-repart.service" ];
         neededForBoot = true;
       };
       "/nix/.rw-store" = {
