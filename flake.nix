@@ -16,6 +16,7 @@
       epehmeral = ./ephemeral.nix;
       image = ./image.nix;
       resize-var-lib = ./resize-var-lib.nix;
+      encrypt-var-lib = ./encrypt-var-lib.nix;
       debug = ./debug.nix;
     };
     modules = lib.attrValues nixosModules;

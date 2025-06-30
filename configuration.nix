@@ -14,6 +14,13 @@
     ## Leave it unset (or set to null) to build a large image with a static /var/lib partition.
     boot.initrd.systemd.repart.device = "/dev/vda";
 
+    #
+    boot.initrd.systemd.repart.keyFile = "/etc/disk.key";
+
+    # --factory-reset instructs systemd-repart to reset all partitions marked with FactoryReset=true,
+    # only /var/lib in our case. The read-only partitions stay in place.
+    boot.initrd.systemd.repart.factoryReset = true;
+
     # Add extra software from nixpkgs, as well as a custom shell to build Android
     environment.systemPackages = with pkgs; [
       vim htop tmux gitMinimal
