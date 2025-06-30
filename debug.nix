@@ -1,4 +1,4 @@
-{
+{ pkgs, ...}: {
   # Set an empty password for "user"
   users.users."user" = {
     initialHashedPassword = "";
@@ -24,4 +24,7 @@
     "systemd.journald.forward_to_console=1"
   ];
 
+  # Add grep to the initrd. Feel free to remove, this just makes
+  # inspection and debugging in an emergency shell much more convinient.
+  boot.initrd.systemd.initrdBin = [ pkgs.gnugrep ];
 }
