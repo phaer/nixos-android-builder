@@ -25,14 +25,15 @@ in {
       requiredBy = [
         "cryptsetup-pre.target"
         "systemd-cryptsetup@var\\x2dlib\\x2dcrypt.service"
+        "initrd-fs.target"
       ];
+      serviceConfig.ExecStartPost = "/bin/udevadm settle -t 5";
     };
 
 
     boot.initrd.systemd.contents = {
       "/etc/systemd/system.control/sysroot-nix-.ro\\x2dstore.mount.d/overrides.conf".text = ''[Unit]
 After=systemd-repart.service
-Requires=systemd-repart.service
       '';
       "/etc/systemd/system.control/systemd-cryptsetup@var\\x2dlib\\x2dcrypt.service.d/overrides.conf".text = ''[Unit]
 After=systemd-repart.service
