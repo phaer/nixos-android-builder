@@ -1,6 +1,7 @@
 # NixOS Android Builder
 
-This repository contains a Proof-of-Concept Nix flake setup to build NixOS images that boot into memory while keeping state in a persitent `/var/` partition, which is expanded on first boot..
+This repository contains a Proof-of-Concept Nix flake setup to build NixOS images that boot into memory while keeping state in a persistent `/var/lib` partition. That partition will be expanded and (re-)encrypted with
+a ephemeral key on each boot. No state is persisted between boots by default.
 
 It's not hardnened by default. To the contrary: It includes a single account `users` that is automatically logged in on `tty1` and `ttyS0` and has password-less sudo permission and a persistent home in `/var/lib/build`.
 
@@ -18,12 +19,13 @@ build has finished.
 * [Nix](https://nixos.org) with flakes support
 * At least 64G of memory to build Android.
 * An empty disk with at least 250G for bare metal deployments, or space for an image of the same size for the VM.
+* EFI Boot
 
 # Usage in a Virtual Machine
 
 It is possible to test the whole setup in a [qemu](http://qemu.org/) virtual machine using Nix (currently only tested from `x86_64-linux`), after preparing a writable disk image, `android-builder.qcow2` in the current working directory.
 
-```bash
+```shell-session
 nix run .#create-vm-disk
 nix run .#run-vm
 ```
@@ -34,15 +36,20 @@ The command above will create a `qcow2` disk image for the persistent storage in
 
 # Usage on Bare Metal
 
-To deploy the builder to physical hardware, we can build a disk image with:
+To deploy the builder to physical hardware, you currently need to set `boot.initrd.systemd.repart.device` to the device path of your boot disk in `configuration.nix`:
 
-```bash
-ls $(nix build .#image -L --print-out-paths)
-android-builder_25.11pre-git.raw
+``` nix
+    boot.initrd.systemd.repart.device = "/dev/vda";
 ```
 
-This image can then be copied to a USB stick or hard-drive with `dd` or other utils and booted on EFI-enabled x86_64 machines. It will format an empty disk on first boot.
+replace `/dev/vda`, the default for virtual machines, which `/dev/sdb`, `/dev/nvme0n1` or the `/dev/disk/by-id/` path of your physicial device.
 
-That disk is `/dev/vda` by default, and needs to be adapted for bare metal deployments by setting `boot.initrd.systemd.repart.device` to the device path of your target disk.
+Once that's done, we can build a disk image:
 
-You may also set `boot.initrd.systemd.repart.empty = "force"` to always ERASE all contents of the disk on each boot to effectively opt out of persistence.
+```shell-session
+$ realpath -e result/android-builder_*.raw
+/nix/store/1rr1x8q3ak1r34w8jlgmp25kzr45ny6s-android-builder-25.11pre-git/android-builder_25.11pre-git.raw
+```
+(the hash in your store path will likely be different)
+
+This image can then be copied to a USB stick or hard-drive with e.g. `sudo dd if="$(realpath -e result/android-builder_*.raw)" bs=1M status=progress of=/dev/your-device` or other utils and booted on EFI-enabled x86_64 machines.
