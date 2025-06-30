@@ -9,12 +9,8 @@
     # Target architecture of this NixOS instance
     nixpkgs.hostPlatform = { system = "x86_64-linux"; };
 
-    ## Set the following to the device path of your boot disk in your target system
-    ## to generate a smaller image and resize /var/lib on first boot.
-    ## Leave it unset (or set to null) to build a large image with a static /var/lib partition.
-    boot.initrd.systemd.repart.device = "/dev/vda";
-
-    #
+    # Location of the random key to encrypt the persistent volume with,
+    # should never touch the disk, /etc is on tmpfs
     boot.initrd.systemd.repart.keyFile = "/etc/disk.key";
 
     # --factory-reset instructs systemd-repart to reset all partitions marked with FactoryReset=true,

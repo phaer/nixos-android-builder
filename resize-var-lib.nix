@@ -1,6 +1,6 @@
 { lib, pkgs, config, ...}:
 {
-  config = lib.mkIf (config.boot.initrd.systemd.repart.device != null) {
+  config = {
     boot.initrd.systemd = {
       # Run systemd-repart in initrd at boot
       repart.enable = true;

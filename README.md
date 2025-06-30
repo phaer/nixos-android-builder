@@ -36,15 +36,7 @@ The command above will create a `qcow2` disk image for the persistent storage in
 
 # Usage on Bare Metal
 
-To deploy the builder to physical hardware, you currently need to set `boot.initrd.systemd.repart.device` to the device path of your boot disk in `configuration.nix`:
-
-``` nix
-    boot.initrd.systemd.repart.device = "/dev/vda";
-```
-
-replace `/dev/vda`, the default for virtual machines, which `/dev/sdb`, `/dev/nvme0n1` or the `/dev/disk/by-id/` path of your physicial device.
-
-Once that's done, we can build a disk image:
+To deploy the builder to physical hardware, we can build a disk image:
 
 ```shell-session
 $ realpath -e result/android-builder_*.raw
@@ -52,4 +44,4 @@ $ realpath -e result/android-builder_*.raw
 ```
 (the hash in your store path will likely be different)
 
-This image can then be copied to a USB stick or hard-drive with e.g. `sudo dd if="$(realpath -e result/android-builder_*.raw)" bs=1M status=progress of=/dev/your-device` or other utils and booted on EFI-enabled x86_64 machines.
+That image can then be copied to a USB stick or hard-drive with e.g. `sudo dd if="$(realpath -e result/android-builder_*.raw)" bs=1M status=progress of=/dev/your-device` or other utils and booted on EFI-enabled x86_64 machines.
