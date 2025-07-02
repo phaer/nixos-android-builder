@@ -1,4 +1,9 @@
-{ lib, pkgs, config, ...}:
+{
+  lib,
+  pkgs,
+  config,
+  ...
+}:
 {
   config = {
     boot.initrd.systemd = {
@@ -21,8 +26,7 @@
       # if run with --factory-reset, which we do by default.
       FactoryReset = true;
       # FIXME: hack to avoid formatting for too long on large disks.
-      SizeMaxBytes = "300G";
+      SizeMaxBytes = "500G";
     };
   };
 }
-
