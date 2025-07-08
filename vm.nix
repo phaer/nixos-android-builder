@@ -1,5 +1,11 @@
 # Settings which should only be applied if run as a VM, not on bare metal.
-{ lib, config, modulesPath, ...}: {
+{
+  lib,
+  config,
+  modulesPath,
+  ...
+}:
+{
   imports = [ "${modulesPath}/virtualisation/qemu-vm.nix" ];
   config = {
     virtualisation = {

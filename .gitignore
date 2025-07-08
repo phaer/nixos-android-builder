@@ -1,4 +1,5 @@
 android-builder.qcow2
 android-builder-efi-vars.fd
+*.raw
 .direnv/
 result

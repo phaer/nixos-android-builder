@@ -1,6 +1,14 @@
-{lib, pkgs, config, modulesPath, ...}: let
+{
+  lib,
+  pkgs,
+  config,
+  modulesPath,
+  ...
+}:
+let
   initrdCfg = config.boot.initrd.systemd.repart;
-in {
+in
+{
   imports = [
     "${modulesPath}/image/repart.nix"
     "${modulesPath}/profiles/minimal.nix"
@@ -21,46 +29,55 @@ in {
     };
   };
 
-
-
   config = {
-    fileSystems = let
-      parts = config.image.repart.partitions;
-    in {
-      "/" = {
-        device = "none";
-        fsType = "tmpfs";
-        options = [ "size=20%" "mode=0755" ];
-      };
-      "/var/lib" = {
-        device = "/dev/disk/by-partlabel/${parts."var-lib".repartConfig.Label}";
-        fsType = parts."var-lib".repartConfig.Format;
-        neededForBoot = true;
-      };
-      "/boot" = {
-        device = "/dev/disk/by-partlabel/${parts."esp".repartConfig.Label}";
-        fsType = parts."esp".repartConfig.Format;
-        options = [ "ro" ];
-      };
-      "/nix/store" = {
-        overlay = {
-          lowerdir = [ "/nix/.ro-store" ];
-          upperdir = "/nix/.rw-store/upper";
-          workdir = "/nix/.rw-store/work";
+    fileSystems =
+      let
+        parts = config.image.repart.partitions;
+      in
+      {
+        "/" = {
+          device = "none";
+          fsType = "tmpfs";
+          options = [
+            "size=20%"
+            "mode=0755"
+          ];
+        };
+        "/var/lib" = {
+          device = "/dev/disk/by-partlabel/${parts."var-lib".repartConfig.Label}";
+          fsType = parts."var-lib".repartConfig.Format;
+          neededForBoot = true;
+        };
+        "/boot" = {
+          device = "/dev/disk/by-partlabel/${parts."esp".repartConfig.Label}";
+          fsType = parts."esp".repartConfig.Format;
+          options = [ "ro" ];
+        };
+        "/nix/store" = {
+          overlay = {
+            lowerdir = [ "/nix/.ro-store" ];
+            upperdir = "/nix/.rw-store/upper";
+            workdir = "/nix/.rw-store/work";
+          };
+        };
+        "/nix/.ro-store" = {
+          device = "/dev/disk/by-partlabel/${parts."store".repartConfig.Label}";
+          fsType = parts."store".repartConfig.Format;
+          options = [
+            "ro"
+            "x-systemd.after=systemd-repart.service"
+          ];
+          neededForBoot = true;
+        };
+        "/nix/.rw-store" = {
+          device = "none";
+          fsType = "tmpfs";
+          options = [
+            "size=20%"
+            "mode=0755"
+          ];
         };
       };
-      "/nix/.ro-store" = {
-        device = "/dev/disk/by-partlabel/${parts."store".repartConfig.Label}";
-        fsType = parts."store".repartConfig.Format;
-        options = [ "ro" "x-systemd.after=systemd-repart.service" ];
-        neededForBoot = true;
-      };
-      "/nix/.rw-store" = {
-        device = "none";
-        fsType = "tmpfs";
-        options = [ "size=20%" "mode=0755" ];
-      };
-    };
 
     system.image = {
       id = config.system.name;
@@ -81,7 +98,6 @@ in {
       };
     };
 
-
     image = {
       repart = {
         # OVMF does not work with the default repart sector size of 4096
@@ -98,12 +114,12 @@ in {
               let
                 efiArch = config.nixpkgs.hostPlatform.efiArch;
               in
-                {
-                  "/EFI/BOOT/BOOT${lib.toUpper efiArch}.EFI".source =
-                    "${config.system.build.uki}/${config.system.boot.loader.ukiFile}";
-                  "/EFI/Linux/${config.system.boot.loader.ukiFile}".source =
-                    "${config.system.build.uki}/${config.system.boot.loader.ukiFile}";
-                };
+              {
+                "/EFI/BOOT/BOOT${lib.toUpper efiArch}.EFI".source =
+                  "${config.system.build.uki}/${config.system.boot.loader.ukiFile}";
+                "/EFI/Linux/${config.system.boot.loader.ukiFile}".source =
+                  "${config.system.build.uki}/${config.system.boot.loader.ukiFile}";
+              };
             repartConfig = {
               Type = "esp";
               Label = "boot";
@@ -141,14 +157,14 @@ in {
       # for definition files in /sysroot or /sysusr. We tell it to look
       # in the initrd itself.
       ''
-      ${config.boot.initrd.systemd.package}/bin/systemd-repart \
-        --definitions=/etc/repart.d \
-        --dry-run=no \
-        --empty=${initrdCfg.empty} \
-        --discard=${lib.boolToString initrdCfg.discard} \
-        --factory-reset=${lib.boolToString initrdCfg.factoryReset} \
-        ${lib.optionalString (initrdCfg.keyFile != null) "--key-file=${initrdCfg.keyFile}"} \
-        ${lib.optionalString (initrdCfg.device != null) initrdCfg.device}
+        ${config.boot.initrd.systemd.package}/bin/systemd-repart \
+          --definitions=/etc/repart.d \
+          --dry-run=no \
+          --empty=${initrdCfg.empty} \
+          --discard=${lib.boolToString initrdCfg.discard} \
+          --factory-reset=${lib.boolToString initrdCfg.factoryReset} \
+          ${lib.optionalString (initrdCfg.keyFile != null) "--key-file=${initrdCfg.keyFile}"} \
+          ${lib.optionalString (initrdCfg.device != null) initrdCfg.device}
       ''
     ];
   };

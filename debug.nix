@@ -1,4 +1,5 @@
-{ pkgs, ...}: {
+{ pkgs, ... }:
+{
   # Set an empty password for "user"
   users.users."user" = {
     initialHashedPassword = "";
