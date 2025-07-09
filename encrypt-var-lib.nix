@@ -1,4 +1,5 @@
-{ lib, config, ...}: {
+{ lib, config, ... }:
+{
   config = {
     systemd.repart.partitions."var-lib".Encrypt = "key-file";
 
@@ -20,7 +21,7 @@
       description = "Generate a secure, ephemeral key to encrypt the persistent disk with";
       wantedBy = [ "initrd.target" ];
       before = [ "systemd-repart.service" ];
-      requiredBy = ["systemd-repart.service" ];
+      requiredBy = [ "systemd-repart.service" ];
       unitConfig = {
         DefaultDependencies = false;
       };
@@ -39,14 +40,16 @@
       description = "Create volatile-root to tell systemd-repart which disk to user";
       wantedBy = [ "initrd.target" ];
       before = [ "systemd-repart.service" ];
-      requiredBy = ["systemd-repart.service" ];
+      requiredBy = [ "systemd-repart.service" ];
       unitConfig = {
         DefaultDependencies = false;
       };
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        ExecStart = ''/bin/ln -sf /dev/disk/by-partlabel/${config.image.repart.partitions."store".repartConfig.Label} /run/systemd/volatile-root'';
+        ExecStart = ''/bin/ln -sf /dev/disk/by-partlabel/${
+          config.image.repart.partitions."store".repartConfig.Label
+        } /run/systemd/volatile-root'';
       };
     };
   };

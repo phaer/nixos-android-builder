@@ -1,13 +1,18 @@
 {
-  lib, pkgs, ...
-}: {
+  lib,
+  pkgs,
+  ...
+}:
+{
 
   config = {
     # Name our system. Image file names and metadata is derived from this
     system.name = "android-builder";
 
     # Target architecture of this NixOS instance
-    nixpkgs.hostPlatform = { system = "x86_64-linux"; };
+    nixpkgs.hostPlatform = {
+      system = "x86_64-linux";
+    };
 
     # Location of the random key to encrypt the persistent volume with,
     # should never touch the disk, /etc is on tmpfs
@@ -19,7 +24,10 @@
 
     # Add extra software from nixpkgs, as well as a custom shell to build Android
     environment.systemPackages = with pkgs; [
-      vim htop tmux gitMinimal
+      vim
+      htop
+      tmux
+      gitMinimal
 
       (import ./android-build-env.nix { inherit pkgs; })
     ];
@@ -29,18 +37,24 @@
       users."user" = {
         isNormalUser = true;
         group = "user";
-        extraGroups = [ "kvm" "wheel"];
+        extraGroups = [
+          "kvm"
+          "wheel"
+        ];
         home = "/var/lib/build";
         createHome = true;
       };
-      groups.user = {};
+      groups.user = { };
     };
 
     # Configure nix with flake support, but no channels.
     nix = {
       enable = true;
       channel.enable = false;
-      settings.experimental-features = ["nix-command" "flakes"];
+      settings.experimental-features = [
+        "nix-command"
+        "flakes"
+      ];
     };
 
     # Opt-in into systemd-based initrd, declarative user management and networking.
@@ -55,11 +69,12 @@
     # Console on tty0 for bare-metal and serial output for VMS.
     boot.kernelParams =
       [
-        "console=tty0"  "console=ttyS0,115200"
+        "console=tty0"
+        "console=ttyS0,115200"
       ]
-    ++ (lib.optional (
-      pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64
-    ) "console=ttyAMA0,115200");
+      ++ (lib.optional (
+        pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64
+      ) "console=ttyAMA0,115200");
 
     # TODO: This might be good to upstream. systemd-oomd starts too early,
     # so fails twice and spams log before succeeding.
@@ -69,4 +84,3 @@
     system.stateVersion = "25.05";
   };
 }
-
