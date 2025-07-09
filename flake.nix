@@ -6,7 +6,7 @@
   };
 
   outputs =
-    { self, nixpkgs }:
+    { nixpkgs, ... }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
@@ -20,6 +20,7 @@
         resize-var-lib = ./resize-var-lib.nix;
         encrypt-var-lib = ./encrypt-var-lib.nix;
         debug = ./debug.nix;
+        secure-boot = ./secure-boot.nix;
       };
       modules = lib.attrValues nixosModules;
 
@@ -32,7 +33,17 @@
     {
       inherit nixosModules;
       nixosConfigurations = { inherit vm; };
+
       formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt-tree;
+
+      devShells.${system}.default = pkgs.mkShell {
+        packages = with pkgs; [
+          sbsigntool
+          openssl
+          efitools
+        ];
+      };
+
       packages.${system} = {
         inherit run-vm;
         inherit image;
