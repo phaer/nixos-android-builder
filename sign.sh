@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# This script assumes a disk image in result/*.raw.
+# It'll create a copy of it in a temporary directory,
+# modify all .efi files in the esp partition, singing them with key material
+# expected to be in the keys/ directory.
+# The image can then be flashed to the target machine.
+# The user is expected to clean up the temporary directory containing 
+# the image afterwards.
 
 set -e
 
