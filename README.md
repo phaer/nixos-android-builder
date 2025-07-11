@@ -42,6 +42,33 @@ To deploy the builder to physical hardware, we can build a disk image:
 $ realpath -e result/android-builder_*.raw
 /nix/store/1rr1x8q3ak1r34w8jlgmp25kzr45ny6s-android-builder-25.11pre-git/android-builder_25.11pre-git.raw
 ```
+
 (the hash in your store path will likely be different)
 
 That image can then be copied to a USB stick or hard-drive with e.g. `sudo dd if="$(realpath -e result/android-builder_*.raw)" bs=1M status=progress of=/dev/your-device` or other utils and booted on EFI-enabled x86_64 machines.
+
+# Secure Boot
+
+There are scripts included for secure boot key creation and signing the image. They should be run in the included devshell, after building `.#image` but before flashing it.
+
+```sh
+./create-signing-keys.sh
+./sign.sh
+```
+
+`openssl` is used to generate new secure boot keys. The keys are stored into `./keys` directory.
+This process is meant to be done outside of the target hardware, in a centralized way.
+
+Be sure to keep the `*.key` files safe and private! Other generated files are safe to distribute.
+Various formats of public keys and certs are generated to be compatible with most UEFIs and use cases.
+
+The signing script copies the public keys from `./keys` into the raw image at `/boot/EFI/keys` where they can be enrolled from -
+either by using the included UEFI gui, or by booting the image with secure boot in setup mode and using the included `enroll-secure-boot` script.
+
+```sh
+# uses efi-updatevar under the hood
+enroll-secure-boot
+
+# reboot to UEFI now to enable secure boot
+sudo systemctl reboot --firmware-setup
+```
