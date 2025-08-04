@@ -62,7 +62,7 @@ pkgs.buildFHSEnv {
       jdk
       gnumake
       python3
-      git-repo
+      (git-repo.override { git = gitMinimal; })
       rsync
     ];
 }

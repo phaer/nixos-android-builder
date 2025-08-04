@@ -12,6 +12,7 @@ in
   imports = [
     "${modulesPath}/image/repart.nix"
     "${modulesPath}/profiles/minimal.nix"
+    "${modulesPath}/profiles/perlless.nix"
   ];
 
   # TODO upstream these options and the ExecStart changes for systemd-repart below
