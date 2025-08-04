@@ -39,6 +39,7 @@ The command above will create a `qcow2` disk image for the persistent storage in
 To deploy the builder to physical hardware, we can build a disk image:
 
 ```shell-session
+$ nix build .#image
 $ realpath -e result/android-builder_*.raw
 /nix/store/1rr1x8q3ak1r34w8jlgmp25kzr45ny6s-android-builder-25.11pre-git/android-builder_25.11pre-git.raw
 ```
