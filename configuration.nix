@@ -2,8 +2,7 @@
   lib,
   pkgs,
   ...
-}:
-{
+}: {
 
   config = {
     # Name our system. Image file names and metadata is derived from this
@@ -28,9 +27,8 @@
       htop
       tmux
       gitMinimal
-
-      (import ./android-build-env.nix { inherit pkgs; })
     ];
+
 
     # Configure a build user
     users = {
