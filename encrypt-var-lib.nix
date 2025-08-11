@@ -1,6 +1,14 @@
 { lib, config, ... }:
 {
   config = {
+    # Location of the random key to encrypt the persistent volume with,
+    # should never touch the disk, /etc is on tmpfs
+    boot.initrd.systemd.repart.keyFile = "/etc/disk.key";
+
+    # --factory-reset instructs systemd-repart to reset all partitions marked with FactoryReset=true,
+    # only /var/lib in our case. The read-only partitions stay in place.
+    boot.initrd.systemd.repart.factoryReset = true;
+
     systemd.repart.partitions."var-lib".Encrypt = "key-file";
 
     boot.initrd.luks.devices."var_lib_crypt" = {
@@ -29,27 +37,6 @@
         Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = ''/bin/sh -c "umask 0077; head -c 64 /dev/urandom > /etc/disk.key"'';
-      };
-    };
-
-    # Link the read-only nix store to /run/systemd/volatile-root before
-    # systemd-repart runs. systemd-repart normally looks for the block device
-    # backing "/", or this path. So this enables systemd-repart to find the
-    # right device at boot.
-    boot.initrd.systemd.services.link-volatile-root = {
-      description = "Create volatile-root to tell systemd-repart which disk to user";
-      wantedBy = [ "initrd.target" ];
-      before = [ "systemd-repart.service" ];
-      requiredBy = [ "systemd-repart.service" ];
-      unitConfig = {
-        DefaultDependencies = false;
-      };
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        ExecStart = ''/bin/ln -sf /dev/disk/by-partlabel/${
-          config.image.repart.partitions."store".repartConfig.Label
-        } /run/systemd/volatile-root'';
       };
     };
   };
