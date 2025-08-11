@@ -151,7 +151,7 @@ in
     }
     {
       environment.systemPackages = [
-        pkgs.helix pkgs.zellij pkgs.ripgrep pkgs.fd
+        pkgs.helix pkgs.zellij pkgs.ripgrep pkgs.fd pkgs.strace
       ];
 
       virtualisation.forwardPorts = [
