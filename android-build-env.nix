@@ -164,4 +164,20 @@ in
         "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIHqRNv8hueRuN4khLUQMiPVS0NqwZfX17BNXIRZJ9yRPAAAAE3NzaDpoZWxsb0BwaGFlci5vcmc="
       ];
     }
+    (let
+      persist = {
+        source = "$HOME/nixos-android-builder/persist";
+        target = "/var/lib";
+      };
+    in {
+      virtualisation.sharedDirectories = {
+        inherit persist;
+      };
+      fileSystems."/var/lib" = lib.mkForce {
+        device = "persist";
+        fsType = "9p";
+        options = [ "trans=virtio" "version=9p2000.L" "msize=262144" "cache=loose" ];
+        neededForBoot = true;
+      };
+    })
 ]
