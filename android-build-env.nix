@@ -6,6 +6,7 @@ let
     # sudo apt-get install git-core gnupg flex bison build-essential zip curl zlib1g-dev libc6-dev-i386 x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig
     gitMinimal
     binutils
+    diffutils
     gnupg
     flex
     bison
@@ -61,14 +62,18 @@ let
       ${rsyncExe} -r --copy-dirlinks --links --chmod "+w" ${glibc-vanilla}/lib/ $out/lib/
   '';
 
+  fhsBash = pkgs.bash.override { interactive = true; forFHSEnv = true; };
+
   binaries = pkgs.runCommandNoCC "android-binaries" {} ''
     set -e
     mkdir -p $out/bin
-    install ${pkgs.bashInteractive}/bin/bash $out/bin/
     for store_path in $(cat "${closure}/store-paths"); do
       test -e "$store_path/bin" && echo "$store_path/bin" || true
     done \
     | xargs -i ${rsyncExe} -r --copy-links --copy-unsafe-links --chmod "+w" "{}"/ $out/bin
+
+    install ${fhsBash}/bin/bash $out/bin/bash
+    install ${fhsBash}/bin/bash $out/bin/sh
 
     for f in $out/bin/*; do
       if ${lib.getExe pkgs.file} $f | grep -q 'ELF.*dynamically'; then
@@ -161,11 +166,11 @@ in
         fsType = "none";
       };
 
-      #fileSystems."/lib64" = {
-      #  device = "${toString glibc-vanilla}/lib";
-      #  options = [ "bind" ];
-      #  fsType = "none";
-      #};
+      fileSystems."/lib64" = {
+        device = "${toString libraries}/lib";
+        options = [ "bind" ];
+        fsType = "none";
+      };
     }
     {
       environment.systemPackages = [
