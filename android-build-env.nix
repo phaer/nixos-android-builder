@@ -1,5 +1,7 @@
 { lib, pkgs, config, ...}:
 let
+  glibc-vanilla = pkgs.callPackage ./glibc-vanilla.nix {};
+
   packages = with pkgs; [
     # sudo apt-get install git-core gnupg flex bison build-essential zip curl zlib1g-dev libc6-dev-i386 x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig
     gitMinimal
@@ -56,17 +58,31 @@ let
         test -e "$store_path/lib" && echo "$store_path/lib" || true
       done \
       | xargs -i ${rsyncExe} -r --copy-dirlinks --links --chmod "+w" "{}"/ $out/lib/
+
+
+      ${rsyncExe} -r --copy-dirlinks --links --chmod "+w" ${glibc-vanilla}/lib/ $out/lib/
   '';
 
+  fhsBash = pkgs.bash.override { interactive = true; forFHSEnv = true; };
+
   binaries = pkgs.runCommandNoCC "android-binaries" {} ''
-      set -x
-      mkdir -p $out/bin
-      cp ${pkgs.bashInteractive}/bin/bash $out/bin/
-      for store_path in $(cat "${closure}/store-paths"); do
-        test -e "$store_path/bin" && echo "$store_path/bin" || true
-      done \
-      | xargs -i ${rsyncExe} -r --copy-links --copy-unsafe-links "{}"/ $out/bin
-    '';
+    set -e
+    mkdir -p $out/bin
+    for store_path in $(cat "${closure}/store-paths"); do
+      test -e "$store_path/bin" && echo "$store_path/bin" || true
+    done \
+    | xargs -i ${rsyncExe} -r --copy-links --copy-unsafe-links --chmod "+w" "{}"/ $out/bin
+
+    install ${fhsBash}/bin/bash $out/bin/bash
+    install ${fhsBash}/bin/bash $out/bin/sh
+
+    for f in $out/bin/*; do
+      if ${lib.getExe pkgs.file} $f | grep -q 'ELF.*dynamically'; then
+        echo $f
+        patchelf --set-rpath /lib --set-interpreter /lib/ld-linux-x86-64.so.2 "$f"
+      fi
+    done
+  '';
 
   fetchAndroid = writeShellScriptBin "fetch-android" ''
     set -e
@@ -106,7 +122,7 @@ in
     }
     {
       environment.variables = {
-        "PATH" = "/bin:$PATH";
+        "PATH" = "$PATH:/bin";
         # "ENVFS_RESOLVE_ALWAYS" = "1";
       };
 
@@ -117,13 +133,19 @@ in
       };
     }
     {
-      environment.variables = {
-        "NIX_LD_LIBRARY_PATH" = lib.mkForce "/lib";
-        "NIX_LD_LOG" = "warn";
-      };
-      programs.nix-ld.enable = true;
+      # environment.variables = {
+      #   "NIX_LD_LIBRARY_PATH" = lib.mkForce "/lib";
+      #   "NIX_LD_LOG" = "warn";
+      # };
+      # programs.nix-ld.enable = true;
 
       fileSystems."/lib" = {
+        device = "${toString libraries}/lib";
+        options = [ "bind" ];
+        fsType = "none";
+      };
+
+      fileSystems."/lib64" = {
         device = "${toString libraries}/lib";
         options = [ "bind" ];
         fsType = "none";
@@ -131,7 +153,7 @@ in
     }
     {
       environment.systemPackages = [
-        pkgs.helix pkgs.zellij pkgs.ripgrep pkgs.fd pkgs.strace
+        pkgs.helix pkgs.zellij pkgs.ripgrep pkgs.fd pkgs.strace pkgs.jq
       ];
 
       virtualisation.forwardPorts = [
@@ -144,4 +166,4 @@ in
         "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIHqRNv8hueRuN4khLUQMiPVS0NqwZfX17BNXIRZJ9yRPAAAAE3NzaDpoZWxsb0BwaGFlci5vcmc="
       ];
     }
-]
+  ]
