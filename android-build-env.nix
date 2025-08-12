@@ -7,6 +7,7 @@ let
     gitMinimal
     binutils
     diffutils
+    findutils
     gnupg
     flex
     bison
