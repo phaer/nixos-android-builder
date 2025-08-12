@@ -1,5 +1,7 @@
 { lib, pkgs, config, ...}:
 let
+  glibc-vanilla = pkgs.callPackage ./glibc-vanilla.nix {};
+
   packages = with pkgs; [
     # sudo apt-get install git-core gnupg flex bison build-essential zip curl zlib1g-dev libc6-dev-i386 x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig
     gitMinimal
@@ -54,17 +56,27 @@ let
         test -e "$store_path/lib" && echo "$store_path/lib" || true
       done \
       | xargs -i ${rsyncExe} -r --copy-dirlinks --links --chmod "+w" "{}"/ $out/lib/
+
+
+      ${rsyncExe} -r --copy-dirlinks --links --chmod "+w" ${glibc-vanilla}/lib/ $out/lib/
   '';
 
   binaries = pkgs.runCommandNoCC "android-binaries" {} ''
-      set -x
-      mkdir -p $out/bin
-      cp ${pkgs.bashInteractive}/bin/bash $out/bin/
-      for store_path in $(cat "${closure}/store-paths"); do
-        test -e "$store_path/bin" && echo "$store_path/bin" || true
-      done \
-      | xargs -i ${rsyncExe} -r --copy-links --copy-unsafe-links "{}"/ $out/bin
-    '';
+    set -e
+    mkdir -p $out/bin
+    install ${pkgs.bashInteractive}/bin/bash $out/bin/
+    for store_path in $(cat "${closure}/store-paths"); do
+      test -e "$store_path/bin" && echo "$store_path/bin" || true
+    done \
+    | xargs -i ${rsyncExe} -r --copy-links --copy-unsafe-links --chmod "+w" "{}"/ $out/bin
+
+    for f in $out/bin/*; do
+      if ${lib.getExe pkgs.file} $f | grep -q 'ELF.*dynamically'; then
+        echo $f
+        patchelf --set-rpath /lib --set-interpreter /lib/ld-linux-x86-64.so.2 "$f"
+      fi
+    done
+  '';
 
   fetchAndroid = writeShellScriptBin "fetch-android" ''
     set -e
@@ -104,7 +116,7 @@ in
     }
     {
       environment.variables = {
-        "PATH" = "/bin:$PATH";
+        "PATH" = "$PATH:/bin";
         # "ENVFS_RESOLVE_ALWAYS" = "1";
       };
 
@@ -137,21 +149,27 @@ in
       #};
     }
     {
-      environment.variables = {
-        "NIX_LD_LIBRARY_PATH" = lib.mkForce "/lib";
-        "NIX_LD_LOG" = "warn";
-      };
-      programs.nix-ld.enable = true;
+      # environment.variables = {
+      #   "NIX_LD_LIBRARY_PATH" = lib.mkForce "/lib";
+      #   "NIX_LD_LOG" = "warn";
+      # };
+      # programs.nix-ld.enable = true;
 
       fileSystems."/lib" = {
         device = "${toString libraries}/lib";
         options = [ "bind" ];
         fsType = "none";
       };
+
+      #fileSystems."/lib64" = {
+      #  device = "${toString glibc-vanilla}/lib";
+      #  options = [ "bind" ];
+      #  fsType = "none";
+      #};
     }
     {
       environment.systemPackages = [
-        pkgs.helix pkgs.zellij pkgs.ripgrep pkgs.fd pkgs.strace
+        pkgs.helix pkgs.zellij pkgs.ripgrep pkgs.fd pkgs.strace pkgs.jq
       ];
 
       virtualisation.forwardPorts = [
@@ -164,20 +182,15 @@ in
         "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIHqRNv8hueRuN4khLUQMiPVS0NqwZfX17BNXIRZJ9yRPAAAAE3NzaDpoZWxsb0BwaGFlci5vcmc="
       ];
     }
-    (let
-      persist = {
-        source = "$HOME/nixos-android-builder/persist";
-        target = "/var/lib";
-      };
-    in {
-      virtualisation.sharedDirectories = {
-        inherit persist;
-      };
-      fileSystems."/var/lib" = lib.mkForce {
-        device = "persist";
-        fsType = "9p";
-        options = [ "trans=virtio" "version=9p2000.L" "msize=262144" "cache=loose" ];
-        neededForBoot = true;
-      };
-    })
+    {
+      boot.initrd.systemd.repart.enable = lib.mkForce false;
+      fileSystems."/var/lib".device = lib.mkForce "/dev/vdb";
+      # nix shell nixpkgs#qemu nixpkgs#e2fsprogs --command bash -c 'qemu-img create -f raw "temp.img" "250G" && mkfs.ext4 -L persist "temp.img" && qemu-img convert -f raw -O qcow2 "temp.img" "persist.qcow2" && rm temp.img'
+      virtualisation.qemu.drives = [
+        {
+        file = "$PRJ_ROOT/persist.qcow2";
+        driveExtraOpts.werror = "report";
+        }
+      ];
+    }
 ]
