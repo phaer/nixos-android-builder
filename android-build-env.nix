@@ -125,6 +125,7 @@ in
     }
     {
       environment.variables = {
+        "PATH" = "$PATH:/bin";
         "SOURCE_DIR" = "$HOME/source";
       };
       environment.systemPackages = [fetchAndroid buildAndroid];
