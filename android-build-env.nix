@@ -33,9 +33,6 @@ let
     # into the closure.
     (git-repo.override {
       git = gitMinimal;
-      gnupg = gnupg.override {
-        enableMinimal = true;
-      };
     })
     gitMinimal
     diffutils
