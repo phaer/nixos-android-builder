@@ -1,4 +1,4 @@
-{ lib, pkgs, config, ...}:
+{ lib, pkgs, ...}:
 let
   glibc-vanilla = pkgs.callPackage ./glibc-vanilla.nix {};
 
@@ -121,23 +121,11 @@ in
         ];
     }
     {
-      environment.variables = {
-        "PATH" = "$PATH:/bin";
-        # "ENVFS_RESOLVE_ALWAYS" = "1";
-      };
-
       fileSystems."/bin" = {
         device = "${toString binaries}/bin";
         options = [ "bind" ];
         fsType = "none";
       };
-    }
-    {
-      # environment.variables = {
-      #   "NIX_LD_LIBRARY_PATH" = lib.mkForce "/lib";
-      #   "NIX_LD_LOG" = "warn";
-      # };
-      # programs.nix-ld.enable = true;
 
       fileSystems."/lib" = {
         device = "${toString libraries}/lib";
