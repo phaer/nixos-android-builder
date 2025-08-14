@@ -3,11 +3,10 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
-    envfs.url = "github:phaer/envfs?ref=no-symlinks";
   };
 
   outputs =
-    { nixpkgs, envfs, ... }:
+    { nixpkgs, ... }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
@@ -27,9 +26,7 @@
       modules = lib.attrValues nixosModules;
 
       vm = pkgs.nixos {
-        imports = modules ++ [{
-          #environment.systemPackages = [ envfs.packages.${system}.envfs ];
-        }];
+        imports = modules;
       };
 
       run-vm = vm.config.system.build.vm;

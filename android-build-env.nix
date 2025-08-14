@@ -121,45 +121,12 @@ in
         ];
     }
     {
-      environment.variables = {
-        "PATH" = "$PATH:/bin";
-        # "ENVFS_RESOLVE_ALWAYS" = "1";
-      };
 
       fileSystems."/bin" = {
         device = "${toString binaries}/bin";
         options = [ "bind" ];
         fsType = "none";
       };
-
-
-      #fileSystems."/usr/bin" = {
-      #  device = "none";
-      #  fsType = "envfs";
-      #  options = [
-      #    "bind-mount=/bin"
-      #    "fallback-path=${pkgs.runCommand "fallback-path" {} ''
-      #      mkdir -p $out
-      #    ln -s ${config.environment.usrbinenv} $out/env
-      #    ln -s ${config.environment.binsh} $out/sh
-      #    ''}"
-      #    "nofail"
-      #  ];
-      #};
-      ## We need to bind-mount /bin to /usr/bin, because otherwise upgrading
-      ## from envfs < 1.0.5 will cause having the old envs with no /bin bind mount.
-      ## Systemd is smart enough to not mount /bin if it's already mounted.
-      #fileSystems."/bin" = {
-      #  device = "/usr/bin";
-      #  options = [ "bind" "nofail" ];
-      #};
-    }
-    {
-      # environment.variables = {
-      #   "NIX_LD_LIBRARY_PATH" = lib.mkForce "/lib";
-      #   "NIX_LD_LOG" = "warn";
-      # };
-      # programs.nix-ld.enable = true;
 
       fileSystems."/lib" = {
         device = "${toString libraries}/lib";
