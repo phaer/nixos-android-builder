@@ -62,7 +62,25 @@ let
   storePaths = "${pkgs.closureInfo { rootPaths = packages; }}/store-paths";
   fhsEnv = (import ./fhsenv.nix { inherit pkgs; }) { inherit pins storePaths;  };
 
-  fetchAndroid = pkgs.writeShellScriptBin "fetch-android" ''
+  # pkgs.writeShellScriptBin with bashInteractive instead of pkgsruntimeShell, so that we
+  # don't get errors about the missing "complete" builtin.
+  writeShellScriptBin =
+    name: text:
+    pkgs.writeTextFile {
+      inherit name;
+      executable = true;
+      destination = "/bin/${name}";
+      text = ''
+        #!/bin/bash
+        ${text}
+      '';
+      checkPhase = ''
+        ${pkgs.stdenv.shellDryRun} "$target"
+      '';
+      meta.mainProgram = name;
+    };
+
+  fetchAndroid = writeShellScriptBin "fetch-android" ''
     set -e
     mkdir -p $SOURCE_DIR
     cd $SOURCE_DIR
@@ -79,7 +97,7 @@ let
     repo sync -c $@
   '';
 
-  buildAndroid = pkgs.writeShellScriptBin "build-android" ''
+  buildAndroid = writeShellScriptBin "build-android" ''
     set -e
     cd $SOURCE_DIR
     source build/envsetup.sh || true
