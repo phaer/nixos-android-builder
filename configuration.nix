@@ -2,7 +2,8 @@
   lib,
   pkgs,
   ...
-}: {
+}:
+{
 
   config = {
     # Name our system. Image file names and metadata is derived from this
@@ -20,7 +21,6 @@
       tmux
       gitMinimal
     ];
-
 
     # Configure a build user
     users = {
@@ -57,14 +57,13 @@
     hardware.enableAllHardware = true;
 
     # Console on tty0 for bare-metal and serial output for VMS.
-    boot.kernelParams =
-      [
-        "console=tty0"
-        "console=ttyS0,115200"
-      ]
-      ++ (lib.optional (
-        pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64
-      ) "console=ttyAMA0,115200");
+    boot.kernelParams = [
+      "console=tty0"
+      "console=ttyS0,115200"
+    ]
+    ++ (lib.optional (
+      pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64
+    ) "console=ttyAMA0,115200");
 
     # TODO: This might be good to upstream. systemd-oomd starts too early,
     # so fails twice and spams log before succeeding.

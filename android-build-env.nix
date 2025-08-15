@@ -1,10 +1,17 @@
-{ lib, pkgs, ...}:
+{
+  lib,
+  pkgs,
+  ...
+}:
 let
   # The default glibc build shipping with NixOS includes a dynamic linker (ld.so) that works
   # for NixOS, but ignores conventional FHS directories, such as /lib, by design.
 
-  glibc = pkgs.callPackage ./glibc-vanilla.nix {};
-  bash = pkgs.bash.override { interactive = true; forFHSEnv = true; };
+  glibc = pkgs.callPackage ./glibc-vanilla.nix { };
+  bash = pkgs.bash.override {
+    interactive = true;
+    forFHSEnv = true;
+  };
 
   # A sorted list of packages to add first, so that they "win" if there are collisions/conflicts
   # during creation of the FHS env. Unresolved collisions will produce a warning in the build log.
@@ -57,7 +64,7 @@ let
   ];
 
   storePaths = "${pkgs.closureInfo { rootPaths = packages; }}/store-paths";
-  fhsEnv = (import ./fhsenv.nix { inherit pkgs; }) { inherit pins storePaths;  };
+  fhsEnv = (import ./fhsenv.nix { inherit pkgs; }) { inherit pins storePaths; };
 
   # pkgs.writeShellScriptBin with bashInteractive instead of pkgsruntimeShell, so that we
   # don't get errors about the missing "complete" builtin.
@@ -102,32 +109,35 @@ let
     m
   '';
 in
-  lib.mkMerge [
-    {
-      system.build.fhsEnv = fhsEnv;
-      fileSystems."/bin" = {
-        device = "${fhsEnv}/bin";
-        options = [ "bind" ];
-        fsType = "none";
-      };
+lib.mkMerge [
+  {
+    system.build.fhsEnv = fhsEnv;
+    fileSystems."/bin" = {
+      device = "${fhsEnv}/bin";
+      options = [ "bind" ];
+      fsType = "none";
+    };
 
-      fileSystems."/lib" = {
-        device = "${fhsEnv}/lib";
-        options = [ "bind" ];
-        fsType = "none";
-      };
+    fileSystems."/lib" = {
+      device = "${fhsEnv}/lib";
+      options = [ "bind" ];
+      fsType = "none";
+    };
 
-      fileSystems."/lib64" = {
-        device = "${fhsEnv}/lib";
-        options = [ "bind" ];
-        fsType = "none";
-      };
-    }
-    {
-      environment.variables = {
-        "PATH" = "$PATH:/bin";
-        "SOURCE_DIR" = "$HOME/source";
-      };
-      environment.systemPackages = [fetchAndroid buildAndroid];
-    }
+    fileSystems."/lib64" = {
+      device = "${fhsEnv}/lib";
+      options = [ "bind" ];
+      fsType = "none";
+    };
+  }
+  {
+    environment.variables = {
+      "PATH" = "$PATH:/bin";
+      "SOURCE_DIR" = "$HOME/source";
+    };
+    environment.systemPackages = [
+      fetchAndroid
+      buildAndroid
+    ];
+  }
 ]

@@ -15,6 +15,6 @@ let
 
   pins' = pkgs.writeText "pins" (pkgs.lib.concatMapStringsSep "\n" builtins.toString pins);
 in
-  pkgs.runCommandNoCC "fhsenv" {} ''
-    ${buildFHSEnv} ${storePaths} $out ${pins'}
-  ''
+pkgs.runCommandNoCC "fhsenv" { } ''
+  ${buildFHSEnv} ${storePaths} $out ${pins'}
+''
