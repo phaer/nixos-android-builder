@@ -1,7 +1,6 @@
-{glibc, linuxHeaders}:
+{ glibc, linuxHeaders }:
 glibc.overrideAttrs (oldAttrs: {
-  configureFlags =
-    (oldAttrs.configureFlags or []) ++ [
+  configureFlags = (oldAttrs.configureFlags or [ ]) ++ [
     "--with-headers=${linuxHeaders}/include"
     "--prefix=/"
     "--libdir=/lib"
