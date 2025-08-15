@@ -14,22 +14,12 @@
       system = "x86_64-linux";
     };
 
-    # Location of the random key to encrypt the persistent volume with,
-    # should never touch the disk, /etc is on tmpfs
-    boot.initrd.systemd.repart.keyFile = "/etc/disk.key";
-
-    # --factory-reset instructs systemd-repart to reset all partitions marked with FactoryReset=true,
-    # only /var/lib in our case. The read-only partitions stay in place.
-    boot.initrd.systemd.repart.factoryReset = true;
-
     # Add extra software from nixpkgs, as well as a custom shell to build Android
     environment.systemPackages = with pkgs; [
       vim
       htop
       tmux
       gitMinimal
-
-      (import ./android-build-env.nix { inherit pkgs; })
     ];
 
     # Configure a build user
@@ -67,14 +57,13 @@
     hardware.enableAllHardware = true;
 
     # Console on tty0 for bare-metal and serial output for VMS.
-    boot.kernelParams =
-      [
-        "console=tty0"
-        "console=ttyS0,115200"
-      ]
-      ++ (lib.optional (
-        pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64
-      ) "console=ttyAMA0,115200");
+    boot.kernelParams = [
+      "console=tty0"
+      "console=ttyS0,115200"
+    ]
+    ++ (lib.optional (
+      pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64
+    ) "console=ttyAMA0,115200");
 
     # TODO: This might be good to upstream. systemd-oomd starts too early,
     # so fails twice and spams log before succeeding.

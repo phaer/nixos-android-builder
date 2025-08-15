@@ -5,7 +5,24 @@ a ephemeral key on each boot. No state is persisted between boots by default.
 
 It's not hardnened by default. To the contrary: It includes a single account `users` that is automatically logged in on `tty1` and `ttyS0` and has password-less sudo permission and a persistent home in `/var/lib/build`.
 
-The users shell includes a command `android-build-env` which starts a shell inside a [bubblewrap](https://github.com/containers/bubblewrap) sandbox, mimicking a conventional [FHS](https://en.wikipedia.org/wiki/Filesystem_Hierarchy_Standard) layout with required [tooling to build AOSP](https://source.android.com/docs/setup/start) and two scripts:
+## Build Environment
+
+Androids build system assumes to be run inside a Linux environment that resembles a conventional Linux File System Hierachy (FHS) with executables in `/bin`, dynamic libraries in `/lib`, and so on.
+
+One might be inclined to do so by linking nix store path to FHS paths with e.g. `pkgs.buildFHSEnv`, an approach that works for simpler build systems. But Androids build system contains sandboxing utils such as nsjail, that run a container that only mounts FHS paths, but not the nix store itself, leading to broken symlinks in `/bin` from the perspective of a process running in such a container.
+Tools like envfs and nix-ld run into similar issues with sandboxes, by depending on the  availibility of `/nix/store `in the same mount namespace as your proces runs.
+
+We therefore prepare /lib and /bin directories, containing no symlinks, but regular files for all dependencies needed to build AOSP.
+The we run patchelf on those binaries to set both, their run path, as well as their interpreter to conventional FHS paths.
+We also add two custom packages:
+- A `/bin/bash` (and `/bin/sh`) build that has a default $PATH that includes `/bin`, even with an empty environment. That's the same behavior as conventional Linux Distributions such as Debian have, but different to NixOS defaults.
+- A glibc build that differs from NixOS in that uses FHS paths, and therefore searches `/lib` for libraries by default.
+
+`/lib` and `/bin `are currently shipped as a single nix derivation, and bind-mounted to the host file system during boot.
+
+---
+
+Two simple shell scripts are available in the shell for quick testing & demos:
 
 * `fetch-android` sets up git and checks out `android-latest-release` into `/var/lib/build/source` using [repo](https://android.googlesource.com/tools/repo).
 * `build-android` demonstrates a trivial build of `aosp_cf_x86_64_only_phone-aosp_current-userdebug`.
@@ -39,6 +56,7 @@ The command above will create a `qcow2` disk image for the persistent storage in
 To deploy the builder to physical hardware, we can build a disk image:
 
 ```shell-session
+$ nix build .#image
 $ realpath -e result/android-builder_*.raw
 /nix/store/1rr1x8q3ak1r34w8jlgmp25kzr45ny6s-android-builder-25.11pre-git/android-builder_25.11pre-git.raw
 ```

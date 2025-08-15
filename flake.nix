@@ -21,14 +21,16 @@
         encrypt-var-lib = ./encrypt-var-lib.nix;
         debug = ./debug.nix;
         secure-boot = ./secure-boot.nix;
+        android-build-env = ./android-build-env.nix;
       };
       modules = lib.attrValues nixosModules;
 
-      vm = pkgs.nixos { imports = modules; };
+      vm = pkgs.nixos {
+        imports = modules;
+      };
 
       run-vm = vm.config.system.build.vm;
       image = vm.config.system.build.image;
-      android-build-env = import ./android-build-env.nix { inherit pkgs; };
     in
     {
       inherit nixosModules;
@@ -47,7 +49,6 @@
       packages.${system} = {
         inherit run-vm;
         inherit image;
-        inherit android-build-env;
         default = image;
         create-vm-disk =
           let
