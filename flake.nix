@@ -29,7 +29,7 @@
         imports = modules;
       };
 
-      run-vm = vm.config.system.build.vm;
+      run-vm = vm.config.system.build.vmBackedByImage;
       image = vm.config.system.build.image;
     in
     {
@@ -50,23 +50,6 @@
         inherit run-vm;
         inherit image;
         default = image;
-        create-vm-disk =
-          let
-            cfg = vm.config.virtualisation;
-          in
-          pkgs.writeShellScriptBin "create-vm-disk" ''
-            if [ ! -e ${cfg.diskImage} ]; then
-              echo "creating ${cfg.diskImage}"
-                  ${cfg.qemu.package}/bin/qemu-img create \
-                    -f qcow2 \
-                    -b ${image}/${vm.config.image.fileName} \
-                    -F raw \
-                    ${cfg.diskImage} \
-                    "${toString cfg.diskSize}M"
-            else
-              echo "${cfg.diskImage} already exists, skipping creation"
-            fi
-          '';
       };
     };
 }

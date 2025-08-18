@@ -40,14 +40,13 @@ build has finished.
 
 # Usage in a Virtual Machine
 
-It is possible to test the whole setup in a [qemu](http://qemu.org/) virtual machine using Nix (currently only tested from `x86_64-linux`), after preparing a writable disk image, `android-builder.qcow2` in the current working directory.
+It is possible to test the whole setup in a [qemu](http://qemu.org/) virtual machine using Nix (currently only tested from `x86_64-linux`), in the current working directory.
 
 ```shell-session
-nix run .#create-vm-disk
 nix run .#run-vm
 ```
 
-Will start a head-less VM with a console in the current terminal. Use `Ctrl-A x` or `systemctl poweroff` to stop the VM.
+This will create a writable Copy-on-Write copy of the read-only disk image, named `nixos-android-builder.qcow2`, in the local directory, before starting a head-less VM with a console in the current terminal. Use `Ctrl-A x` or `systemctl poweroff` to stop the VM.
 
 The command above will create a `qcow2` disk image for the persistent storage in the current directory, if one does not exist already. That disk image can be deleted as needed to do a "factory reset" of the builder. It's mostly used as a cache for sources and build artifacts.
 
