@@ -12,9 +12,9 @@ in
   imports = [
     "${modulesPath}/image/repart.nix"
     "${modulesPath}/profiles/minimal.nix"
+    "${modulesPath}/profiles/perlless.nix"
   ];
 
-  # TODO upstream these options and the ExecStart changes for systemd-repart below
   options.boot.initrd.systemd.repart = {
     keyFile = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
@@ -24,7 +24,7 @@ in
 
     factoryReset = lib.mkOption {
       type = lib.types.bool;
-      description = "";
+      description = "whether to use systemd factory reset facilities";
       default = false;
     };
   };
@@ -148,24 +148,9 @@ in
       };
     };
 
-    # The upstream service definition in nixpkgs currently does not allow us to pass
-    # neither --key-file=, nor --factory-reset, so we patch them in.
-    # TODO this can probably be upstreamed with the options for factoryReset & keyFile
-    boot.initrd.systemd.services.systemd-repart.serviceConfig.ExecStart = [
-      " " # required to unset the previous value.
-      # When running in the initrd, systemd-repart by default searches
-      # for definition files in /sysroot or /sysusr. We tell it to look
-      # in the initrd itself.
-      ''
-        ${config.boot.initrd.systemd.package}/bin/systemd-repart \
-          --definitions=/etc/repart.d \
-          --dry-run=no \
-          --empty=${initrdCfg.empty} \
-          --discard=${lib.boolToString initrdCfg.discard} \
-          --factory-reset=${lib.boolToString initrdCfg.factoryReset} \
-          ${lib.optionalString (initrdCfg.keyFile != null) "--key-file=${initrdCfg.keyFile}"} \
-          ${lib.optionalString (initrdCfg.device != null) initrdCfg.device}
-      ''
+    boot.initrd.systemd.repart.extraArgs = [
+      (lib.optionalString (initrdCfg.keyFile != null) "--key-file=${initrdCfg.keyFile}")
+      (lib.optionalString (initrdCfg.factoryReset) "--factory-reset=true")
     ];
   };
 }

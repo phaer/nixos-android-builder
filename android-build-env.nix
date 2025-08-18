@@ -1,6 +1,90 @@
-{ pkgs }:
+{
+  lib,
+  pkgs,
+  ...
+}:
 let
-  fetchAndroid = pkgs.writeShellScriptBin "fetch-android" ''
+  # The default glibc build shipping with NixOS includes a dynamic linker (ld.so) that works
+  # for NixOS, but ignores conventional FHS directories, such as /lib, by design.
+
+  glibc = pkgs.callPackage ./glibc-vanilla.nix { };
+  bash = pkgs.bash.override {
+    interactive = true;
+    forFHSEnv = true;
+  };
+
+  # A sorted list of packages to add first, so that they "win" if there are collisions/conflicts
+  # during creation of the FHS env. Unresolved collisions will produce a warning in the build log.
+  pins = [
+    # We always want our custom builds to win
+    glibc
+    bash
+    # These are dependencies of packages below, where multiple builds with different parameters
+    # ended up in the build closure. So we pin known-good packages here.
+    pkgs.binutils
+    pkgs.libgcc
+    pkgs.systemdMinimal
+    pkgs.zstd.bin
+    pkgs.getent
+    pkgs.gmp
+  ];
+
+  # Packages needed to build Android AOSP. This is mostly copied from AOSP documentation, but could
+  # probably be reduced further, as AOSP repos ship much of it in-tree (i.e. python3, jdk, etc)
+  packages = with pkgs; [
+    # Our custom builds must be included here as well, so they end up in the closure.
+    # The rest of the pins above a transistive dependencies, which are implicitly included here.
+    bash
+    glibc
+    # We just override a two deps of git-repo to include less features, but don't pull huge dependencies
+    # into the closure.
+    (git-repo.override {
+      git = gitMinimal;
+    })
+    gitMinimal
+    diffutils
+    findutils
+    curl
+    binutils
+    zip
+    unzip
+    zlib
+    rsync
+    libxml2
+    libxslt
+    fontconfig
+    flex
+    bison
+    xorg.libX11
+    mesa
+    openssl
+    jdk
+    gnumake
+    python3
+  ];
+
+  storePaths = "${pkgs.closureInfo { rootPaths = packages; }}/store-paths";
+  fhsEnv = (import ./fhsenv.nix { inherit pkgs; }) { inherit pins storePaths; };
+
+  # pkgs.writeShellScriptBin with bashInteractive instead of pkgsruntimeShell, so that we
+  # don't get errors about the missing "complete" builtin.
+  writeShellScriptBin =
+    name: text:
+    pkgs.writeTextFile {
+      inherit name;
+      executable = true;
+      destination = "/bin/${name}";
+      text = ''
+        #!/bin/bash
+        ${text}
+      '';
+      checkPhase = ''
+        ${pkgs.stdenv.shellDryRun} "$target"
+      '';
+      meta.mainProgram = name;
+    };
+
+  fetchAndroid = writeShellScriptBin "fetch-android" ''
     set -e
     mkdir -p $SOURCE_DIR
     cd $SOURCE_DIR
@@ -13,56 +97,47 @@ let
          -b android-latest-release \
          -u https://android.googlesource.com/platform/manifest
 
-    repo sync -c -j4 || true
-    repo sync -c -j4
-
-    patch -p1 < ${./fix_nsjail.patch}
+    repo sync -c $@ || true
+    repo sync -c $@
   '';
-  buildAndroid = pkgs.writeShellScriptBin "build-android" ''
+
+  buildAndroid = writeShellScriptBin "build-android" ''
     set -e
     cd $SOURCE_DIR
     source build/envsetup.sh || true
-    lunch aosp_cf_x86_64_only_phone-aosp_current-userdebug
+    lunch aosp_cf_x86_64_only_phone-aosp_current-eng
     m
   '';
-
 in
-pkgs.buildFHSEnv {
-  name = "android-build-env";
-  runScript = "bash";
-  profile = ''
-    export ANDROID_JAVA_HOME=${pkgs.jdk.home}
-    export SOURCE_DIR=$HOME/source
-    # We don't seem to have /lib in the linker cache by default here.
-    export LD_LIBRARY_PATH=/lib
-    # Set a custom prompt to more easily see in which shell we are.
-    export PROMPT_COMMAND='PS1="\e[0;32mandroid-build-env\$ \e[0m"'
-  '';
-  targetPkgs =
-    pkgs: with pkgs; [
+lib.mkMerge [
+  {
+    system.build.fhsEnv = fhsEnv;
+    fileSystems."/bin" = {
+      device = "${fhsEnv}/bin";
+      options = [ "bind" ];
+      fsType = "none";
+    };
+
+    fileSystems."/lib" = {
+      device = "${fhsEnv}/lib";
+      options = [ "bind" ];
+      fsType = "none";
+    };
+
+    fileSystems."/lib64" = {
+      device = "${fhsEnv}/lib";
+      options = [ "bind" ];
+      fsType = "none";
+    };
+  }
+  {
+    environment.variables = {
+      "PATH" = "$PATH:/bin";
+      "SOURCE_DIR" = "$HOME/source";
+    };
+    environment.systemPackages = [
       fetchAndroid
       buildAndroid
-      # sudo apt-get install git-core gnupg flex bison build-essential zip curl zlib1g-dev libc6-dev-i386 x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig
-      gitMinimal
-      binutils
-      gnupg
-      flex
-      bison
-      zip
-      curl
-      zlib
-      xorg.libX11
-      mesa
-      libxml2
-      libxslt
-      unzip
-      fontconfig
-      openssl
-      # Before you can work with AOSP, you must have installations of OpenJDK, Make, Python 3, and Repo
-      jdk
-      gnumake
-      python3
-      git-repo
-      rsync
     ];
-}
+  }
+]
