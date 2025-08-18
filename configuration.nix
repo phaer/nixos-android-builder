@@ -65,10 +65,6 @@
       pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64
     ) "console=ttyAMA0,115200");
 
-    # TODO: This might be good to upstream. systemd-oomd starts too early,
-    # so fails twice and spams log before succeeding.
-    systemd.services."systemd-oomd".after = [ "systemd-sysusers.service" ];
-
     # Define a stateVersion to supress eval warnings. As we don't keep state, it's irrelevant
     system.stateVersion = "25.05";
   };
