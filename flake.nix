@@ -52,5 +52,9 @@
         inherit image;
         default = image;
       };
+
+      checks.${system} = {
+        integration = pkgs.testers.runNixOSTest (import ./tests.nix { inherit modules; });
+      };
     };
 }
