@@ -5,9 +5,6 @@
     initialHashedPassword = "";
   };
 
-  # Allow root to login without password
-  users.users.root.initialHashedPassword = "";
-
   # Allow password-less sudo for wheel users
   security.sudo.wheelNeedsPassword = false;
 
