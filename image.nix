@@ -1,13 +1,9 @@
 {
   lib,
-  pkgs,
   config,
   modulesPath,
   ...
 }:
-let
-  initrdCfg = config.boot.initrd.systemd.repart;
-in
 {
   imports = [
     "${modulesPath}/image/repart.nix"
@@ -107,26 +103,31 @@ in
         #compression.enable = true;
         #compression.algorithm = "zstd";
 
-        partitions = {
-          "00-esp" = {
-            # Populate the ESP statically so that we can boot this image.
-            contents =
-              let
-                efiArch = config.nixpkgs.hostPlatform.efiArch;
-              in
-              {
-                "/EFI/BOOT/BOOT${lib.toUpper efiArch}.EFI".source =
-                  "${config.system.build.uki}/${config.system.boot.loader.ukiFile}";
-                "/EFI/Linux/${config.system.boot.loader.ukiFile}".source =
-                  "${config.system.build.uki}/${config.system.boot.loader.ukiFile}";
-              };
-            repartConfig = {
-              Type = "esp";
-              Label = "boot";
-              UUID = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"; # Well known
-              Format = "vfat";
-              SizeMinBytes = "128M";
+        verityStore =
+          let
+            efiArch = config.nixpkgs.hostPlatform.efiArch;
+            efiUki = "/EFI/BOOT/BOOT${lib.toUpper efiArch}.EFI";
+          in
+          {
+            enable = true;
+            ukiPath = efiUki;
+            partitionIds = {
+              esp = "00-esp";
+              store-verity = "10-store-verity";
+              store = "20-store";
             };
+          };
+
+        partitions = {
+          "00-esp".repartConfig = {
+            Type = "esp";
+            Label = "boot";
+            UUID = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"; # Well known
+            Format = "vfat";
+            SizeMinBytes = "128M";
+          };
+          "10-store-verity".repartConfig = {
+            Minimize = "best";
           };
           "20-store" = {
             storePaths = [ config.system.build.toplevel ];
@@ -148,9 +149,13 @@ in
       };
     };
 
-    boot.initrd.systemd.repart.extraArgs = [
-      (lib.optionalString (initrdCfg.keyFile != null) "--key-file=${initrdCfg.keyFile}")
-      (lib.optionalString (initrdCfg.factoryReset) "--factory-reset=true")
-    ];
+    boot.initrd.systemd.repart.extraArgs =
+      let
+        initrdCfg = config.boot.initrd.systemd.repart;
+      in
+      [
+        (lib.optionalString (initrdCfg.keyFile != null) "--key-file=${initrdCfg.keyFile}")
+        (lib.optionalString (initrdCfg.factoryReset) "--factory-reset=true")
+      ];
   };
 }
