@@ -26,6 +26,7 @@
       modules = lib.attrValues nixosModules;
 
       vm = pkgs.nixos {
+        nixpkgs.hostPlatform = { inherit system; };
         imports = modules;
       };
 
