@@ -9,7 +9,7 @@
     # only /var/lib in our case. The read-only partitions stay in place.
     boot.initrd.systemd.repart.factoryReset = true;
 
-    systemd.repart.partitions."var-lib".Encrypt = "key-file";
+    systemd.repart.partitions."30-var-lib".Encrypt = "key-file";
 
     boot.initrd.luks.devices."var_lib_crypt" = {
       keyFile = config.boot.initrd.systemd.repart.keyFile;

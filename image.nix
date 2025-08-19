@@ -44,13 +44,13 @@ in
           ];
         };
         "/var/lib" = {
-          device = "/dev/disk/by-partlabel/${parts."var-lib".repartConfig.Label}";
-          fsType = parts."var-lib".repartConfig.Format;
+          device = "/dev/disk/by-partlabel/${parts."30-var-lib".repartConfig.Label}";
+          fsType = parts."30-var-lib".repartConfig.Format;
           neededForBoot = true;
         };
         "/boot" = {
-          device = "/dev/disk/by-partlabel/${parts."esp".repartConfig.Label}";
-          fsType = parts."esp".repartConfig.Format;
+          device = "/dev/disk/by-partlabel/${parts."00-esp".repartConfig.Label}";
+          fsType = parts."00-esp".repartConfig.Format;
           options = [ "ro" ];
         };
         "/nix/store" = {
@@ -61,8 +61,8 @@ in
           };
         };
         "/nix/.ro-store" = {
-          device = "/dev/disk/by-partlabel/${parts."store".repartConfig.Label}";
-          fsType = parts."store".repartConfig.Format;
+          device = "/dev/disk/by-partlabel/${parts."20-store".repartConfig.Label}";
+          fsType = parts."20-store".repartConfig.Format;
           options = [
             "ro"
             "x-systemd.after=systemd-repart.service"
@@ -108,7 +108,7 @@ in
         #compression.algorithm = "zstd";
 
         partitions = {
-          "esp" = {
+          "00-esp" = {
             # Populate the ESP statically so that we can boot this image.
             contents =
               let
@@ -128,7 +128,7 @@ in
               SizeMinBytes = "128M";
             };
           };
-          "store" = {
+          "20-store" = {
             storePaths = [ config.system.build.toplevel ];
             stripNixStorePrefix = true;
             repartConfig = {
@@ -138,7 +138,7 @@ in
               Minimize = "best";
             };
           };
-          "var-lib".repartConfig = {
+          "30-var-lib".repartConfig = {
             Type = "var";
             UUID = "4d21b016-b534-45c2-a9fb-5c16e091fd2d"; # Well known
             Format = "ext4";
