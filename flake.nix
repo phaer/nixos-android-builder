@@ -2,7 +2,7 @@
   description = "A ephemeral NixOS VMs to build Android Open Source Project";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    nixpkgs.url = "github:phaer/nixpkgs?ref=qemu-runner";
   };
 
   outputs =
@@ -26,6 +26,7 @@
       modules = lib.attrValues nixosModules;
 
       vm = pkgs.nixos {
+        nixpkgs.hostPlatform = { inherit system; };
         imports = modules;
       };
 
@@ -50,23 +51,10 @@
         inherit run-vm;
         inherit image;
         default = image;
-        create-vm-disk =
-          let
-            cfg = vm.config.virtualisation;
-          in
-          pkgs.writeShellScriptBin "create-vm-disk" ''
-            if [ ! -e ${cfg.diskImage} ]; then
-              echo "creating ${cfg.diskImage}"
-                  ${cfg.qemu.package}/bin/qemu-img create \
-                    -f qcow2 \
-                    -b ${image}/${vm.config.image.fileName} \
-                    -F raw \
-                    ${cfg.diskImage} \
-                    "${toString cfg.diskSize}M"
-            else
-              echo "${cfg.diskImage} already exists, skipping creation"
-            fi
-          '';
+      };
+
+      checks.${system} = {
+        integration = pkgs.testers.runNixOSTest (import ./tests.nix { inherit modules; });
       };
     };
 }

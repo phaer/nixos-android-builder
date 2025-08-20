@@ -28,5 +28,41 @@
       # Start a headless VM with serial console.
       graphics = false;
     };
+
+    # Upstreams system.build.vm wrapped, so that it starts the VM with a
+    # copy-on-write copy of the underlying, read-only, disk image from the
+    # /nix/store.
+    system.build.vm =
+      let
+        cfg = config.virtualisation;
+        hostPkgs = cfg.host.pkgs;
+
+        runner' = hostPkgs.writeShellScript "run-${config.system.name}-vm" ''
+          if [ ! -e ${cfg.diskImage} ]; then
+            echo "creating ${cfg.diskImage}"
+                ${cfg.qemu.package}/bin/qemu-img create \
+                  -f qcow2 \
+                  -b ${config.system.build.image}/${config.image.fileName} \
+                  -F raw \
+                  ${cfg.diskImage} \
+                  "${toString cfg.diskSize}M"
+          else
+            echo "${cfg.diskImage} already exists, skipping creation"
+          fi
+          ${cfg.runner} $@
+        '';
+      in
+      lib.mkForce (
+        hostPkgs.runCommand "nixos-vm"
+          {
+            preferLocalBuild = true;
+            meta.mainProgram = "run-${config.system.name}-vm";
+          }
+          ''
+              mkdir -p $out/bin
+            ln -s ${config.system.build.toplevel} $out/system
+            ln -s ${runner'} $out/bin/run-${config.system.name}-vm
+          ''
+      );
   };
 }

@@ -9,11 +9,6 @@
     # Name our system. Image file names and metadata is derived from this
     system.name = "android-builder";
 
-    # Target architecture of this NixOS instance
-    nixpkgs.hostPlatform = {
-      system = "x86_64-linux";
-    };
-
     # Add extra software from nixpkgs, as well as a custom shell to build Android
     environment.systemPackages = with pkgs; [
       vim
