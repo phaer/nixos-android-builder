@@ -147,9 +147,7 @@
       let
         initrdCfg = config.boot.initrd.systemd.repart;
       in
-      [
-        (lib.optionalString (initrdCfg.keyFile != null) "--key-file=${initrdCfg.keyFile}")
-        (lib.optionalString (initrdCfg.factoryReset) "--factory-reset=true")
-      ];
+        (lib.optionals (initrdCfg.keyFile != null) ["--key-file=${initrdCfg.keyFile}"])
+        ++ (lib.optionals (initrdCfg.factoryReset) ["--factory-reset=true"]);
   };
 }
