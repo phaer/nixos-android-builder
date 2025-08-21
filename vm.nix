@@ -42,7 +42,7 @@
             echo "creating ${cfg.diskImage}"
                 ${cfg.qemu.package}/bin/qemu-img create \
                   -f qcow2 \
-                  -b ${config.system.build.image}/${config.image.fileName} \
+                  -b ${config.system.build.finalImage}/${config.image.fileName} \
                   -F raw \
                   ${cfg.diskImage} \
                   "${toString cfg.diskSize}M"

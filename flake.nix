@@ -31,7 +31,7 @@
       };
 
       run-vm = vm.config.system.build.vm;
-      image = vm.config.system.build.image;
+      image = vm.config.system.build.finalImage;
     in
     {
       inherit nixosModules;
