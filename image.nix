@@ -57,12 +57,8 @@
           };
         };
         "/nix/.ro-store" = {
-          device = "/dev/disk/by-partlabel/${parts."20-store".repartConfig.Label}";
-          fsType = parts."20-store".repartConfig.Format;
-          options = [
-            "ro"
-            "x-systemd.after=systemd-repart.service"
-          ];
+          device = "/usr/nix/store";
+          options = [ "bind" ];
           neededForBoot = true;
         };
         "/nix/.rw-store" = {
@@ -127,15 +123,13 @@
             SizeMinBytes = "128M";
           };
           "10-store-verity".repartConfig = {
+            Label = "store-verity";
             Minimize = "best";
           };
           "20-store" = {
             storePaths = [ config.system.build.toplevel ];
-            stripNixStorePrefix = true;
             repartConfig = {
-              Type = "linux-generic";
               Label = "store";
-              Format = "erofs";
               Minimize = "best";
             };
           };
