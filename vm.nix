@@ -59,7 +59,7 @@
             meta.mainProgram = "run-${config.system.name}-vm";
           }
           ''
-              mkdir -p $out/bin
+            mkdir -p $out/bin
             ln -s ${config.system.build.toplevel} $out/system
             ln -s ${runner'} $out/bin/run-${config.system.name}-vm
           ''
