@@ -8,6 +8,7 @@ let
   waitForDisk = pkgs.writeScript "wait-for-disk" ''
     #!/bin/sh
     set -e
+    partprobe
     udevadm settle -t 5
   '';
   generateDiskKey = pkgs.writeScript "generate-disk-key" ''
@@ -37,10 +38,15 @@ in
       # only /var/lib in our case. The read-only partitions stay in place.
       repart.factoryReset = true;
 
+      extraBin = {
+        partprobe = "${pkgs.parted}/bin/partprobe";
+      };
+
       storePaths = [
         waitForDisk
         generateDiskKey
       ];
+
       services = {
         systemd-repart = {
           before = [
