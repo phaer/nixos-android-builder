@@ -47,7 +47,7 @@
         Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = ''/bin/ln -sf /dev/disk/by-partlabel/${
-          config.image.repart.partitions."20-store".repartConfig.Label
+          config.image.repart.partitions."30-var-lib".repartConfig.Label
         } /run/systemd/volatile-root'';
       };
     };
