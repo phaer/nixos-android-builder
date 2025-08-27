@@ -13,6 +13,8 @@
       memorySize = 64 * 1024;
       cores = 32;
 
+      useSecureBoot = true;
+
       # Don't use direct boot for the VM to verify that the bootloader is working.
       directBoot.enable = false;
       installBootLoader = false;
@@ -38,18 +40,21 @@
         hostPkgs = cfg.host.pkgs;
 
         runner' = hostPkgs.writeShellScript "run-${config.system.name}-vm" ''
-          if [ ! -e ${cfg.diskImage} ]; then
-            echo "creating ${cfg.diskImage}"
-                ${cfg.qemu.package}/bin/qemu-img create \
-                  -f qcow2 \
-                  -b ${config.system.build.finalImage}/${config.image.fileName} \
-                  -F raw \
-                  ${cfg.diskImage} \
-                  "${toString cfg.diskSize}M"
-          else
-            echo "${cfg.diskImage} already exists, skipping creation"
+           if [ ! -e ${cfg.diskImage} ]; then
+             echo "creating ${cfg.diskImage}"
+                 ${cfg.qemu.package}/bin/qemu-img create \
+                   -f qcow2 \
+                   -b ${config.system.build.finalImage}/${config.image.fileName} \
+                   -F raw \
+                   ${cfg.diskImage} \
+                   "${toString cfg.diskSize}M"
+           else
+             echo "${cfg.diskImage} already exists, skipping creation"
           fi
-          ${cfg.runner} $@
+          echo "Signing disk image"
+          ${./sign-disk-image.sh} ${cfg.diskImage}
+
+           ${cfg.runner} $@
         '';
       in
       lib.mkForce (

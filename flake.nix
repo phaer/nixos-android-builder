@@ -44,6 +44,9 @@
           sbsigntool
           openssl
           efitools
+
+          qemu-utils
+          multipath-tools
         ];
       };
 
