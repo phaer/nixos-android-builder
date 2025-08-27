@@ -32,6 +32,10 @@
       groups.user = { };
     };
 
+    # Opt-out of lastlog functionality, as it did not seem to work with our setup
+    # and isn't worth investing time in in our use-case.
+    security.pam.services.login.updateWtmp = lib.mkForce false;
+
     # Configure nix with flake support, but no channels.
     nix = {
       enable = true;
