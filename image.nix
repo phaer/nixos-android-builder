@@ -26,6 +26,8 @@
   };
 
   config = {
+    system.activationScripts.usrbinenv = lib.mkForce "";
+
     fileSystems =
       let
         parts = config.image.repart.partitions;
