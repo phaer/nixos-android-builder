@@ -1,75 +1,60 @@
 #!/usr/bin/env bash
-# Given a disk image, mount it's ESP partition via qemu-nbd,
-# and sign the default EFI application on it.
-# Uses qemu-nbd instead of losetup, because that can handle
-# both, raw disk images, as well as qcow2 images. The backing
-# layer stays read-only in /nix/store while we modify the
-# COW layer in the latter case.
-# It assumes secure boot keys to exist in $keystore, the
-# $nbd_device to be free, as well as the ESP to be found on
-# partition number $disk_image_partition.
+# Given a disk image, find its ESP partition, sign the default EFI
+# application on it - usually our Unified Kernel Image (UKI), and
+# copy update bundles for Secure Boot enrollment into EFI/KEYS.
+# Using mtools and raw image files has the advantage of neither
+# requiring root nor any daemons, so it works in restricted build
+# environments such as the nix sandbox or different CI runners.
 set -euo pipefail
 
-keystore="keys"
-disk_image_file="$1"
-disk_image_partition="${2:-1}"
-disk_image_format="$(qemu-img info "$disk_image_file" | awk '/^file format/ {print $3}')"
-
-nbd_device="/dev/nbd0"
-nbd_partition="/dev/mapper/$(basename "$nbd_device")p${disk_image_partition}"
+keystore="${keystore:-./keys}"
+target_image_file="$1"
 
 esp_uki="EFI/BOOT/BOOTX64.EFI"
 esp_keystore="EFI/KEYS"
+temp_dir=$(mktemp -d --suffix "efi")
 
-declare -a CLEANUP_STACK
-on_cleanup() {
-    CLEANUP_STACK+=("$1")
-    # Update the trap to run all items in stack (in reverse order)
-    local cleanup_cmd=""
-    local i
-    for ((i=${#CLEANUP_STACK[@]}-1; i>=0; i--)); do
-        if [ -n "$cleanup_cmd" ]; then
-            cleanup_cmd="$cleanup_cmd; "
-        fi
-        cleanup_cmd="$cleanup_cmd${CLEANUP_STACK[i]}"
-    done
-    trap "$cleanup_cmd" EXIT
+
+cleanup() {
+    rm -rf "$temp_dir"
 }
-on_cleanup 'echo >&2 "Done. $disk_image_file includes a signed UKI & keys for enrollment now."'
-on_cleanup 'sleep 1; udevadm settle -t 5'
+trap "cleanup" EXIT
 
+echo >&2 "Searching ESP partition offset in $target_image_file"
+esp_offset="$(
+  parted \
+    --script \
+    --json \
+    "$target_image_file" \
+    -- unit B print \
+    | \
+ jq -r '
+   .disk.partitions[]
+   | select(.flags and (.flags | contains(["esp"])))
+   | .start
+   | rtrimstr("B")'
+)"
 
-echo >&2 "Loading nbd kernel module"
-if ! lsmod | grep -q nbd; then
-    sudo modprobe nbd
-fi
-on_cleanup 'sudo modprobe nbd'
+mtools_args="-i $target_image_file@@$esp_offset"
+mcopy_args="$mtools_args -o"
 
-echo >&2 "Attaching $disk_image_format image $disk_image_file to $nbd_device"
-sudo qemu-nbd \
-     --format="$disk_image_format" \
-     --connect="$nbd_device" \
-     "$disk_image_file"
-on_cleanup 'sudo qemu-nbd --disconnect "$nbd_device"'
+echo >&2 "Copying $esp_uki from the image to $temp_dir/$esp_uki"
+mkdir -p "$temp_dir/$(dirname "$esp_uki")"
+mcopy $mtools_args "::$esp_uki" "$temp_dir/$esp_uki"
 
-echo >&2 "Scanning for partitions in $nbd_device"
-sudo kpartx -a "$nbd_device"
-on_cleanup 'sudo kpartx -d "$nbd_device"'
+echo >&2 "Signing $temp_dir/$esp_uki"
+sbsign \
+  --key "$keystore/db.key" \
+  --cert "$keystore/db.crt" \
+  "$temp_dir/$esp_uki" \
+  --output "$temp_dir/$esp_uki"
 
-mount_point=$(mktemp -d)
-on_cleanup 'rm -rf "$mount_point"'
+echo >&2 "Copying $temp_dir/$esp_uki back to the image, into $esp_uki"
+mcopy $mcopy_args "$temp_dir/$esp_uki" "::$esp_uki"
 
-echo >&2 "Mounting $nbd_partition to $mount_point"
-sudo mount "$nbd_partition" "$mount_point"
-on_cleanup 'sudo umount "$mount_point"'
+echo >&2 "Copying certificates from $keystore to the image, into $esp_keystore"
+mmd $mtools_args "::$esp_keystore"
+mcopy $mcopy_args "$keystore"/{PK,KEK,db}.auth "::$esp_keystore"
 
-echo >&2 "Signing $mount_point/$esp_uki"
-sudo sbsign \
-     --key keys/db.key \
-     --cert keys/db.crt \
-     "$mount_point/$esp_uki" \
-     --output "$mount_point/$esp_uki"
-
-echo >&2 "Copying certificates from $keystore to $mount_point/$esp_keystore"
-sudo mkdir -p "$mount_point/$esp_keystore"
-sudo cp -v "$keystore"/{PK,KEK,db}.auth "$mount_point/$esp_keystore"
+echo >&2 "Done. You can now flash the signed image:"
+echo "$target_image_file"
