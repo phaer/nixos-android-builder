@@ -51,8 +51,10 @@
            else
              echo "${cfg.diskImage} already exists, skipping creation"
           fi
-          echo "Signing disk image"
-          ${./sign-disk-image.sh} ${cfg.diskImage}
+          ${lib.optionalString cfg.useSecureBoot ''
+            echo "Signing disk image"
+            ${./sign-disk-image.sh} ${cfg.diskImage}
+          ''}
 
            ${cfg.runner} $@
         '';
