@@ -43,26 +43,17 @@
         cfg = config.virtualisation;
         hostPkgs = cfg.host.pkgs;
 
+        scripts = import ./scripts { pkgs = hostPkgs; };
+
         # Create a set of private keys for VM tests, but cache them in the /nix/store,
         # so we don't need to create a new pair on each run.
-        testKeys = hostPkgs.runCommandLocal "test-keys" {
-          buildInputs = [
-            hostPkgs.sbsigntool
-            hostPkgs.openssl
-            hostPkgs.efitools
-            hostPkgs.util-linux
-          ];
-        } ''
-          bash ${./create-signing-keys.sh} $out/
+        testKeys = hostPkgs.runCommandLocal "test-keys" { } ''
+          ${lib.getExe scripts.create-signing-keys} $out/
         '';
 
         runner' = hostPkgs.writeShellApplication {
           name = "run-${config.system.name}-vm";
           runtimeInputs = [
-            hostPkgs.jq
-            hostPkgs.mtools
-            hostPkgs.parted
-            hostPkgs.sbsigntool
             cfg.qemu.package
           ];
           text = ''
@@ -80,7 +71,7 @@
                 echo >&2 "Using test keys to sign UKI."
                 export keystore=${testKeys}
               fi
-              bash ${./sign-disk-image.sh} "${cfg.diskImage}"
+              bash ${lib.getExe scripts.sign-disk-image} "${cfg.diskImage}"
             else
               echo "${cfg.diskImage} already exists, skipping creation & signing"
             fi

@@ -32,6 +32,7 @@
 
       run-vm = vm.config.system.build.vm;
       image = vm.config.system.build.finalImage;
+      scripts = import ./scripts { inherit pkgs; };
     in
     {
       inherit nixosModules;
@@ -40,19 +41,15 @@
       formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt-tree;
 
       devShells.${system}.default = pkgs.mkShell {
-        packages = with pkgs; [
-          sbsigntool
-          openssl
-          efitools
-
-          qemu-utils
-          multipath-tools
+        packages = with scripts; [
+          create-signing-keys
+          sign-disk-image
         ];
       };
 
       packages.${system} = {
-        inherit run-vm;
-        inherit image;
+        inherit run-vm image;
+        inherit (scripts) create-signing-keys sign-disk-image;
         default = image;
       };
 
