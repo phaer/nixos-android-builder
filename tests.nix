@@ -53,10 +53,41 @@
               "search path of /lib/ld-linux-x86-64.so.2 does not contain /lib ")
       '';
 
+      testVerity = ''
+        with subtest("dm-verity works"):
+          t.assertRegex(
+          machine.succeed("veritysetup status usr"),
+          r'status:\s+verified')
+      '';
+
+      testSecureBoot = ''
+        with subtest("secure boot works"):
+          t.assertIn(
+            "Secure Boot: disabled (setup)", machine.succeed("bootctl status"),
+            "Machine isn't in SecureBoot setup mode")
+
+          machine.succeed("enroll-secure-boot")
+
+          t.assertNotIn(
+            "Secure Boot: disabled (setup)", machine.succeed("bootctl status"),
+            "Machine did not leave SecureBoot setup mode after enrollment")
+          t.assertIn(
+            "Secure Boot: disabled", machine.succeed("bootctl status"),
+            "Machine is expected to have secure boot disabled at this point")
+
+          machine.reboot()
+
+          t.assertIn(
+            "Secure Boot: enabled (user)", machine.succeed("bootctl status"),
+            "Machine is NOT in SecureBoot after reboot")
+      '';
     in
     ''
-      machine.start()
+      serial_stdout_on()
+      machine.start(allow_reboot=True)
       machine.wait_for_unit("default.target")
+      ${testSecureBoot}
+      ${testVerity}
       ${testFHSEnv}
       machine.shutdown()
     '';
