@@ -5,7 +5,7 @@ a ephemeral key on each boot. No state is persisted between boots by default.
 
 It's not hardnened by default. To the contrary: It includes a single account `users` that is automatically logged in on `tty1` and `ttyS0` and has password-less sudo permission and a persistent home in `/var/lib/build`.
 
-## Build Environment
+# Build Environment
 
 Androids build system assumes to be run inside a Linux environment that resembles a conventional Linux File System Hierachy (FHS) with executables in `/bin`, dynamic libraries in `/lib`, and so on.
 
@@ -40,16 +40,14 @@ build has finished.
 
 # Usage in a Virtual Machine
 
-It is possible to test the whole setup in a [qemu](http://qemu.org/) virtual machine using Nix (currently only tested from `x86_64-linux`), after preparing a writable disk image, `android-builder.qcow2` in the current working directory.
+It is possible to test the whole setup in a [qemu](http://qemu.org/) virtual machine using Nix (currently only tested from `x86_64-linux`), in the current working directory.
 
 ```shell-session
-nix run .#create-vm-disk
 nix run .#run-vm
 ```
 
-Will start a head-less VM with a console in the current terminal. Use `Ctrl-A x` or `systemctl poweroff` to stop the VM.
-
-The command above will create a `qcow2` disk image for the persistent storage in the current directory, if one does not exist already. That disk image can be deleted as needed to do a "factory reset" of the builder. It's mostly used as a cache for sources and build artifacts.
+This will create a writable copy of the read-only disk image, e.g. `android-builder_25.11pre-git.raw` in the local directory and sign ith with a pair of test keys,
+before starting a head-less VM with a console in the current terminal. Use `Ctrl-A x` or `systemctl poweroff` to stop the VM.
 
 # Usage on Bare Metal
 
@@ -57,36 +55,46 @@ To deploy the builder to physical hardware, we can build a disk image:
 
 ```shell-session
 $ nix build .#image
-$ realpath -e result/android-builder_*.raw
-/nix/store/1rr1x8q3ak1r34w8jlgmp25kzr45ny6s-android-builder-25.11pre-git/android-builder_25.11pre-git.raw
 ```
 
-(the hash in your store path will likely be different)
+This will take a while on first build, but eventually result in read-only disk image in the nix store and link it in `result`, e.g.: `./result/android-builder_25.11pre-git.raw`.
 
-That image can then be copied to a USB stick or hard-drive with e.g. `sudo dd if="$(realpath -e result/android-builder_*.raw)" bs=1M status=progress of=/dev/your-device` or other utils and booted on EFI-enabled x86_64 machines.
+## Secure Boot
 
-# Secure Boot
+To prepare our image for SecureBoot, we first have to copy it to a location where we can write to it, and then run two of our included scripts for key creation and image signing.
+Those scripts can be run from the included devshell (`nix develop`) or by using `nix run`, i.e. `nix run .#create-signing-keys`:
 
-There are scripts included for secure boot key creation and signing the image. They should be run in the included devshell, after building `.#image` but before flashing it.
+```shell-session
+# Create SecureBoot keys
+create-signing-keys
+# Build the image, copy it to our current working directory and make it writable
+install -T $(nix build --no-link --print-out-paths .#image)/*.raw android_builder.raw
+# Finally, sign the UKI on the images ESP partition
+sign-disk-image android-builder.raw
+```
+
+`openssl` is used to generate new secure boot keys. The keys are stored into `$PWD/keys` directory.
+This process is currently expected to be run from this repo on your workstation, not the target machine.
+
+Be sure to keep the `*.key` files safe and private! Other generated files should be relatively safe to distribute. Various formats of public keys and certs are generated to be compatible with most UEFIs and use cases. The current setup does not over revocation lists nor does it guard against downgrade attacks.
+
+The signing script copies the public keys from `./keys` into the raw image at `/boot/EFI/keys` where they can be enrolled by booting in SecureBoot setup mode and running the included `enroll-secure-boot` script before rebooting. `enroll-secure-boot` leaves setup mode automatically.
 
 ```sh
-./create-signing-keys.sh
-./sign.sh
+sudo enroll-secure-boot
+sudo systemctl reboot
 ```
 
-`openssl` is used to generate new secure boot keys. The keys are stored into `./keys` directory.
-This process is meant to be done outside of the target hardware, in a centralized way.
+## Flashing it
 
-Be sure to keep the `*.key` files safe and private! Other generated files are safe to distribute.
-Various formats of public keys and certs are generated to be compatible with most UEFIs and use cases.
+The result image can then be copied to a USB stick or hard-drive with e.g. `sudo dd if=android-builder.raw bs=1M status=progress of=/dev/your-device` or other utils and booted on EFI-enabled x86_64 machines.
 
-The signing script copies the public keys from `./keys` into the raw image at `/boot/EFI/keys` where they can be enrolled from -
-either by using the included UEFI gui, or by booting the image with secure boot in setup mode and using the included `enroll-secure-boot` script.
 
-```sh
-# uses efi-updatevar under the hood
-enroll-secure-boot
+# Automated Testing
 
-# reboot to UEFI now to enable secure boot
-sudo systemctl reboot --firmware-setup
+There's a NixOS VM Test that boots the built image in a virtual machine and checks whether the Android build env is in order, and wheter dm-verity and secure boot, including enrollment, work.
+
+```shell-session
+nix build -L .#checks.x86_64-linux.integration
 ```
+

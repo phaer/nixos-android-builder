@@ -2,16 +2,16 @@
   "nodes": {
     "nixpkgs": {
       "locked": {
-        "lastModified": 1754214453,
-        "narHash": "sha256-Q/I2xJn/j1wpkGhWkQnm20nShYnG7TI99foDBpXm1SY=",
-        "owner": "nixos",
+        "lastModified": 1756123245,
+        "narHash": "sha256-4q2Y0Atw/r8SwBPif+37mzC/7AE3PLOX3hGz40dZ88k=",
+        "owner": "phaer",
         "repo": "nixpkgs",
-        "rev": "5b09dc45f24cf32316283e62aec81ffee3c3e376",
+        "rev": "f0377e55eaa5016433e8c16d1b96c89a2e512004",
         "type": "github"
       },
       "original": {
-        "owner": "nixos",
-        "ref": "nixos-unstable",
+        "owner": "phaer",
+        "ref": "qemu-runner",
         "repo": "nixpkgs",
         "type": "github"
       }

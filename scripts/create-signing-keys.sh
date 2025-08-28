@@ -2,13 +2,15 @@
 
 set -e
 
-if [ -d ./keys ]; then
+keystore="${1:-./keys}"
+
+if [ -d "$keystore" ]; then
 	echo "Directory 'keys' already exists, delete if you want new keys!"
 	exit 1
 fi
 
-mkdir keys
-cd keys
+mkdir -p "$keystore"
+cd "$keystore"
 
 echo ">>> Generating UUID"
 uuidgen --random >guid.txt
