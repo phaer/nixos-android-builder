@@ -29,35 +29,64 @@
 
       # Start a headless VM with serial console.
       graphics = false;
+
+      # Use a raw image, not image for the vm (for easier post-processing with mtools & such).
+      diskImage = config.image.fileName;
     };
 
-    # Upstreams system.build.vm wrapped, so that it starts the VM with a
-    # copy-on-write copy of the underlying, read-only, disk image from the
-    # /nix/store.
+    # Upstreams system.build.vm wrapped, so that it copies the read-only
+    # image out of the nix store, to a writable copy in $PWD. It then
+    # signs an EFI app inside the images ESP and copies SecureBoot keys
+    # to it, before it starts the VM.
     system.build.vm =
       let
         cfg = config.virtualisation;
         hostPkgs = cfg.host.pkgs;
 
-        runner' = hostPkgs.writeShellScript "run-${config.system.name}-vm" ''
-           if [ ! -e ${cfg.diskImage} ]; then
-             echo "creating ${cfg.diskImage}"
-                 ${cfg.qemu.package}/bin/qemu-img create \
-                   -f qcow2 \
-                   -b ${config.system.build.finalImage}/${config.image.fileName} \
-                   -F raw \
-                   ${cfg.diskImage} \
-                   "${toString cfg.diskSize}M"
-           else
-             echo "${cfg.diskImage} already exists, skipping creation"
-          fi
-          ${lib.optionalString cfg.useSecureBoot ''
-            echo "Signing disk image"
-            ${./sign-disk-image.sh} ${cfg.diskImage}
-          ''}
-
-           ${cfg.runner} $@
+        # Create a set of private keys for VM tests, but cache them in the /nix/store,
+        # so we don't need to create a new pair on each run.
+        testKeys = hostPkgs.runCommandLocal "test-keys" {
+          buildInputs = [
+            hostPkgs.sbsigntool
+            hostPkgs.openssl
+            hostPkgs.efitools
+            hostPkgs.util-linux
+          ];
+        } ''
+          bash ${./create-signing-keys.sh} $out/
         '';
+
+        runner' = hostPkgs.writeShellApplication {
+          name = "run-${config.system.name}-vm";
+          runtimeInputs = [
+            hostPkgs.jq
+            hostPkgs.mtools
+            hostPkgs.parted
+            hostPkgs.sbsigntool
+            cfg.qemu.package
+          ];
+          text = ''
+            if [ ! -e ${cfg.diskImage} ]; then
+              echo >&2 "Copying ${config.system.build.finalImage}/${config.image.fileName} to ${cfg.diskImage}"
+              qemu-img convert -f raw -O raw "${config.system.build.finalImage}/${config.image.fileName}" "${cfg.diskImage}"
+              echo >&2 "Resizing ${cfg.diskImage} to ${toString cfg.diskSize}M"
+              qemu-img resize "${cfg.diskImage}" "${toString cfg.diskSize}M"
+
+              echo >&2 "Signing UKI in ${cfg.diskImage}"
+              if [ -n "''${testScript:-}" ]; then
+                # We are supposedly running in a NixOS VM test, so we neither
+                # have nor want access to production keys. Let's use test keys
+                # in the world-readable nix store instead.
+                echo >&2 "Using test keys to sign UKI."
+                export keystore=${testKeys}
+              fi
+              bash ${./sign-disk-image.sh} "${cfg.diskImage}"
+            else
+              echo "${cfg.diskImage} already exists, skipping creation & signing"
+            fi
+            ${cfg.runner} "$@"
+          '';
+        };
       in
       lib.mkForce (
         hostPkgs.runCommand "nixos-vm"
@@ -68,7 +97,7 @@
           ''
             mkdir -p $out/bin
             ln -s ${config.system.build.toplevel} $out/system
-            ln -s ${runner'} $out/bin/run-${config.system.name}-vm
+            ln -s ${lib.getExe runner'} $out/bin/run-${config.system.name}-vm
           ''
       );
   };
