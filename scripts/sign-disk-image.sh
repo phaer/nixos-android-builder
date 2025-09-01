@@ -20,6 +20,8 @@ cleanup() {
 }
 trap "cleanup" EXIT
 
+echo >&2 "using keystore ${keystore}".
+
 echo >&2 "Searching ESP partition offset in $target_image_file"
 esp_offset="$(
   parted \

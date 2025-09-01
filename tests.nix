@@ -19,6 +19,7 @@
     };
 
   testScript =
+    { nodes, ... }:
     let
       testFHSEnv = ''
         with subtest("Checking FHS Environment"):
@@ -83,6 +84,19 @@
       '';
     in
     ''
+      import os
+      import os.path
+      import subprocess
+      env = os.environ.copy()
+
+      # Use world-readable, throw-away test keys to sign the writable image
+      # copy used for this test run.
+      env["keystore"] = "${nodes.machine.system.build.secureBootKeysForTests}"
+      # Prepare the writable disk image
+      subprocess.run([
+        "${lib.getExe nodes.machine.system.build.prepareWritableDisk}"
+      ], env=env, cwd=machine.state_dir)
+
       serial_stdout_on()
       machine.start(allow_reboot=True)
       machine.wait_for_unit("default.target")

@@ -5,6 +5,12 @@
   modulesPath,
   ...
 }:
+let
+  cfg = config.virtualisation;
+  hostPkgs = cfg.host.pkgs;
+
+  scripts = import ./scripts { pkgs = hostPkgs; };
+in
 {
   imports = [ "${modulesPath}/virtualisation/qemu-vm.nix" ];
   config = {
@@ -34,62 +40,52 @@
       diskImage = config.image.fileName;
     };
 
-    # Upstreams system.build.vm wrapped, so that it copies the read-only
-    # image out of the nix store, to a writable copy in $PWD. It then
-    # signs an EFI app inside the images ESP and copies SecureBoot keys
-    # to it, before it starts the VM.
-    system.build.vm =
-      let
-        cfg = config.virtualisation;
-        hostPkgs = cfg.host.pkgs;
+    # Create a set of private keys for VM tests, but cache them in the /nix/store,
+    # so we don't need to create a new pair on each run.
+    system.build.secureBootKeysForTests = hostPkgs.runCommandLocal "test-keys" { } ''
+      ${lib.getExe scripts.create-signing-keys} $out/
+    '';
 
-        scripts = import ./scripts { pkgs = hostPkgs; };
-
-        # Create a set of private keys for VM tests, but cache them in the /nix/store,
-        # so we don't need to create a new pair on each run.
-        testKeys = hostPkgs.runCommandLocal "test-keys" { } ''
-          ${lib.getExe scripts.create-signing-keys} $out/
-        '';
-
-        runner' = hostPkgs.writeShellApplication {
-          name = "run-${config.system.name}-vm";
-          runtimeInputs = [
-            cfg.qemu.package
-          ];
-          text = ''
+    # Helper that copies the read-only image out of the nix store, to a
+    # writable copy in $PWD. It then signs an UKI inside the images ESP and
+    # copies SecureBoot keys to it.
+    system.build.prepareWritableDisk = hostPkgs.writeShellApplication {
+      name = "prepare-writable-disk";
+      text =
+        let
+          cfg = config.virtualisation;
+        in
+        ''
             if [ ! -e ${cfg.diskImage} ]; then
+
               echo >&2 "Copying ${config.system.build.finalImage}/${config.image.fileName} to ${cfg.diskImage}"
-              qemu-img convert -f raw -O raw "${config.system.build.finalImage}/${config.image.fileName}" "${cfg.diskImage}"
+              ${cfg.qemu.package}/bin/qemu-img convert \
+                -f raw -O raw \
+                "${config.system.build.finalImage}/${config.image.fileName}" \
+                "${cfg.diskImage}"
+
               echo >&2 "Resizing ${cfg.diskImage} to ${toString cfg.diskSize}M"
-              qemu-img resize "${cfg.diskImage}" "${toString cfg.diskSize}M"
+              ${cfg.qemu.package}/bin/qemu-img resize \
+                "${cfg.diskImage}" \
+                "${toString cfg.diskSize}M"
 
               echo >&2 "Signing UKI in ${cfg.diskImage}"
-              if [ -n "''${testScript:-}" ]; then
-                # We are supposedly running in a NixOS VM test, so we neither
-                # have nor want access to production keys. Let's use test keys
-                # in the world-readable nix store instead.
-                echo >&2 "Using test keys to sign UKI."
-                export keystore=${testKeys}
-              fi
+              export keystore="${config.system.build.secureBootKeysForTests}"
               bash ${lib.getExe scripts.sign-disk-image} "${cfg.diskImage}"
             else
               echo "${cfg.diskImage} already exists, skipping creation & signing"
-            fi
-            ${cfg.runner} "$@"
-          '';
-        };
-      in
-      lib.mkForce (
-        hostPkgs.runCommand "nixos-vm"
-          {
-            preferLocalBuild = true;
-            meta.mainProgram = "run-${config.system.name}-vm";
-          }
-          ''
-            mkdir -p $out/bin
-            ln -s ${config.system.build.toplevel} $out/system
-            ln -s ${lib.getExe runner'} $out/bin/run-${config.system.name}-vm
-          ''
-      );
+          fi
+        '';
+    };
+
+    # Upstreams system.build.vm wrapped to prepare a writeable & signed image
+    # before starting the vm.
+    system.build.vmWithWritableDisk = hostPkgs.writeShellApplication {
+      name = "run-${config.system.name}-vm";
+      text = ''
+        ${lib.getExe config.system.build.prepareWritableDisk}
+        ${lib.getExe config.system.build.vm} "$@"
+      '';
+    };
   };
 }

@@ -2,7 +2,7 @@
   description = "A ephemeral NixOS VMs to build Android Open Source Project";
 
   inputs = {
-    nixpkgs.url = "github:phaer/nixpkgs?ref=qemu-runner";
+    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
   };
 
   outputs =
@@ -30,7 +30,7 @@
         imports = modules;
       };
 
-      run-vm = vm.config.system.build.vm;
+      run-vm = vm.config.system.build.vmWithWritableDisk;
       image = vm.config.system.build.finalImage;
       scripts = import ./scripts { inherit pkgs; };
     in
