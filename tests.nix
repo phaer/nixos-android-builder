@@ -1,5 +1,4 @@
-{ modules }:
-{ lib, ... }:
+{ modules, lib, ... }:
 {
   name = "nixos-android-builder-integration-test";
   nodes.machine =

@@ -53,7 +53,12 @@
       };
 
       checks.${system} = {
-        integration = pkgs.testers.runNixOSTest (import ./tests.nix { inherit modules; });
+        integration = pkgs.testers.runNixOSTest {
+          imports = [
+            ./tests.nix
+            { _module.args = { inherit modules; }; }
+          ];
+        };
       };
     };
 }
