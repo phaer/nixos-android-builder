@@ -25,7 +25,7 @@
 
       vm = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
-        imports = modules;
+        imports = modules ++ [ ./configuration.nix ];
       };
 
       run-vm = vm.config.system.build.vmWithWritableDisk;

@@ -1,15 +1,14 @@
-# Generic NixOS Host Configurations, that don't fit in other modules.
+# Custom Options & generic NixOS configuration, that don't fit in other modules.
 {
   lib,
   pkgs,
   ...
 }:
 {
-
+  options.nixosAndroidBuilder = {
+    debug = lib.mkEnableOption "image customizations for interactive access during run-time.";
+  };
   config = {
-    # Name our system. Image file names and metadata is derived from this.
-    system.name = "android-builder";
-
     # All users must be declared at build-time.
     users.mutableUsers = false;
 
