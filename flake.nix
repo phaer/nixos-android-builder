@@ -30,7 +30,8 @@
 
       run-vm = vm.config.system.build.vmWithWritableDisk;
       image = vm.config.system.build.finalImage;
-      scripts = import ./scripts { inherit pkgs; };
+
+      secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
     in
     {
       inherit nixosModules;
@@ -39,7 +40,7 @@
       formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt-tree;
 
       devShells.${system}.default = pkgs.mkShell {
-        packages = with scripts; [
+        packages = with secureBootScripts; [
           create-signing-keys
           sign-disk-image
         ];
@@ -47,7 +48,7 @@
 
       packages.${system} = {
         inherit run-vm image;
-        inherit (scripts) create-signing-keys sign-disk-image;
+        inherit (secureBootScripts) create-signing-keys sign-disk-image;
         default = image;
       };
 

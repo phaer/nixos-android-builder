@@ -9,7 +9,7 @@ let
   cfg = config.virtualisation;
   hostPkgs = cfg.host.pkgs;
 
-  scripts = import ../scripts { pkgs = hostPkgs; };
+  secureBootScripts = hostPkgs.callPackage ../packages/secure-boot-scripts { };
 in
 {
   imports = [ "${modulesPath}/virtualisation/qemu-vm.nix" ];
@@ -43,7 +43,7 @@ in
     # Create a set of private keys for VM tests, but cache them in the /nix/store,
     # so we don't need to create a new pair on each run.
     system.build.secureBootKeysForTests = hostPkgs.runCommandLocal "test-keys" { } ''
-      ${lib.getExe scripts.create-signing-keys} $out/
+      ${lib.getExe secureBootScripts.create-signing-keys} $out/
     '';
 
     # Helper that copies the read-only image out of the nix store, to a
@@ -71,7 +71,7 @@ in
 
               echo >&2 "Signing UKI in ${cfg.diskImage}"
               export keystore="${config.system.build.secureBootKeysForTests}"
-              bash ${lib.getExe scripts.sign-disk-image} "${cfg.diskImage}"
+              bash ${lib.getExe secureBootScripts.sign-disk-image} "${cfg.diskImage}"
             else
               echo "${cfg.diskImage} already exists, skipping creation & signing"
           fi

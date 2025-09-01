@@ -7,7 +7,7 @@ let
   # The default glibc build shipping with NixOS includes a dynamic linker (ld.so) that works
   # for NixOS, but ignores conventional FHS directories, such as /lib, by design.
 
-  glibc = pkgs.callPackage ../glibc-vanilla.nix { };
+  glibc = pkgs.callPackage ../packages/glibc-vanilla { };
   bash = pkgs.bash.override {
     interactive = true;
     forFHSEnv = true;
@@ -64,7 +64,7 @@ let
   ];
 
   storePaths = "${pkgs.closureInfo { rootPaths = packages; }}/store-paths";
-  fhsEnv = (import ../fhsenv.nix { inherit pkgs; }) { inherit pins storePaths; };
+  fhsEnv = (pkgs.callPackage ../packages/fhsenv { }) { inherit pins storePaths; };
 
   # pkgs.writeShellScriptBin with bashInteractive instead of pkgsruntimeShell, so that we
   # don't get errors about the missing "complete" builtin.
