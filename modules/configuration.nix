@@ -1,3 +1,4 @@
+# Generic NixOS Host Configurations, that don't fit in other modules.
 {
   lib,
   pkgs,
@@ -17,6 +18,8 @@
       gitMinimal
     ];
 
+    # All users must be declared at build-time.
+    users.mutableUsers = false;
     # Configure a build user
     users = {
       users."user" = {
