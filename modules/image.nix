@@ -8,8 +8,6 @@
 {
   imports = [
     "${modulesPath}/image/repart.nix"
-    "${modulesPath}/profiles/minimal.nix"
-    "${modulesPath}/profiles/perlless.nix"
   ];
 
   config = {

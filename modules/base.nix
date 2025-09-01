@@ -2,9 +2,15 @@
 {
   lib,
   pkgs,
+  modulesPath,
   ...
 }:
 {
+  imports = [
+    "${modulesPath}/profiles/minimal.nix"
+    "${modulesPath}/profiles/perlless.nix"
+  ];
+
   options.nixosAndroidBuilder = {
     debug = lib.mkEnableOption "image customizations for interactive access during run-time.";
   };
