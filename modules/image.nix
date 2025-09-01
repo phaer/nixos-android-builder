@@ -158,8 +158,6 @@
         # Tell systemd-repart to re-format and re-encrypt this partition on each boot
         # if run with --factory-reset, which we do by default.
         FactoryReset = true;
-        # FIXME: hack to avoid formatting for too long on large disks.
-        SizeMaxBytes = "500G";
       };
 
     boot.initrd.luks.devices."var_lib_crypt" = {
