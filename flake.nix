@@ -12,17 +12,15 @@
       pkgs = nixpkgs.legacyPackages.${system};
       lib = nixpkgs.lib;
 
-      nixosModules = {
-        host = ./configuration.nix;
-        vm = ./vm.nix;
-        epehmeral = ./ephemeral.nix;
-        image = ./image.nix;
-        resize-var-lib = ./resize-var-lib.nix;
-        encrypt-var-lib = ./encrypt-var-lib.nix;
-        debug = ./debug.nix;
-        secure-boot = ./secure-boot.nix;
-        android-build-env = ./android-build-env.nix;
-      };
+      nixosModules = lib.pipe (builtins.readDir ./modules) [
+        (lib.filterAttrs (n: v: (lib.hasSuffix ".nix" n) && v == "regular"))
+        (lib.mapAttrs' (
+          n: _v: {
+            name = lib.removeSuffix ".nix" n;
+            value = ./modules/${n};
+          }
+        ))
+      ];
       modules = lib.attrValues nixosModules;
 
       vm = pkgs.nixos {

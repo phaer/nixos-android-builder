@@ -9,7 +9,7 @@ let
   cfg = config.virtualisation;
   hostPkgs = cfg.host.pkgs;
 
-  scripts = import ./scripts { pkgs = hostPkgs; };
+  scripts = import ../scripts { pkgs = hostPkgs; };
 in
 {
   imports = [ "${modulesPath}/virtualisation/qemu-vm.nix" ];
