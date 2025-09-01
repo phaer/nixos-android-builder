@@ -12,20 +12,6 @@
     "${modulesPath}/profiles/perlless.nix"
   ];
 
-  options.boot.initrd.systemd.repart = {
-    keyFile = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      description = "key file to use for LUKS encryption";
-      default = null;
-    };
-
-    factoryReset = lib.mkOption {
-      type = lib.types.bool;
-      description = "whether to use systemd factory reset facilities";
-      default = false;
-    };
-  };
-
   config = {
     # The NixOS default activation script to create /usr/bin/env assumes a
     # writable /usr/ file system. That's not the case for us, so we disable
@@ -58,7 +44,7 @@
           ];
         };
         "/var/lib" = {
-          device = "/dev/disk/by-partlabel/${parts."30-var-lib".repartConfig.Label}";
+          device = "/dev/mapper/var_lib_crypt";
           fsType = parts."30-var-lib".repartConfig.Format;
           neededForBoot = true;
         };
@@ -169,6 +155,7 @@
     systemd.repart.partitions."30-var-lib" =
       config.image.repart.partitions."30-var-lib".repartConfig
       // {
+        Encrypt = "key-file";
         SizeMinBytes = "250G";
         # Tell systemd-repart to re-format and re-encrypt this partition on each boot
         # if run with --factory-reset, which we do by default.
@@ -177,52 +164,105 @@
         SizeMaxBytes = "500G";
       };
 
-    boot.initrd.systemd = {
-      # Add mkfs, fsck, etc for ext4 to initrd
-      initrdBin = [ pkgs.e2fsprogs ];
+    boot.initrd.luks.devices."var_lib_crypt" = {
+      keyFile = "/etc/disk.key";
+      device = "/dev/disk/by-partlabel/var-lib";
+    };
 
-      # Link /var/run to /run to appease systemd
-      tmpfiles.settings = {
-        "1-var-run" = {
-          "/var/run" = {
-            L = {
-              argument = "/run";
+    boot.initrd.systemd =
+      let
+        waitForDisk = pkgs.writeScript "wait-for-disk" ''
+          #!/bin/sh
+          set -e
+          partprobe
+          udevadm settle -t 5
+        '';
+        generateDiskKey = pkgs.writeScript "generate-disk-key" ''
+          #!/bin/sh
+          set -e
+          umask 0077
+          head -c 64 /dev/urandom > /etc/disk.key
+        '';
+      in
+      {
+        # Add mkfs, fsck, etc for ext4 to initrd
+        initrdBin = [ pkgs.e2fsprogs ];
+        # Add just the partprobe binary from parted.
+        extraBin = {
+          partprobe = "${pkgs.parted}/bin/partprobe";
+        };
+        # We need to list our scripts here, otherwise store paths won't be in initrd
+        storePaths = [
+          waitForDisk
+          generateDiskKey
+        ];
+
+        # Link /var/run to /run to appease systemd
+        tmpfiles.settings = {
+          "1-var-run" = {
+            "/var/run" = {
+              L = {
+                argument = "/run";
+              };
+            };
+          };
+        };
+
+        # Run systemd-repart in initrd at boot
+        repart = {
+          enable = true;
+          extraArgs = [
+            "--key-file=/etc/disk.key"
+            # --factory-reset instructs systemd-repart to reset all partitions marked with FactoryReset=true,
+            # only /var/lib in our case. The read-only partitions stay in place.
+            "--factory-reset=true"
+          ];
+        };
+
+        services = {
+          systemd-repart = {
+            before = [
+              "systemd-cryptsetup@var_lib_crypt.service"
+            ];
+            serviceConfig.ExecStartPost = waitForDisk;
+          };
+
+          generate-disk-key = {
+            description = "Generate a secure, ephemeral key to encrypt the persistent disk with";
+            wantedBy = [ "initrd.target" ];
+            before = [ "systemd-repart.service" ];
+            requiredBy = [ "systemd-repart.service" ];
+            unitConfig = {
+              DefaultDependencies = false;
+            };
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+              ExecStart = generateDiskKey;
+            };
+          };
+
+          # Link the read-only nix store to /run/systemd/volatile-root before
+          # systemd-repart runs. systemd-repart normally looks for the block device
+          # backing "/", or this path. So this enables systemd-repart to find the
+          # right device at boot.
+          link-volatile-root = {
+            description = "Create volatile-root to tell systemd-repart which disk to user";
+            wantedBy = [ "initrd.target" ];
+            before = [ "systemd-repart.service" ];
+            requiredBy = [ "systemd-repart.service" ];
+            unitConfig = {
+              DefaultDependencies = false;
+            };
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+              ExecStart = ''/bin/ln -sf /dev/disk/by-partlabel/${
+                config.image.repart.partitions."30-var-lib".repartConfig.Label
+              } /run/systemd/volatile-root'';
             };
           };
         };
       };
-
-      # Run systemd-repart in initrd at boot
-      repart = {
-        enable = true;
-        extraArgs =
-          let
-            initrdCfg = config.boot.initrd.systemd.repart;
-          in
-          (lib.optionals (initrdCfg.keyFile != null) [ "--key-file=${initrdCfg.keyFile}" ])
-          ++ (lib.optionals (initrdCfg.factoryReset) [ "--factory-reset=true" ]);
-      };
-
-      # Link the read-only nix store to /run/systemd/volatile-root before
-      # systemd-repart runs. systemd-repart normally looks for the block device
-      # backing "/", or this path. So this enables systemd-repart to find the
-      # right device at boot.
-      services.link-volatile-root = {
-        description = "Create volatile-root to tell systemd-repart which disk to user";
-        wantedBy = [ "initrd.target" ];
-        before = [ "systemd-repart.service" ];
-        requiredBy = [ "systemd-repart.service" ];
-        unitConfig = {
-          DefaultDependencies = false;
-        };
-        serviceConfig = {
-          Type = "oneshot";
-          RemainAfterExit = true;
-          ExecStart = ''/bin/ln -sf /dev/disk/by-partlabel/${
-            config.image.repart.partitions."30-var-lib".repartConfig.Label
-          } /run/systemd/volatile-root'';
-        };
-      };
-    };
   };
 }
