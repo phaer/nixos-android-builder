@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Given a disk image, find its ESP partition, sign the default EFI
+# application on it - usually our Unified Kernel Image (UKI), and
+# copy update bundles for Secure Boot enrollment into EFI/KEYS.
+# Using mtools and raw image files has the advantage of neither
+# requiring root nor any daemons, so it works in restricted build
+# environments such as the nix sandbox or different CI runners.
+set -euo pipefail
+
+keystore="${keystore:-./keys}"
+target_image_file="$1"
+
+esp_uki="EFI/BOOT/BOOTX64.EFI"
+esp_keystore="EFI/KEYS"
+temp_dir=$(mktemp -d --suffix "efi")
+
+
+cleanup() {
+    rm -rf "$temp_dir"
+}
+trap "cleanup" EXIT
+
+echo >&2 "using keystore ${keystore}".
+
+echo >&2 "Searching ESP partition offset in $target_image_file"
+esp_offset="$(
+  parted \
+    --script \
+    --json \
+    "$target_image_file" \
+    -- unit B print \
+    | \
+ jq -r '
+   .disk.partitions[]
+   | select(.flags and (.flags | contains(["esp"])))
+   | .start
+   | rtrimstr("B")'
+)"
+
+mtools_args="-i $target_image_file@@$esp_offset"
+mcopy_args="$mtools_args -o"
+
+echo >&2 "Copying $esp_uki from the image to $temp_dir/$esp_uki"
+mkdir -p "$temp_dir/$(dirname "$esp_uki")"
+mcopy $mtools_args "::$esp_uki" "$temp_dir/$esp_uki"
+
+echo >&2 "Signing $temp_dir/$esp_uki"
+sbsign \
+  --key "$keystore/db.key" \
+  --cert "$keystore/db.crt" \
+  "$temp_dir/$esp_uki" \
+  --output "$temp_dir/$esp_uki"
+
+echo >&2 "Copying $temp_dir/$esp_uki back to the image, into $esp_uki"
+mcopy $mcopy_args "$temp_dir/$esp_uki" "::$esp_uki"
+
+echo >&2 "Copying certificates from $keystore to the image, into $esp_keystore"
+mmd $mtools_args "::$esp_keystore"
+mcopy $mcopy_args "$keystore"/{PK,KEK,db}.auth "::$esp_keystore"
+
+echo >&2 "Done. You can now flash the signed image:"
+echo "$target_image_file"

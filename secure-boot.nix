@@ -2,20 +2,22 @@
 let
   enroll-secure-boot = pkgs.writeShellScriptBin "enroll-secure-boot" ''
     set -xeu
-    # allow modification of efivars
-    sudo chattr -i /sys/firmware/efi/efivars/db-*
-    sudo chattr -i /sys/firmware/efi/efivars/KEK-*
+    # Allow modification of efivars
+    find \
+      /sys/firmware/efi/efivars/ \
+      \( -name "db-*" -o -name "KEK-*" \) \
+      -exec chattr -i {} \;
+    esp_keystore="/boot/EFI/keys"
+    # Append the new allowed signatures, but keep Microsofts and other vendors signatures.
+    efi-updatevar -a -f "$esp_keystore/db.auth" db
+    # Install Key Exchange Key
+    efi-updatevar -f "$esp_keystore/KEK.auth" KEK
+    # Install Platform Key (Leaving setup mode and enters user mode)
+    efi-updatevar -f "$esp_keystore/PK.auth" PK
 
-    # append the new certificates (keeping the microsoft certs)
-    sudo efi-updatevar -a -c /boot/EFI/keys/db.crt db
-    sudo efi-updatevar -a -c /boot/EFI/keys/KEK.crt KEK
-
-    # install PK (Leaving setup mode and enters user mode)
-    sudo efi-updatevar -f /boot/EFI/keys/PK.auth PK
   '';
 in
 {
-  # debug tooling
   environment.systemPackages = [
     pkgs.efitools
     enroll-secure-boot
