@@ -78,12 +78,8 @@ This process is currently expected to be run from this repo on your workstation,
 
 Be sure to keep the `*.key` files safe and private! Other generated files should be relatively safe to distribute. Various formats of public keys and certs are generated to be compatible with most UEFIs and use cases. The current setup does not over revocation lists nor does it guard against downgrade attacks.
 
-The signing script copies the public keys from `./keys` into the raw image at `/boot/EFI/keys` where they can be enrolled by booting in SecureBoot setup mode and running the included `enroll-secure-boot` script before rebooting. `enroll-secure-boot` leaves setup mode automatically.
-
-```sh
-sudo enroll-secure-boot
-sudo systemctl reboot
-```
+The signing script copies the public keys from `./keys` into the raw image at `/boot/EFI/KEYS`. We check whether the machine has booted in Secure Boot mode and whether it is in setup mode. If it's in setup mode, we enroll the keys in `/boot/EFI/KEYS` automatically and reboot. If Secure Boot is disabled,
+an error is displayed and the machine halted.
 
 ## Flashing it
 
