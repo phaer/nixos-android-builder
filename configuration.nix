@@ -4,5 +4,13 @@
 
   nixosAndroidBuilder = {
     debug = true;
+
+    build = {
+      repoManifestUrl = "https://android.googlesource.com/platform/manifest";
+      repoBranch = "android-latest-release";
+      lunchTarget = "aosp_cf_x86_64_only_phone-aosp_current-eng";
+      userName = "CI User";
+      userEmail = "ci@example.com";
+    };
   };
 }

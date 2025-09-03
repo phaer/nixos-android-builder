@@ -1,5 +1,7 @@
 {
+  lib,
   pkgs,
+  config,
   ...
 }:
 let
@@ -21,18 +23,20 @@ let
       meta.mainProgram = name;
     };
 
+  cfg = config.nixosAndroidBuilder.build;
+
   fetchAndroid = writeShellScriptBin "fetch-android" ''
     set -e
     mkdir -p $SOURCE_DIR
     cd $SOURCE_DIR
     git config --global color.ui true  # keep repo from asking
-    git config --global user.email "ci@example.com"
-    git config --global user.name "CI User"
+    git config --global user.email "${cfg.userEmail}"
+    git config --global user.name "${cfg.userName}"
     repo init \
          --partial-clone \
          --no-use-superproject \
-         -b android-latest-release \
-         -u https://android.googlesource.com/platform/manifest
+         -b ${cfg.repoBranch} \
+         -u ${cfg.repoManifestUrl}
 
     repo sync -c $@ || true
     repo sync -c $@
@@ -42,14 +46,36 @@ let
     set -e
     cd $SOURCE_DIR
     source build/envsetup.sh || true
-    lunch aosp_cf_x86_64_only_phone-aosp_current-eng
+    lunch ${cfg.lunchTarget}
     m
   '';
 in
 {
-  
 
-    config = {
+  options.nixosAndroidBuilder.build = {
+    repoManifestUrl = lib.mkOption {
+      type = lib.types.str;
+      default = "https://android.googlesource.com/platform/manifest";
+    };
+    repoBranch = lib.mkOption {
+      type = lib.types.str;
+      default = "android-latest-release";
+    };
+    lunchTarget = lib.mkOption {
+      type = lib.types.str;
+      default = "aosp_cf_x86_64_only_phone-aosp_current-eng";
+    };
+    userName = lib.mkOption {
+      type = lib.types.str;
+      default = "CI User";
+    };
+    userEmail = lib.mkOption {
+      type = lib.types.str;
+      default = "ci@example.com";
+    };
+  };
+
+  config = {
     environment.variables = {
       "SOURCE_DIR" = "$HOME/source";
     };
