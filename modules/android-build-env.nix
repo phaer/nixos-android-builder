@@ -47,13 +47,42 @@ let
   '';
 in
 {
-  config = {
-      environment.variables = {
-        "SOURCE_DIR" = "$HOME/source";
-      };
-      environment.systemPackages = [
-        fetchAndroid
-        buildAndroid
-      ];
+  
+
+    config = {
+    environment.variables = {
+      "SOURCE_DIR" = "$HOME/source";
     };
+    environment.systemPackages = [
+      fetchAndroid
+      buildAndroid
+    ];
+    nixosAndroidBuilder.fhsEnv.packages = with pkgs; [
+      # We just override a two deps of git-repo to include less features, but don't pull huge dependencies
+      # into the closure.
+      (git-repo.override {
+        git = gitMinimal;
+      })
+      gitMinimal
+      diffutils
+      findutils
+      curl
+      binutils
+      zip
+      unzip
+      zlib
+      rsync
+      libxml2
+      libxslt
+      fontconfig
+      flex
+      bison
+      xorg.libX11
+      mesa
+      openssl
+      jdk
+      gnumake
+      python3
+    ];
+  };
 }
