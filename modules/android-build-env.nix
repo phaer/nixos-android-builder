@@ -3,12 +3,43 @@
   pkgs,
   config,
   ...
-}:
-let
-  # pkgs.writeShellScriptBin with bashInteractive instead of pkgsruntimeShell, so that we
-  # don't get errors about the missing "complete" builtin.
-  writeShellScriptBin =
-    name: text:
+}: {
+
+  options.nixosAndroidBuilder.build = {
+    repoManifestUrl = lib.mkOption {
+      type = lib.types.str;
+      default = "https://android.googlesource.com/platform/manifest";
+    };
+    repoBranch = lib.mkOption {
+      type = lib.types.str;
+      default = "android-latest-release";
+    };
+    lunchTarget = lib.mkOption {
+      type = lib.types.str;
+      default = "aosp_cf_x86_64_only_phone-aosp_current-eng";
+    };
+    userName = lib.mkOption {
+      type = lib.types.str;
+      default = "CI User";
+    };
+    userEmail = lib.mkOption {
+      type = lib.types.str;
+      default = "ci@example.com";
+    };
+    sourceDir = lib.mkOption {
+      type = lib.types.path;
+      default = "/var/lib/build/source";
+    };
+
+  };
+
+  config = let
+    cfg = config.nixosAndroidBuilder.build;
+
+    # pkgs.writeShellScriptBin with bashInteractive instead of pkgsruntimeShell, so that we
+    # don't get errors about the missing "complete" builtin.
+    writeShellScriptBin =
+      name: text:
     pkgs.writeTextFile {
       inherit name;
       executable = true;
@@ -23,10 +54,9 @@ let
       meta.mainProgram = name;
     };
 
-  cfg = config.nixosAndroidBuilder.build;
 
-  fetchAndroid = writeShellScriptBin "fetch-android" ''
-    set -e
+    fetchAndroid = writeShellScriptBin "fetch-android" ''
+      set -e
 
     USER_EMAIL='${cfg.userEmail}'
     USER_NAME='${cfg.userName}'
@@ -84,10 +114,10 @@ let
 
     repo sync -c "$@" || true
     repo sync -c "$@"
-  '';
+    '';
 
-  buildAndroid = writeShellScriptBin "build-android" ''
-    set -e
+    buildAndroid = writeShellScriptBin "build-android" ''
+      set -e
 
     SOURCE_DIR='${cfg.sourceDir}'
     LUNCH_TARGET='${cfg.lunchTarget}'
@@ -125,45 +155,14 @@ let
     source build/envsetup.sh || true
     lunch "$LUNCH_TARGET"
     m "$@"
-  '';
+    '';
 
-  sbomAndroid = writeShellScriptBin "sbom-android" ''
-    set -e
+    sbomAndroid = writeShellScriptBin "sbom-android" ''
+      set -e
 
     ${buildAndroid}/bin/build-android sbom "$@"
-  '';
-in
-{
-
-  options.nixosAndroidBuilder.build = {
-    repoManifestUrl = lib.mkOption {
-      type = lib.types.str;
-      default = "https://android.googlesource.com/platform/manifest";
-    };
-    repoBranch = lib.mkOption {
-      type = lib.types.str;
-      default = "android-latest-release";
-    };
-    lunchTarget = lib.mkOption {
-      type = lib.types.str;
-      default = "aosp_cf_x86_64_only_phone-aosp_current-eng";
-    };
-    userName = lib.mkOption {
-      type = lib.types.str;
-      default = "CI User";
-    };
-    userEmail = lib.mkOption {
-      type = lib.types.str;
-      default = "ci@example.com";
-    };
-    sourceDir = lib.mkOption {
-      type = lib.types.path;
-      default = "/var/lib/build/source";
-    };
-
-  };
-
-  config = {
+    '';
+  in {
     environment.variables = {
       "SOURCE_DIR" = cfg.sourceDir;
     };
