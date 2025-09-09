@@ -27,7 +27,11 @@
               "env (GNU coreutils)", machine.succeed("/usr/bin/env --version"),
               "/usr/bin/env --version can't be executed"
             )
-
+          with subtest("Executables in /bin can be run"):
+             t.assertIn(
+              "diff (GNU diffutils)", machine.succeed("/bin/diff -v"),
+              "failed to execute /bin/diff -v"
+            )
           with subtest("/bin/bash sets default $PATH and is a regular file with the correct linker"):
             t.assertIn(
               "/bin", machine.succeed("env -i /bin/bash -c 'echo $PATH'"),
