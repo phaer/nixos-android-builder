@@ -32,6 +32,17 @@
       image = vm.config.system.build.finalImage;
 
       secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
+      build-spec = pkgs.writeShellApplication {
+        name = "build-spec";
+        runtimeInputs = [
+          pkgs.pandoc
+          pkgs.mermaid-filter
+          pkgs.texliveSmall
+        ];
+        text = ''
+          pandoc  -V geometry:margin=1.5in --toc -s  -F mermaid-filter -o SPEC.pdf SPEC.md
+        '';
+      };
     in
     {
       inherit nixosModules;
@@ -47,7 +58,7 @@
       };
 
       packages.${system} = {
-        inherit run-vm image;
+        inherit run-vm image build-spec;
         inherit (secureBootScripts) create-signing-keys sign-disk-image;
         default = image;
       };
