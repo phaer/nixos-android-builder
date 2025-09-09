@@ -103,6 +103,7 @@ with open(store_paths_file, "r") as f:
                             os.chmod(out_path, mode | 0o200)
                             subprocess.run([
                                 "patchelf",
+                                "--set-rpath", "/lib",
                                 "--set-interpreter", "/lib/ld-linux-x86-64.so.2", str(out_path)
                             ])
                             os.chmod(out_path, mode & ~0o200)
