@@ -32,17 +32,15 @@
       image = vm.config.system.build.finalImage;
 
       secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
-      build-spec = pkgs.writeShellApplication {
-        name = "build-spec";
-        runtimeInputs = [
-          pkgs.pandoc
-          pkgs.mermaid-filter
-          pkgs.texliveSmall
-        ];
-        text = ''
-          pandoc  -V geometry:margin=1.5in --toc -s  -F mermaid-filter -o SPEC.pdf SPEC.md
-        '';
-      };
+      build-docs = pkgs.writeShellScriptBin "build-docs" ''
+        cd $PRJ_ROOT/docs
+        pandoc -V geometry:margin=1.5in --toc -s  -F mermaid-filter -o ./docs.pdf ./docs.md
+      '';
+      watch-docs = pkgs.writeShellScriptBin "watch-docs" ''
+        cd $PRJ_ROOT/docs
+        ls *.md | entr -s ${build-docs}/bin/build-docs
+      '';
+
     in
     {
       inherit nixosModules;
@@ -50,15 +48,27 @@
 
       formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt-tree;
 
-      devShells.${system}.default = pkgs.mkShell {
-        packages = with secureBootScripts; [
-          create-signing-keys
-          sign-disk-image
-        ];
+      devShells.${system} = {
+        default = pkgs.mkShell {
+          packages = with secureBootScripts; [
+            create-signing-keys
+            sign-disk-image
+          ];
+        };
+        docs = pkgs.mkShell {
+          packages = [
+            pkgs.pandoc
+            pkgs.mermaid-filter
+            pkgs.texliveSmall
+            pkgs.entr
+            build-docs
+            watch-docs
+          ];
+        };
       };
 
       packages.${system} = {
-        inherit run-vm image build-spec;
+        inherit run-vm image;
         inherit (secureBootScripts) create-signing-keys sign-disk-image;
         default = image;
       };
