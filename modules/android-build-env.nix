@@ -126,6 +126,12 @@ let
     lunch "$LUNCH_TARGET"
     m "$@"
   '';
+
+  sbomAndroid = writeShellScriptBin "sbom-android" ''
+    set -e
+
+    ${buildAndroid}/bin/build-android sbom "$@"
+  '';
 in
 {
 
@@ -164,6 +170,7 @@ in
     environment.systemPackages = [
       fetchAndroid
       buildAndroid
+      sbomAndroid
     ];
     nixosAndroidBuilder.fhsEnv.packages = with pkgs; [
       # We just override a two deps of git-repo to include less features, but don't pull huge dependencies
