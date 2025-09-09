@@ -27,27 +27,104 @@ let
 
   fetchAndroid = writeShellScriptBin "fetch-android" ''
     set -e
-    mkdir -p $SOURCE_DIR
-    cd $SOURCE_DIR
-    git config --global color.ui true  # keep repo from asking
-    git config --global user.email "${cfg.userEmail}"
-    git config --global user.name "${cfg.userName}"
-    repo init \
-         --partial-clone \
-         --no-use-superproject \
-         -b ${cfg.repoBranch} \
-         -u ${cfg.repoManifestUrl}
 
-    repo sync -c $@ || true
-    repo sync -c $@
+    USER_EMAIL='${cfg.userEmail}'
+    USER_NAME='${cfg.userName}'
+    REPO_BRANCH='${cfg.repoBranch}'
+    REPO_MANIFEST_URL='${cfg.repoManifestUrl}'
+    SOURCE_DIR='${cfg.sourceDir}'
+
+    usage() {
+      cat <<EOF
+    Usage: $0 [options] [-- ...repo sync args...]
+
+    Options:
+      --user-email=EMAIL        Git user.email (default: ${cfg.userEmail})
+      --user-name=NAME          Git user.name (default: ${cfg.userName})
+      --repo-branch=BRANCH      Repo branch to init (default: ${cfg.repoBranch})
+      --repo-manifest-url=URL   Repo manifest URL (default: ${cfg.repoManifestUrl})
+      --source-dir=DIR          Source directory (default: ${cfg.sourceDir})
+      -h, --help                Show this help message
+    EOF
+      exit 0
+    }
+
+    # Parse long flags
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -h|--help) usage ;;
+        --user-email=*) USER_EMAIL="''${1#*=}" ;;
+        --user-name=*) USER_NAME="''${1#*=}" ;;
+        --repo-branch=*) REPO_BRANCH="''${1#*=}" ;;
+        --repo-manifest-url=*) REPO_MANIFEST_URL="''${1#*=}" ;;
+        --source-dir=*) SOURCE_DIR="''${1#*=}" ;;
+        --) shift; break ;;
+        *) break ;;
+      esac
+      shift
+    done
+
+    echo "Fetching android:"
+    echo "  repo.branch      = $REPO_BRANCH"
+    echo "  repo.manifestUrl = $REPO_MANIFEST_URL"
+    echo
+
+    mkdir -p "$SOURCE_DIR"
+    cd "$SOURCE_DIR"
+
+    git config --global color.ui true
+    git config --global user.email "$USER_EMAIL"
+    git config --global user.name "$USER_NAME"
+
+    repo init \
+      --partial-clone \
+      --no-use-superproject \
+      -b "$REPO_BRANCH" \
+      -u "$REPO_MANIFEST_URL"
+
+    repo sync -c "$@" || true
+    repo sync -c "$@"
   '';
 
   buildAndroid = writeShellScriptBin "build-android" ''
     set -e
-    cd $SOURCE_DIR
+
+    SOURCE_DIR='${cfg.sourceDir}'
+    LUNCH_TARGET='${cfg.lunchTarget}'
+
+    usage() {
+      cat <<EOF
+    Usage: $0 [options] [-- ...m args...]
+
+    Options:
+      --source-dir=DIR      Source directory (default: ${cfg.sourceDir})
+      --lunch-target=VALUE  Lunch target (default: ${cfg.lunchTarget})
+      -h, --help            Show this help message
+    EOF
+      exit 0
+    }
+
+    # Parse long flags
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -h|--help) usage ;;
+        --source-dir=*) SOURCE_DIR="''${1#*=}" ;;
+        --lunch-target=*) LUNCH_TARGET="''${1#*=}" ;;
+        --) shift; break ;;
+        *) break ;;
+      esac
+      shift
+    done
+
+    echo "Building android:"
+    echo "  lunch.target = $LUNCH_TARGET"
+    echo "  make.args    = $@"
+    echo
+
+    cd "$SOURCE_DIR"
     source build/envsetup.sh || true
-    lunch ${cfg.lunchTarget}
-    m
+    lunch "$LUNCH_TARGET"
+    m "$@"
   '';
 in
 {
@@ -73,11 +150,16 @@ in
       type = lib.types.str;
       default = "ci@example.com";
     };
+    sourceDir = lib.mkOption {
+      type = lib.types.path;
+      default = "/var/lib/build/source";
+    };
+
   };
 
   config = {
     environment.variables = {
-      "SOURCE_DIR" = "$HOME/source";
+      "SOURCE_DIR" = cfg.sourceDir;
     };
     environment.systemPackages = [
       fetchAndroid
