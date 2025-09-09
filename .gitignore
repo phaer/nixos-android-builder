@@ -4,4 +4,4 @@ android-builder-efi-vars.fd
 .direnv/
 result
 keys
-.mermaid-filter.err
+docs/.mermaid-filter.err
