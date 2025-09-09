@@ -23,6 +23,12 @@
     let
       testFHSEnv = ''
         with subtest("Checking FHS Environment"):
+          with subtest("/usr/bin/env can be executed"):
+            t.assertIn(
+              "env (GNU coreutils)", machine.succeed("/usr/bin/env --version"),
+              "/usr/bin/env --version can't be executed"
+            )
+
           with subtest("/bin/bash sets default $PATH and is a regular file with the correct linker"):
             t.assertIn(
               "/bin", machine.succeed("env -i /bin/bash -c 'echo $PATH'"),

@@ -1,4 +1,5 @@
 {
+  pkgs,
   lib,
   config,
   modulesPath,
@@ -26,6 +27,10 @@
   };
 
   config = {
+    # The NixOS default activation script to create /usr/bin/env assumes a
+    # writable /usr/ file system. That's not the case for us, so we disable
+    # it and add a bind mount from /usr/bin to /bin while building the image
+    # below.
     system.activationScripts.usrbinenv = lib.mkForce "";
 
     fileSystems =
@@ -50,6 +55,17 @@
           device = "/dev/disk/by-partlabel/${parts."00-esp".repartConfig.Label}";
           fsType = parts."00-esp".repartConfig.Format;
           options = [ "ro" ];
+        };
+        "/usr/bin" = {
+          # Bind-mount /usr/bin to /bin. Mostly to get /usr/bin/env in place.
+          # We bind the whole directory because it has no extra cost and
+          # we don't know what tools inside the fhsenv might expect /usr/bin paths.
+          device = "/bin";
+          options = [
+            "bind"
+            "x-systemd.requires=bin.mount"
+          ];
+          neededForBoot = false;
         };
         "/nix/store" = {
           overlay = {
@@ -130,6 +146,12 @@
           };
           "20-store" = {
             storePaths = [ config.system.build.toplevel ];
+            contents = {
+              # Create an empty dir at /usr/bin, in order to bind-mount /bin at run-time
+              "/bin".source = pkgs.runCommand "usr-bin-symlink" { } ''
+                mkdir -p $out
+              '';
+            };
             repartConfig = {
               Label = "store";
               Minimize = "best";
