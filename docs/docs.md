@@ -131,3 +131,6 @@ flowchart TB
 8. Finally, build outputs can be found in-tree, depending on the targets built.
    E.g. `/var/lib/build/source/out/target/product/vsoc_x86_64_only`. Those are currently not persisted on the builder, so manual copying is required if build outputs should be kept.
 
+# Options Reference
+
+{{nixos-options}}

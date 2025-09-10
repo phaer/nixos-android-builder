@@ -2,14 +2,9 @@
   pkgs,
   lib,
   config,
-  modulesPath,
   ...
 }:
 {
-  imports = [
-    "${modulesPath}/image/repart.nix"
-  ];
-
   config = {
     # The NixOS default activation script to create /usr/bin/env assumes a
     # writable /usr/ file system. That's not the case for us, so we disable

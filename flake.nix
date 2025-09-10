@@ -6,7 +6,7 @@
   };
 
   outputs =
-    { nixpkgs, ... }:
+    { self, nixpkgs, ... }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
@@ -21,25 +21,53 @@
           }
         ))
       ];
-      modules = lib.attrValues nixosModules;
+
+      ourModules = (lib.attrValues nixosModules) ++ [ ./configuration.nix ];
+
+      modules = [
+        (
+          { modulesPath, ... }:
+          {
+            imports = [
+              "${modulesPath}/image/repart.nix"
+              "${modulesPath}/profiles/minimal.nix"
+              "${modulesPath}/profiles/perlless.nix"
+              "${modulesPath}/virtualisation/qemu-vm.nix"
+            ];
+          }
+        )
+      ]
+      ++ ourModules;
 
       vm = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
-        imports = modules ++ [ ./configuration.nix ];
+        imports = modules;
       };
 
       run-vm = vm.config.system.build.vmWithWritableDisk;
       image = vm.config.system.build.finalImage;
 
       secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
+
       build-docs = pkgs.writeShellScriptBin "build-docs" ''
         cd $PRJ_ROOT/docs
-        pandoc -V geometry:margin=1.5in --toc -s  -F mermaid-filter -o ./docs.pdf ./docs.md
+        pandoc -V geometry:margin=1.5in --toc -s --lua-filter=./nixos-options.lua  -F mermaid-filter -o ./docs.pdf ./docs.md
       '';
       watch-docs = pkgs.writeShellScriptBin "watch-docs" ''
         cd $PRJ_ROOT/docs
         ls *.md | entr -s ${build-docs}/bin/build-docs
       '';
+
+      optionDocs =
+        (pkgs.nixosOptionsDoc {
+          inherit (vm) options;
+          transformOptions =
+            opt:
+            if lib.any (decl: lib.hasPrefix (toString self) (toString decl)) (opt.declarations or [ ]) then
+              opt
+            else
+              opt // { visible = false; };
+        }).optionsCommonMark;
 
     in
     {
@@ -68,7 +96,7 @@
       };
 
       packages.${system} = {
-        inherit run-vm image;
+        inherit run-vm image optionDocs;
         inherit (secureBootScripts) create-signing-keys sign-disk-image;
         default = image;
       };
