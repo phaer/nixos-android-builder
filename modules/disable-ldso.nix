@@ -14,6 +14,7 @@
       # Mock ldso.nix options, so that we don't have to disable a bunch of modules
       # which are "disabled" but still evaluated by default (nix-ld, ld-stub, etc)
       mock = lib.mkOption {
+        description = "Mock option, as ldso.nix is disabled but assumed to be there by other modules";
         type = lib.types.nullOr lib.types.path;
         default = null;
       };
