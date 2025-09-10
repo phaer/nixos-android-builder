@@ -2,17 +2,11 @@
 {
   lib,
   pkgs,
-  modulesPath,
   ...
 }:
 {
-  imports = [
-    "${modulesPath}/profiles/minimal.nix"
-    "${modulesPath}/profiles/perlless.nix"
-  ];
-
   options.nixosAndroidBuilder = {
-    debug = lib.mkEnableOption "image customizations for interactive access during run-time.";
+    debug = lib.mkEnableOption "image customizations for interactive access during run-time";
   };
   config = {
     # All users must be declared at build-time.

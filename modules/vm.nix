@@ -2,7 +2,6 @@
 {
   lib,
   config,
-  modulesPath,
   ...
 }:
 let
@@ -12,7 +11,6 @@ let
   secureBootScripts = hostPkgs.callPackage ../packages/secure-boot-scripts { };
 in
 {
-  imports = [ "${modulesPath}/virtualisation/qemu-vm.nix" ];
   config = {
     virtualisation = {
       diskSize = 300 * 1024;
