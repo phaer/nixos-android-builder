@@ -7,26 +7,50 @@
 
   options.nixosAndroidBuilder.build = {
     repoManifestUrl = lib.mkOption {
+      description = ''
+        URL of a `repo` manifest to fetch sources from.
+        Can be overriden at run-time by passing `--repo-manifest-url` to `fetch-android`.
+      '';
       type = lib.types.str;
       default = "https://android.googlesource.com/platform/manifest";
     };
     repoBranch = lib.mkOption {
+      description = ''
+        Name of the branch that should be fetched.
+        Can be overriden at run-time by passing `--repo-branch` to `fetch-android`.
+      '';
       type = lib.types.str;
       default = "android-latest-release";
     };
     lunchTarget = lib.mkOption {
+      description = ''
+        Name of lunch target to build.
+        Can be overriden at run-time by passing `--lunch-target` to `build-android`.
+      '';
       type = lib.types.str;
       default = "aosp_cf_x86_64_only_phone-aosp_current-eng";
     };
     userName = lib.mkOption {
+      description = ''
+        User name used for `repo`/`git` operations.
+        Can be overriden at run-time by passing `--user-name` to `fetch-android`.
+      '';
       type = lib.types.str;
       default = "CI User";
     };
     userEmail = lib.mkOption {
+      description = ''
+        Email address used for `repo`/`git` operations.
+        Can be overriden at run-time by passing `--user-email` to `fetch-android`.
+      '';
       type = lib.types.str;
       default = "ci@example.com";
     };
     sourceDir = lib.mkOption {
+      description = ''
+        Directory where `repo` checkout is stored.
+        Can be overriden at run-time by passing `--source-dir` to `fetch-android` and `build-android`.
+      '';
       type = lib.types.path;
       default = "/var/lib/build/source";
     };
