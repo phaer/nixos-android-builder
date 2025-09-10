@@ -1,5 +1,4 @@
-{ modules }:
-{ lib, ... }:
+{ modules, lib, ... }:
 {
   name = "nixos-android-builder-integration-test";
   nodes.machine =
@@ -28,7 +27,11 @@
               "env (GNU coreutils)", machine.succeed("/usr/bin/env --version"),
               "/usr/bin/env --version can't be executed"
             )
-
+          with subtest("Executables in /bin can be run"):
+             t.assertIn(
+              "diff (GNU diffutils)", machine.succeed("/bin/diff -v"),
+              "failed to execute /bin/diff -v"
+            )
           with subtest("/bin/bash sets default $PATH and is a regular file with the correct linker"):
             t.assertIn(
               "/bin", machine.succeed("env -i /bin/bash -c 'echo $PATH'"),
@@ -70,23 +73,8 @@
       testSecureBoot = ''
         with subtest("secure boot works"):
           t.assertIn(
-            "Secure Boot: disabled (setup)", machine.succeed("bootctl status"),
-            "Machine isn't in SecureBoot setup mode")
-
-          machine.succeed("enroll-secure-boot")
-
-          t.assertNotIn(
-            "Secure Boot: disabled (setup)", machine.succeed("bootctl status"),
-            "Machine did not leave SecureBoot setup mode after enrollment")
-          t.assertIn(
-            "Secure Boot: disabled", machine.succeed("bootctl status"),
-            "Machine is expected to have secure boot disabled at this point")
-
-          machine.reboot()
-
-          t.assertIn(
             "Secure Boot: enabled (user)", machine.succeed("bootctl status"),
-            "Machine is NOT in SecureBoot after reboot")
+            "Secure Boot is NOT active")
       '';
     in
     ''

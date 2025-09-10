@@ -12,27 +12,26 @@
       pkgs = nixpkgs.legacyPackages.${system};
       lib = nixpkgs.lib;
 
-      nixosModules = {
-        host = ./configuration.nix;
-        vm = ./vm.nix;
-        epehmeral = ./ephemeral.nix;
-        image = ./image.nix;
-        resize-var-lib = ./resize-var-lib.nix;
-        encrypt-var-lib = ./encrypt-var-lib.nix;
-        debug = ./debug.nix;
-        secure-boot = ./secure-boot.nix;
-        android-build-env = ./android-build-env.nix;
-      };
+      nixosModules = lib.pipe (builtins.readDir ./modules) [
+        (lib.filterAttrs (n: v: (lib.hasSuffix ".nix" n) && v == "regular"))
+        (lib.mapAttrs' (
+          n: _v: {
+            name = lib.removeSuffix ".nix" n;
+            value = ./modules/${n};
+          }
+        ))
+      ];
       modules = lib.attrValues nixosModules;
 
       vm = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
-        imports = modules;
+        imports = modules ++ [ ./configuration.nix ];
       };
 
       run-vm = vm.config.system.build.vmWithWritableDisk;
       image = vm.config.system.build.finalImage;
-      scripts = import ./scripts { inherit pkgs; };
+
+      secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
     in
     {
       inherit nixosModules;
@@ -41,7 +40,7 @@
       formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt-tree;
 
       devShells.${system}.default = pkgs.mkShell {
-        packages = with scripts; [
+        packages = with secureBootScripts; [
           create-signing-keys
           sign-disk-image
         ];
@@ -49,12 +48,17 @@
 
       packages.${system} = {
         inherit run-vm image;
-        inherit (scripts) create-signing-keys sign-disk-image;
+        inherit (secureBootScripts) create-signing-keys sign-disk-image;
         default = image;
       };
 
       checks.${system} = {
-        integration = pkgs.testers.runNixOSTest (import ./tests.nix { inherit modules; });
+        integration = pkgs.testers.runNixOSTest {
+          imports = [
+            ./tests.nix
+            { _module.args = { inherit modules; }; }
+          ];
+        };
       };
     };
 }

@@ -12,7 +12,8 @@ different libgcc, etc. Ensuring a collision-free closure via overlays can be
 done but is quite a bit of work with no clear upside, as many of the collisions
 are non-critical.
 For cases where they are, a second list of store paths, `pins` can be passed
-in a file. Store path listed in that file are added first, overr
+in a file. Store path listed in that file are added first, effectivly "overriding"
+those comming later.
 
 """
 import os

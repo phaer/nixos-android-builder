@@ -1,5 +1,24 @@
-{ pkgs, ... }:
+# Support debug builds with interactive login & extra software.
+{ pkgs, lib, ... }:
 {
+  # Add extra software from nixpkgs for convinience.
+  environment.systemPackages = with pkgs; [
+    vim
+    htop
+    tmux
+    gitMinimal
+  ];
+
+  # Configure nix with flake support, but no channels.
+  nix = {
+    enable = lib.mkForce true;
+    channel.enable = false;
+    settings.experimental-features = [
+      "nix-command"
+      "flakes"
+    ];
+  };
+
   # Set an empty password for "user"
   users.users."user" = {
     initialHashedPassword = "";
