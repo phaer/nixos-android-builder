@@ -205,7 +205,7 @@ So the user is asked to copy the built image from the nix store to a writable lo
 Usage is documented in [README.md](../README.md). `sign-disk-image.sh` manipulates the `vfat` partition inside the disk image directly, in order to:
 
 - **(6)** The `UKI` is copied to a temporary file, signed, and copied back into the `esp` again.
-- **(7)** Secure Boot update budnles (`*.auth` files) are copied to the `esp` to ensure that `ensure-secure-boot-enrollment.service` can find them during boot.
+- **(7)** Secure Boot update bundles (`*.auth` files) are copied to the `esp` to ensure that `ensure-secure-boot-enrollment.service` can find them during boot.
 - **(8)** We finally have a signed image, reado to flash & boot on a target machine.
 
 
