@@ -1,6 +1,5 @@
 ---
 title: NixOS Android Builder
-date: 2025-09-11
 ---
 
 \pagebreak
