@@ -24,17 +24,21 @@ We created a modular proof‑of‑concept based on NixOS that fulfills most of t
   customizations, a good understanding of `nix` might be needed. We will ease those as far as possible, as we learn more about users customization needs.
 
 
-## Used technologies
+## Used Technologies
 
-* **[`NixOS`](https://nixos.org)** as Linux Distribution for its declarative module system and flexible boot process.
-* **[`nixpkgs`](https://github.com/nixos/nixpkgs)** as software repository for its reproducible approach of building up-to-date Open Source packages.
-* **[`qemu`](https://qemu.org)** to emulate generic virtual machines during testing.
-* **[`systemd`](https://systemd.io)** to orchestrate upstream components and custom ones while handling credentials and persistent state.
-* **[`systemd-repart`](https://www.freedesktop.org/software/systemd/man/latest/systemd-repart.html)** to prepare sign-able read-only disk images for the builder.
-  And to resize, and re-encrypt the state partition on each boot.
-* **[Linux Unified Key Setup (`LUKS`)](https://gitlab.com/cryptsetup/cryptsetup/blob/master/README.md)** - to encrypt the state partition with an ephemeral key on each boot.
-* Various **build requirements** of Android, such as Python 3 and OpenJDK. See definition of `packages` in `android-build-env.nix` for a complete list.
-* A complete **Software Bill of Materials** (SBOM) for the builders NixOS closure can be acquired by running the following command from the repository top-level: `nix run github:tiiuae/sbomnix#sbomnix -- .#nixosConfigurations.vm.toplevel`.
+- **[`NixOS`](https://nixos.org)** - the Linux distribution chosen for its declarative module system and flexible boot process.
+- **[`nixpkgs`](https://github.com/nixos/nixpkgs)** - the software repository that enables reproducible builds of up‑to‑date open‑source packages.
+- **[`qemu`](https://qemu.org)** - used to run virtual machines during testing.
+- **[`systemd`](https://systemd.io)** - orchestrates both upstream and custom components while managing credentials and persistent state.
+- **[`systemd-repart`](https://www.freedesktop.org/software/systemd/man/latest/systemd-repart.html)** - prepares signable read‑only disk images for the builder and resizes and re‑encrypts the state partition at each boot.
+- **[Linux Unified Key Setup (`LUKS`)](https://gitlab.com/cryptsetup/cryptsetup/blob/master/README.md)** - encrypts the state partition with an ephemerally generated key on each boot.
+- Various **build requirements** for Android, such as Python 3 and OpenJDK. The complete list is in the `packages` section of `android-build-env.nix`.
+
+A complete **Software Bill of Materials (SBOM)** for the builder's NixOS closure can be generated from the repository root by running, e.g.:
+
+``` shellsession
+nix run github:tiiuae/sbomnix#sbomnix -- .#nixosConfigurations.vm.toplevel`.
+```
 
 
 ## Major Components
