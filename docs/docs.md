@@ -105,7 +105,36 @@ The `/var/lib` partition is deliberately designed to be temporary and encrypted.
 
 Secure Boot is enabled by generating a set of keys that are stored unencrypted in a local `keys/` directory within the repository. Users must protect these keys and back them up. When a new image is signed, Secure Boot update bundles (`*.auth` files) are created for each target machine. These bundles are stored unsigned and unencrypted on the `/boot` partition. On boot, we check whether whe are in Secure Boot setup mode and, if so, enroll our keys. If Secure Boot is disabled, we display an error and fail early during boot.
 
-## Sequence Chart
+## Custom FHS Environment
+
+The builder image includes a custom builder for File Hierarchy Standard (`FHS`) environments.
+
+It consists of a derivation that runs a python script, `fhsenv.py` to bundle together all libraries and binaries of declared packages (`nixosAndroidBuilder.fhsEnv.packages`), arranging them in one big `FHS` layout with `/bin` & `/lib` directories in the derivations output.
+
+A mechanism to pin specific instances of packages which might be included multiple times inside the transitive dependency
+tree. See `nixosAndroidBuilder.fhsEnv.pins`.
+
+The `fhsenv.nix` NixOS Module bind-mounts `/lib` and `bin` from the derivations output during runtime, while also
+setting default pins / packages, `$PATH` and adding a custom build of `glibc` for its dynamic linker, and a `FHS`-compatible build of `bash`.
+
+That dynamic linker is configured to `/lib` instead of the standard Nix store paths. This setup mimics a conventional Linux environment, allowing the Android build system to function without modification.
+
+Alternative approaches, such as `pkgs.buildFHSEnv`, `nix-ld` or `envfs`, were evaluated but found insufficient because they rely on individual symlinks that break when sandboxed bind‑mounts are applied to `/bin` and `/lib` only, without having `/nix/store` in the sandbox.
+
+## Android Build Environment
+
+The `android-build-env.nix` NixOS module uses the `fhsenv.nix` module described in the section above, to add all tools required by for an AOSP build. By using this module, developers can compile Android in a clean, reproducible environment that mimics a standard Linux installation.
+
+It also adds 3 scripts, added for convinience:
+
+- `fetch-android` checks out the configured `repo` repository & branch, upstream AOSP's `android-latest-release` by default.
+- `build-android` loads the shell setup, sets the configured `lunch` target and builds a given `m` target.
+- `sbom-android` is a thin wrapper around `build-android` to run upstream's Software Bill Of Materials facilities.
+
+Please fefer to the Option Reference below to see available options & flag.
+
+\pagebreak
+# Sequence Chart
 
 ~~~mermaid
 ---
