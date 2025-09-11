@@ -28,7 +28,7 @@ We created a modular proof‑of‑concept based on NixOS that fulfills most of t
 
 - **[`NixOS`](https://nixos.org)** - the Linux distribution chosen for its declarative module system and flexible boot process.
 - **[`nixpkgs`](https://github.com/nixos/nixpkgs)** - the software repository that enables reproducible builds of up‑to‑date open‑source packages.
-- **[`qemu`](https://qemu.org)** - used to run virtual machines during testing.
+- **[`qemu`](https://qemu.org)** - used to run virtual machines during interactive, as well as automated testing. Both help to decrease testing & verification cycles during development & customization.
 - **[`systemd`](https://systemd.io)** - orchestrates both upstream and custom components while managing credentials and persistent state.
 - **[`systemd-repart`](https://www.freedesktop.org/software/systemd/man/latest/systemd-repart.html)** - prepares signable read‑only disk images for the builder and resizes and re‑encrypts the state partition at each boot.
 - **[Linux Unified Key Setup (`LUKS`)](https://gitlab.com/cryptsetup/cryptsetup/blob/master/README.md)** - encrypts the state partition with an ephemerally generated key on each boot.
