@@ -59,14 +59,25 @@
       '';
 
       optionDocs =
+        let
+          isDefinedInThisRepo =
+            opt: lib.any (decl: lib.hasPrefix (toString self) (toString decl)) (opt.declarations or [ ]);
+          isMocked =
+            opt:
+            opt.loc == [
+              "environment"
+              "ldso"
+            ]
+            ||
+              opt.loc == [
+                "environment"
+                "ldso32"
+              ];
+        in
         (pkgs.nixosOptionsDoc {
           inherit (vm) options;
           transformOptions =
-            opt:
-            if lib.any (decl: lib.hasPrefix (toString self) (toString decl)) (opt.declarations or [ ]) then
-              opt
-            else
-              opt // { visible = false; };
+            opt: if isDefinedInThisRepo opt && !isMocked opt then opt else opt // { visible = false; };
         }).optionsCommonMark;
 
     in
