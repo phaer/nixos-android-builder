@@ -1,6 +1,10 @@
-# NixOS Android Builder
+---
+title: NixOS Android Builder
+date: 2025-09-11
+---
 
-## Design Principles
+\pagebreak
+# Design Principles
 
 With the goal of enabling offline, SLSA‑compliant builds for custom distributions of Android AOSP, we set out to create a minimal Linux system with the following properties:
 
@@ -12,7 +16,7 @@ With the goal of enabling offline, SLSA‑compliant builds for custom distributi
 
 We created a modular proof‑of‑concept based on NixOS that fulfills most of these properties, with the remaining limitations and future plans detailed below.
 
-### Limitations and Further Work
+## Limitations and Further Work
 
 * **aarch64 support** could be added if needed. Only `x86_64` with `UEFI` is implemented at the moment.
 * **unattended mode** is not yet fully-tested. The current implementation includes an interactive shell and debug tools.
@@ -24,7 +28,7 @@ We created a modular proof‑of‑concept based on NixOS that fulfills most of t
   customizations, a good understanding of `nix` might be needed. We will ease those as far as possible, as we learn more about users customization needs.
 
 
-## Used Technologies
+# Used Technologies
 
 - **[`NixOS`](https://nixos.org)** - the Linux distribution chosen for its declarative module system and flexible boot process.
 - **[`nixpkgs`](https://github.com/nixos/nixpkgs)** - the software repository that enables reproducible builds of up‑to‑date open‑source packages.
