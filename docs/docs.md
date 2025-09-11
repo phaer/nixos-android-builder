@@ -37,27 +37,70 @@ We created a modular proof‑of‑concept based on NixOS that fulfills most of t
 A complete **Software Bill of Materials (SBOM)** for the builder's NixOS closure can be generated from the repository root by running, e.g.:
 
 ``` shellsession
-nix run github:tiiuae/sbomnix#sbomnix -- .#nixosConfigurations.vm.toplevel`.
+nix run github:tiiuae/sbomnix#sbomnix -- .#nixosConfigurations.vm.toplevel
 ```
 
 
-## Major Components
+# Major Components
 
-* **`AOSP` source distribution**: the only component not shipped with the builders images. Android sources must be cloned into `/var/lib/builder/sources`, e.g. with `fetch-android` described below.
-* **`android-build-env`**: a NixOS module to emulate a conventional Linux environment with paths adhering to the File Hierachy Standard (FHS; i.e. `/bin`, `/lib`, ...).
-    We implement this by creating a custom `fhsenv` derivation, containing libraries and binaries from all of Androids build-time dependencies, as well as a custom dynamic linker that searches `/lib` instead of nix store paths.
-    Alternative approaches such as `nix-ld` and `envfs` where considered, but deemed insufficient as they work with individual symlinks to store paths and those links break with sandboxes bind-mounting `/bin` and `/lib`.
-* **`nixos-android-builder` source repository**: reproducibly defines all software dependencies of the builder image in a `nix flake`. It pins `nixpkgs` to a specific revision and declaratively describes the builders NixOS system, including `android-build-env`.
-* **disk image**: Built from `nixos-android-builder`, ready to be booted on generic `x86_64` hardware. Contains 4 partitions:
-  * **`/boot`**: contains the signed Unified Kernel Image as an EFI executable. Mounted read-only at run-time.
-  * **`/usr`**: contains `/nix/store`, which is bind-mounted during boot. Verified via `dm-verity` at run-time.
-  * **`/usr hash`**: contains `dm-verity` hashes for `/usr` above. Generated during build-time. Its hash is added to kernel parameters in the `UKI` as `usrhash`.
-  * **`/var/lib` state partition**: While a minimal, empty partition is built into the image, this partition is meant to be resized & formatted during each boot as described below. It is encrypted with an ephemeral key to prevent data leaks. Its purpose is to store build artifacts that
-  would not fit into memory.
-  * No `/` is included here, because the root file system as well as a writable `/nix/store` overlay are kept in `tmpfs` only.
-* **Secure Boot keys** those are currently generated manually and stored unencrypted in a local, untracked `keys/` directory in the
-  source repository. It's a users responsibility to keep them safe and do backups. Secure Boot update bundles `*.auth` for enrollment
-  of individual machines are stored unsigned and unencrypted on the `/boot` partition when signing an image.
+The **NixOS Android Builder** is a collection of Nix expressions (a "nix flake") and helper scripts that produce a reproducible[^reproducible], ready‑to‑flash Linux system capable of compiling Android Open Source Project (AOSP) code.
+The flake pins `nixpkgs` to a specific commit, ensuring that the same versions of compilers, libraries, and build tools are used on every build.
+Inside the flake, a NixOS module describes the system layout, the `android-build-env` package, and the custom `fhsenv` derivation that provides conventional Linux file system hierarchy.
+This approach guarantees that the same inputs always generate the same output, making the build process deterministic and auditable.
+
+Users with `nix` installed can clone this repository, download all dependencies and build a signed disk image, ready to flash & boot on the build machine, in a few simple steps outlined in [README.md](../README.md).
+
+The resulting disk image boots on generic `x86_64` hardware with `UEFI` as well as Secure Boot, and provides an isolated build environment.
+It contains scripts for secure boot enrollment, a verified filesystem, and an ephemeral, encrypted state partition that holds build artifacts that cannot fit into memory.
+
+[^reproducible]: *Reproducible* in functionality. The final disk images are not yet expected to be *fully* bit-by-bit reproducible. That could be done, but would require a long-tail of removing additional sources of indeterminism, such as as date & time of build. See [reproducible.nixos.org](https://reproducible.nixos.org/)
+
+## Disk Image
+
+A ready-made disk image to run NixOS Android Builder on a target host can be build from any existing `x86_64-linux` system with `nix` installed.
+Under the hood, the image itself is built by `systemd-repart`, using NixOS module definitions from `nixpkgs` as well as custom enhancements shipped in this repository.
+
+### Build Process
+
+`systemd-repart` is called twice during build-time:
+
+1. While building `system.build.intermediateImage`:
+  A first image is built, it contains the `store` partition, populated with our NixOS closure as well as minimal `var-lib` partition.
+  `boot` and `store-verity` remain empty during this step.
+
+2. While building `system.build.finalImage`:
+  Take the populated `store` partition from the first step, derive `dm-verity` hashes from them and write them into `store-verity`.
+  The resulting `usrhash` is added to a newly built `UKI`, which is then copied to `boot`, to a path were the firmware finds it (`/EFI/BOOT/BOOTX86.EFI`).
+
+3. The image then needs to be signed with a script outside a `nix` build process (to avoid leaking keys into the world-readable `/nix/store`. No `systemd-repart` is involved in this step. Instead we use `mtools` to read the `UKI` from the image, sign it and - together with Secure Boot update bundles, write it back to `boot` inside the image.
+
+4. Finally, `systemd-repart` is called once more during run-time, in early boot at the start of `initrd`: The minimal `var-lib` partition, created in the first step above, is resized and encrypted with a new random key on each boot. That
+key is generated just before `systemd-repart` in our custom `generate-disk-key.service`.
+
+### Disk Layout
+
+| Partition           | Label          | Format           | Mountpoint |
+|---------------------+----------------+------------------+------------|
+| **00‑esp**          | `boot`         | `vfat`           | `/boot`    |
+| **10‑store‑verity** | `store-verity` | `dm-verity hash` | `n/a`       |
+| **20‑store**        | `store`        | `erofs`          | `/usr`     |
+| **30‑var‑lib**      | `var-lib`      | `ext4`           | `/var/lib` |
+
+- **boot** – Holds the signed Unified Kernel Image (`UKI`) as an `EFI` application, as well as Secure Boot update bundles for enrollment. The partition itself is unsigned and mounted read‑only during boot.
+- **store-verity** – Stores the `dm‑verity` hash for the `/usr` partition. The hash is passed as `usrhash` in the kernel command line, which is signed as part of the `UKI`.
+- **store** – Contains the read-only Nix store,  bind‑mounted into `/nix/store` in the running system. The integrity of `/usr` is verified at runtime using `dm‑verity`.
+- **var-lib** – A minimal, ephemeral state partition. See next section below.
+
+Notably, the root filesystem (`/`) is, along with an optional writable overlay of the Nix store, kept entirely in RAM (`tmpfs`) and therefore not present in the image.
+There's also no boot loader, because the `UKI` acts as an `EFI` application and is directly loaded by the hosts firmware.
+
+### Ephemeral State Partition
+
+The `/var/lib` partition is deliberately designed to be temporary and encrypted. Each time the system boots, a fresh key is generated and the partition is resized to match the current disk size. This ensures that sensitive build artifacts never persist beyond a single session, reducing the risk of leaking proprietary information or to introduce impurities between different builds.
+
+### Secure Boot Support
+
+Secure Boot is enabled by generating a set of keys that are stored unencrypted in a local `keys/` directory within the repository. Users must protect these keys and back them up. When a new image is signed, Secure Boot update bundles (`*.auth` files) are created for each target machine. These bundles are stored unsigned and unencrypted on the `/boot` partition. On boot, we check whether whe are in Secure Boot setup mode and, if so, enroll our keys. If Secure Boot is disabled, we display an error and fail early during boot.
 
 ## Sequence Chart
 
