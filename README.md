@@ -70,7 +70,7 @@ create-signing-keys
 # Build the image, copy it to our current working directory and make it writable
 install -T $(nix build --no-link --print-out-paths .#image)/*.raw android_builder.raw
 # Finally, sign the UKI on the images ESP partition
-sign-disk-image android-builder.raw
+sign-disk-image android_builder.raw
 ```
 
 `openssl` is used to generate new secure boot keys. The keys are stored into `$PWD/keys` directory.
@@ -83,7 +83,7 @@ an error is displayed and the machine halted.
 
 ## Flashing it
 
-The result image can then be copied to a USB stick or hard-drive with e.g. `sudo dd if=android-builder.raw bs=1M status=progress of=/dev/your-device` or other utils and booted on EFI-enabled x86_64 machines.
+The result image can then be copied to a USB stick or hard-drive with e.g. `sudo dd if=android_builder.raw bs=1M status=progress of=/dev/your-device` or other utils and booted on EFI-enabled x86_64 machines.
 
 
 # Automated Testing
