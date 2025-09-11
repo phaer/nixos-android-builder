@@ -1,33 +1,30 @@
 # NixOS Android Builder
 
-## Design principles
+## Design Principles
 
-With the aim of enabling offline [SLSA](https://slsa.dev/)-compliant builds for custom distributions of [Android AOSP](https://source.android.com/) in mind, we set out to build minimal Linux system with the following properties:
+With the goal of enabling offline, SLSA‑compliant builds for custom distributions of Android AOSP, we set out to create a minimal Linux system with the following properties:
 
-* **Portable** - Runs on arbitrary `x86_64` hardware with `UEFI` boot as well as sufficient disk (>250G) and memory (>64G) to build android.
-* **Offline** - Requires no network connectivity, other than to internal source code and artifact repositories.
-* **Ephemeral** - Each boot of the builder should result in a pristine environment. No traces of neither build inputs or artifacts should remain after a build.
-* **Declarative** - All aspects of the build systems are described in nix expression to ensures identical behavior regardless of the build system or time of build.
-* **Trusted** - All deployed artifacts such as disk images must be cryptographically signed for tamper prevention and provenance.
+* **Portable** – Runs on arbitrary `x86_64` hardware with UEFI boot, that provides sufficient disk (≥ 250 GB) and memory (≥ 64 GB) to build Android.
+* **Offline** – Requires no network connectivity other than to internal source‑code and artifact repositories.
+* **Ephemeral** – Each boot of the builder should result in a pristine environment; no trace of build inputs or artifacts should remain after a build.
+* **Declarative** – All aspects of the build system are described in Nix expressions, ensuring identical behavior regardless of the build environment or the time of build.
+* **Trusted** – All deployed artifacts, such as disk images, are cryptographically signed for tamper prevention and provenance.
 
-We succeeded in quickly creating a modular Proof-of-Concept, based on [NixOS](https://nixos.org), that fullfills most of the properties, with the remaining limitations and plans listed below.
-
-A test-suite based on `qemu` virtual machines was created to enable faster iteration due to accelerated testing cycles.
+We created a modular proof‑of‑concept based on NixOS that fulfills most of these properties, with the remaining limitations and future plans detailed below.
 
 ### Limitations and Further Work
 
-
-* **aarch64 support** could be added for both, build and target platforms , if there is demand but has neither been implemented yet.
-* **unattended mode**: we plan to disable all interactive access in production images, while providing an interactive variant for debugging.
-* **artifact uploads**: build artifacts are currently not automatically uploaded anywhere.
-* **credential handling** we do not currently implement any measures to handle secrets other than what NixOS ships out of the box.
+* **aarch64 support** could be added if needed. Only `x86_64` with `UEFI` is implemented at the moment.
+* **unattended mode** is not yet fully-tested. The current implementation includes an interactive shell and debug tools.
+* **artifact uploads**: build artifacts are currently not automatically uploaded anywhere, but stay on the build machine until it is rebooted..
   Integration of a Trusted Platform Module (TPM) could be useful here, to ease authentication to private repositories as well as destinations for artifact upload.
 * **measured boot**: while we use Secure Boot with a platform custom key, we do not measure involved components via a TPM yet. Doing so would improve existing Secure Boot measures as well as help with implementing attestation capabilities later on.
+* **credential handling** we do not currently implement any measures to handle secrets other than what NixOS ships out of the box.
 * **higher-level configuration**: Adapting the build environment to the needs of custom AOSP distributions might need extra work. Depending on the nature of those
   customizations, a good understanding of `nix` might be needed. We will ease those as far as possible, as we learn more about users customization needs.
 
-## Used technologies
 
+## Used technologies
 
 * **[`NixOS`](https://nixos.org)** as Linux Distribution for its declarative module system and flexible boot process.
 * **[`nixpkgs`](https://github.com/nixos/nixpkgs)** as software repository for its reproducible approach of building up-to-date Open Source packages.
