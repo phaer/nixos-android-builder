@@ -4,7 +4,7 @@
 
 With the goal of enabling offline, SLSA‑compliant builds for custom distributions of Android AOSP, we set out to create a minimal Linux system with the following properties:
 
-* **Portable** – Runs on arbitrary `x86_64` hardware with UEFI boot, that provides sufficient disk (≥ 250 GB) and memory (≥ 64 GB) to build Android.
+* **Portable** – Runs on arbitrary `x86_64` hardware with UEFI boot, that provides sufficient disk (>=250 GB) and memory (>=64 GB) to build Android.
 * **Offline** – Requires no network connectivity other than to internal source‑code and artifact repositories.
 * **Ephemeral** – Each boot of the builder should result in a pristine environment; no trace of build inputs or artifacts should remain after a build.
 * **Declarative** – All aspects of the build system are described in Nix expressions, ensuring identical behavior regardless of the build environment or the time of build.
