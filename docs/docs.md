@@ -105,7 +105,7 @@ The `/var/lib` partition is deliberately designed to be temporary and encrypted.
 
 Secure Boot is enabled by generating a set of keys that are stored unencrypted in a local `keys/` directory within the repository. Users must protect these keys and back them up. When a new image is signed, Secure Boot update bundles (`*.auth` files) are created for each target machine. These bundles are stored unsigned and unencrypted on the `/boot` partition. On boot, we check whether whe are in Secure Boot setup mode and, if so, enroll our keys. If Secure Boot is disabled, we display an error and fail early during boot.
 
-## Custom FHS Environment
+## Custom FHS Environment {#fhsenv}
 
 The builder image includes a custom builder for File Hierarchy Standard (`FHS`) environments.
 
@@ -121,7 +121,7 @@ That dynamic linker is configured to `/lib` instead of the standard Nix store pa
 
 Alternative approaches, such as `pkgs.buildFHSEnv`, `nix-ld` or `envfs`, were evaluated but found insufficient because they rely on individual symlinks that break when sandboxed bind‑mounts are applied to `/bin` and `/lib` only, without having `/nix/store` in the sandbox.
 
-## Android Build Environment
+## Android Build Environment {#android-build-env}
 
 The `android-build-env.nix` NixOS module uses the `fhsenv.nix` module described in the section above, to add all tools required by for an AOSP build. By using this module, developers can compile Android in a clean, reproducible environment that mimics a standard Linux installation.
 
@@ -131,15 +131,94 @@ It also adds 3 scripts, added for convinience:
 - `build-android` loads the shell setup, sets the configured `lunch` target and builds a given `m` target.
 - `sbom-android` is a thin wrapper around `build-android` to run upstream's Software Bill Of Materials facilities.
 
-Please fefer to the Option Reference below to see available options & flag.
+Please refer to the [Options Reference](#options-reference) below to see available options & flag.
 
 \pagebreak
 # Sequence Chart
 
+## Build-time
+
+The following chart depicts a high-level overview on how the different components are assembled into the final disk image at build-time.
+A detailed description of the steps follows after the chart.
+
 ~~~mermaid
 ---
 config:
-  theme: 'neutral'
+  theme: neutral
+---
+flowchart TB
+    subgraph nixbuild["inside nix sandbox"]
+      direction TB
+
+      fhsenv["<b>(1)</b> FHS environment"]
+      glibc["<b>(a)</b> glibc-vanilla"] --> fhsenv 
+      bash["<b>(b)</b> bash forFHSEnv"] --> fhsenv
+      tools["<b>(c)</b> android build requirements"] --> fhsenv
+      fhsenv --> nixos["<b>(2)</b> NixOS Closure" ]
+      minimal-nixos["<b>(d)</b> Minimal Nixos"] --> nixos
+      nixos -- store paths --> intermediate["<b>(3)</b> Intermediate Image" ]
+      intermediate -- store partition --> final["<b>(5)</b> Final Image"]
+      intermediate -- store-verity hashes --> final
+      intermediate -- root hash --> uki["<b>(4)</b> UKI"]
+      nixos -- kernel & initrd --> uki
+      uki -- ESP partition  --> final
+    end
+
+    final -- copy image --> signing-script
+    subgraph signing-script["sign-disk-image.sh"]
+      direction TB
+
+      sign-uki["<b>(6)</b> Sign UKI EFI application"]
+      copy-auth["<b>(7)</b> Copy Secure Boot update bundles"]
+    end
+
+    signing-script --> signed
+    signed["<b>(8)</b> Image is signed & ready to boot"]
+
+~~~
+
+### Description
+
+- **(1)** We start by building an [`FHS` environment](#fhsenv) in a derivation, as outlined above.
+Main components are:
+  - **(a)** `glibc-vanilla` - NixOS glibc, but with a dynamic linker configured to search `FHS` paths, such as `/lib`, `/bin`, ...
+  - **(b)** `bash` with `forFHSEnv` set to `true`. NixOS bash does not include `bin` in `PATH` in empty environments. Built with `forFHSEnv` it does.
+  - **(c)** Android build dependencies that are not shipped in-tree. `repo`, etc.
+
+- **(2)** The NixOS closure (`system.build.toplevel`) is build, including **(d)** boot & system services as well as, the `fhsenv` derivation from the previous step.
+- **(3)** First run of `systemd-repart` (`system.build.intermediateImage`):
+  - Starts from a blank disk image.
+  - Store paths from the NixOS closure are copied into the newly `store` partition.
+  - `esp`, `store-verity` and `var-lib` are created but stay empty for the moment.
+- **(4)** With a filled store partition, `dm-verity` hashes can be calculated.
+  So we build a new `UKI`, taking kernel & initrd from the NixOS closure and adding the root hash of the `dm-verity` merkle tree to the kernels command line as `usrhash`.
+- **(5)** Second run of `systemd-repart` (`system.build.finalImage`):
+  - Starts from the intermediate image from step **(3)**.
+  - The `store` and `var-lib` partitions are copied as-is.
+  - `dm-verity` hashes are written to the `store-verity` partition.
+  - The unsigned `UKI` from step **(4)** is copied into the `esp` partition.
+  - With that being done, the image is built and contains our entire NixOS closure, including the `fhsenv`, in a `dm-verity`-checked store partition, as well as the `UKI` including `usrhash`.
+
+All that's left to do, is to sign it and prepare it for Secure Boot.
+The `UKI` is not yet signed, as doing so inside the nix sandbox, might expose the signing keys.
+So the user is asked to copy the built image from the nix store to a writable location and execute `sign-disk-image.sh` on it.
+Usage is documented in [README.md](../README.md). `sign-disk-image.sh` manipulates the `vfat` partition inside the disk image directly, in order to:
+
+- **(6)** The `UKI` is copied to a temporary file, signed, and copied back into the `esp` again.
+- **(7)** Secure Boot update budnles (`*.auth` files) are copied to the `esp` to ensure that `ensure-secure-boot-enrollment.service` can find them during boot.
+- **(8)** We finally have a signed image, reado to flash & boot on a target machine.
+
+
+\pagebreak
+## Run-time
+
+The following chart depicts a high-level overview on steps that run after the disk image has been booted on target hardware.
+A detailed description of the steps follows after the chart.
+
+~~~mermaid
+---
+config:
+  theme: neutral
 ---
 flowchart TB
     uefi["UEFI Firmware"]
@@ -185,7 +264,7 @@ flowchart TB
 
 1. The hosts EFI firmware boots into the Unified Kernel Image (`UKI`), verifying its cryptographic signature if secure boot is active. A service to check that Secure Boot is active runs early in the `UKI`s initial RAM disk (`initrd`).
 
-2. `ensure-secure-boot-enrollment.services`, asks EFI firmware about the current Secure Boot status.
+2. `ensure-secure-boot-enrollment.service`, asks EFI firmware about the current Secure Boot status.
   - If it is **active** and our image is booting succesfully, we trust the firmware here and continue to boot normally.
   - If it is in **setup** mode, we enroll certificates stored on our ESP. Setting the platform key disables setup mode automatically and reboot the machine right after.
   - If it is **disabled** or in any unknown mode, we halt the machine but don't power it off to keep the error message readable.
@@ -207,6 +286,11 @@ flowchart TB
 8. Finally, build outputs can be found in-tree, depending on the targets built.
    E.g. `/var/lib/build/source/out/target/product/vsoc_x86_64_only`. Those are currently not persisted on the builder, so manual copying is required if build outputs should be kept.
 
-# Options Reference
+\pagebreak
+# Options Reference {#options-reference}
+
+The following NixOS Options are available to customize features & behaviour of NixOS Android Builder at build-time.
+Some, e.g. those in the `nixosAndroidBuilder.build` namespace, also have equivalent flags to use at run-time where an interactive shell is available.
+Settings can be set in `configuration.nix` or custom NixOS Modules.
 
 {{nixos-options}}
