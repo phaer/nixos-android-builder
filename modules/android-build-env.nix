@@ -49,7 +49,6 @@ let
       exit 0
     }
 
-    # Parse long flags
     while [[ $# -gt 0 ]]; do
       case "$1" in
         -h|--help) usage ;;
@@ -104,7 +103,6 @@ let
       exit 0
     }
 
-    # Parse long flags
     while [[ $# -gt 0 ]]; do
       case "$1" in
         -h|--help) usage ;;
@@ -127,11 +125,43 @@ let
     m "$@"
   '';
 
-  sbomAndroid = writeShellScriptBin "sbom-android" ''
+  sbomAndroid = writeShellScriptBin "android-sbom" ''
     set -e
 
     ${buildAndroid}/bin/build-android sbom "$@"
   '';
+
+  measureAndroidSource = writeShellScriptBin "android-measure-source" ''
+    set -e
+
+    SOURCE_DIR='${cfg.sourceDir}'
+
+    usage() {
+      cat <<EOF
+    Usage: $0 [options] [-- ...m args...]
+
+    Output a hash over a list of root hashes from all git repositories in the checkout.
+
+    Options:
+      --source-dir=DIR      Source directory (default: ${cfg.sourceDir})
+      -h, --help            Show this help message
+    EOF
+      exit 0
+    }
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -h|--help) usage ;;
+        --source-dir=*) SOURCE_DIR="''${1#*=}" ;;
+        *) break ;;
+      esac
+      shift
+    done
+
+    cd $SOURCE_DIR
+    repo forall -c 'echo $REPO_PATH $(git rev-parse HEAD^{tree})' | sort | sha256sum | cut -d ' ' -f 1
+  '';
+
 in
 {
 
@@ -171,6 +201,7 @@ in
       fetchAndroid
       buildAndroid
       sbomAndroid
+      measureAndroidSource
     ];
     nixosAndroidBuilder.fhsEnv.packages = with pkgs; [
       # We just override a two deps of git-repo to include less features, but don't pull huge dependencies
