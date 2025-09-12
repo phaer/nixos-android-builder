@@ -139,7 +139,7 @@
       checks.${system} = {
         integration = pkgs.testers.runNixOSTest {
           imports = [
-            ./tests.nix
+            ./tests/integration.nix
             { _module.args = { inherit modules; }; }
           ];
         };
