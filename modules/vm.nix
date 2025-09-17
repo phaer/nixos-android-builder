@@ -9,6 +9,7 @@ let
   hostPkgs = cfg.host.pkgs;
 
   secureBootScripts = hostPkgs.callPackage ../packages/secure-boot-scripts { };
+  configure-disk-installer = hostPkgs.callPackage ../packages/configure-disk-installer { };
 in
 {
   config = {
@@ -70,6 +71,7 @@ in
               echo >&2 "Signing UKI in ${cfg.diskImage}"
               export keystore="${config.system.build.secureBootKeysForTests}"
               bash ${lib.getExe secureBootScripts.sign-disk-image} "${cfg.diskImage}"
+              bash ${lib.getExe configure-disk-installer} "${cfg.diskImage}" "/dev/vdb"
             else
               echo "${cfg.diskImage} already exists, skipping creation & signing"
           fi
