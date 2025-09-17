@@ -143,6 +143,13 @@
             { _module.args = { inherit modules; }; }
           ];
         };
+        installer = pkgs.testers.runNixOSTest {
+          imports = [
+            ./tests/installer.nix
+            { _module.args = { inherit modules; }; }
+          ];
+        };
+
       };
     };
 }
