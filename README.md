@@ -31,6 +31,8 @@ No further customization or handling of build artifacts is currently implemented
 Resulting artifacts can be found in-tree in `/var/lib/build/source/out` after the
 build has finished.
 
+See [./docs/docs.md](docs.md) for a more detailed description of design considerations, used components and further work.
+
 # Requirements
 
 * [Nix](https://nixos.org) with flakes support

@@ -6,7 +6,7 @@
   };
 
   outputs =
-    { nixpkgs, ... }:
+    { self, nixpkgs, ... }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
@@ -21,17 +21,65 @@
           }
         ))
       ];
-      modules = lib.attrValues nixosModules;
+
+      ourModules = (lib.attrValues nixosModules) ++ [ ./configuration.nix ];
+
+      modules = [
+        (
+          { modulesPath, ... }:
+          {
+            imports = [
+              "${modulesPath}/image/repart.nix"
+              "${modulesPath}/profiles/minimal.nix"
+              "${modulesPath}/profiles/perlless.nix"
+              "${modulesPath}/virtualisation/qemu-vm.nix"
+            ];
+          }
+        )
+      ]
+      ++ ourModules;
 
       vm = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
-        imports = modules ++ [ ./configuration.nix ];
+        imports = modules;
       };
 
       run-vm = vm.config.system.build.vmWithWritableDisk;
       image = vm.config.system.build.finalImage;
 
       secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
+
+      build-docs = pkgs.writeShellScriptBin "build-docs" ''
+        cd $(git rev-parse --show-toplevel 2>/dev/null)/docs
+        pandoc -V geometry:margin=1.5in --toc -s --lua-filter=./nixos-options.lua  -F mermaid-filter -o ./docs.pdf ./docs.md
+      '';
+      watch-docs = pkgs.writeShellScriptBin "watch-docs" ''
+        cd $(git rev-parse --show-toplevel 2>/dev/null)/docs
+        ls *.md | entr -s ${build-docs}/bin/build-docs
+      '';
+
+      optionDocs =
+        let
+          isDefinedInThisRepo =
+            opt: lib.any (decl: lib.hasPrefix (toString self) (toString decl)) (opt.declarations or [ ]);
+          isMocked =
+            opt:
+            opt.loc == [
+              "environment"
+              "ldso"
+            ]
+            ||
+              opt.loc == [
+                "environment"
+                "ldso32"
+              ];
+        in
+        (pkgs.nixosOptionsDoc {
+          inherit (vm) options;
+          transformOptions =
+            opt: if isDefinedInThisRepo opt && !isMocked opt then opt else opt // { visible = false; };
+        }).optionsCommonMark;
+
     in
     {
       inherit nixosModules;
@@ -39,15 +87,27 @@
 
       formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt-tree;
 
-      devShells.${system}.default = pkgs.mkShell {
-        packages = with secureBootScripts; [
-          create-signing-keys
-          sign-disk-image
-        ];
+      devShells.${system} = {
+        default = pkgs.mkShell {
+          packages = with secureBootScripts; [
+            create-signing-keys
+            sign-disk-image
+          ];
+        };
+        docs = pkgs.mkShell {
+          packages = [
+            pkgs.pandoc
+            pkgs.mermaid-filter
+            pkgs.texliveSmall
+            pkgs.entr
+            build-docs
+            watch-docs
+          ];
+        };
       };
 
       packages.${system} = {
-        inherit run-vm image;
+        inherit run-vm image optionDocs;
         inherit (secureBootScripts) create-signing-keys sign-disk-image;
         default = image;
       };
