@@ -60,9 +60,8 @@
 
   config =
     let
-      
 
-    cfg = config.nixosAndroidBuilder.build;
+      cfg = config.nixosAndroidBuilder.build;
 
       # pkgs.writeShellScriptBin with bashInteractive instead of pkgsruntimeShell, so that we
       # don't get errors about the missing "complete" builtin.
@@ -81,7 +80,6 @@
           '';
           meta.mainProgram = name;
         };
-
 
       fetchAndroid = writeShellScriptBin "fetch-android" ''
           set -e
@@ -219,7 +217,7 @@
         cd $SOURCE_DIR
         repo forall -c 'echo $REPO_PATH $(git rev-parse HEAD^{tree})' | sort | sha256sum | cut -d ' ' -f 1
       '';
-    
+
     in
     {
       environment.variables = {
