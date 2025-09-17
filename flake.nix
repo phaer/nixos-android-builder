@@ -50,11 +50,11 @@
       secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
 
       build-docs = pkgs.writeShellScriptBin "build-docs" ''
-        cd $PRJ_ROOT/docs
+        cd $(git rev-parse --show-toplevel 2>/dev/null)/docs
         pandoc -V geometry:margin=1.5in --toc -s --lua-filter=./nixos-options.lua  -F mermaid-filter -o ./docs.pdf ./docs.md
       '';
       watch-docs = pkgs.writeShellScriptBin "watch-docs" ''
-        cd $PRJ_ROOT/docs
+        cd $(git rev-parse --show-toplevel 2>/dev/null)/docs
         ls *.md | entr -s ${build-docs}/bin/build-docs
       '';
 
