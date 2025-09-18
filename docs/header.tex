@@ -1,0 +1,12 @@
+
+%% inline code snippets
+\usepackage{xcolor}
+
+\definecolor{Light}{HTML}{F4F4F4}
+
+\renewcommand{\texttt}[1]{%
+  \begingroup
+  \setlength{\fboxsep}{1pt}% horizontal padding
+  \colorbox{Light}{\ttfamily #1}%
+  \endgroup
+}
