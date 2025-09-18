@@ -49,14 +49,44 @@
 
       secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
 
-      build-docs = pkgs.writeShellScriptBin "build-docs" ''
-        cd $(git rev-parse --show-toplevel 2>/dev/null)/docs
-        pandoc -V geometry:margin=1.5in --toc -s --lua-filter=./nixos-options.lua  -F mermaid-filter -o ./docs.pdf ./docs.md
-      '';
-      watch-docs = pkgs.writeShellScriptBin "watch-docs" ''
-        cd $(git rev-parse --show-toplevel 2>/dev/null)/docs
-        ls *.md | entr -s ${build-docs}/bin/build-docs
-      '';
+      build-docs = pkgs.writeShellApplication {
+        name =  "build-docs";
+        runtimeInputs = [
+          pkgs.pandoc
+          pkgs.mermaid-filter
+          pkgs.gitMinimal
+          (pkgs.texliveSmall.withPackages (ps: [
+            ps.framed
+          ]))
+        ];
+        text = ''
+          cd "$(git rev-parse --show-toplevel 2>/dev/null)/docs"
+            pandoc \
+              -V linkcolor:blue \
+              -V geometry:a4paper \
+              -V geometry:margin=3cm \
+              --pdf-engine=xelatex \
+              --toc \
+              --standalone \
+              --lua-filter=./nixos-options.lua  \
+              --include-in-header ./header.tex \
+              --highlight-style ./pygments.theme \
+              -F mermaid-filter \
+              -o "./$1.pdf" "./$1.md"
+        '';
+      };
+
+      watch-docs = pkgs.writeShellApplication {
+        name = "watch-docs";
+        runtimeInputs = [
+          pkgs.entr
+          pkgs.gitMinimal
+        ];
+        text = ''
+          cd $(git rev-parse --show-toplevel 2>/dev/null)/docs
+          ls *.md | entr -s ${build-docs}/bin/build-docs
+        '';
+      };
 
       optionDocs =
         let
@@ -92,14 +122,6 @@
           packages = with secureBootScripts; [
             create-signing-keys
             sign-disk-image
-          ];
-        };
-        docs = pkgs.mkShell {
-          packages = [
-            pkgs.pandoc
-            pkgs.mermaid-filter
-            pkgs.texliveSmall
-            pkgs.entr
             build-docs
             watch-docs
           ];
