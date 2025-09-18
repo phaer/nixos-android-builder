@@ -50,13 +50,14 @@
       secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
 
       build-docs = pkgs.writeShellApplication {
-        name =  "build-docs";
+        name = "build-docs";
         runtimeInputs = [
           pkgs.pandoc
           pkgs.mermaid-filter
           pkgs.gitMinimal
           (pkgs.texliveSmall.withPackages (ps: [
             ps.framed
+            ps.fvextra
           ]))
         ];
         text = ''
@@ -84,8 +85,8 @@
           pkgs.gitMinimal
         ];
         text = ''
-          cd $(git rev-parse --show-toplevel 2>/dev/null)/docs
-          ls *.md | entr -s ${build-docs}/bin/build-docs
+          find "$(git rev-parse --show-toplevel 2>/dev/null)/docs" -name '*.md' \
+          | entr -s "${build-docs}/bin/build-docs $*"
         '';
       };
 
