@@ -13,7 +13,7 @@ With the goal of enabling offline, SLSA‑compliant builds for custom distributi
 * **Declarative** – All aspects of the build system are described in Nix expressions, ensuring identical behavior regardless of the build environment or the time of build.
 * **Trusted** – All deployed artifacts, such as disk images, are cryptographically signed for tamper prevention and provenance.
 
-We created a modular proof‑of‑concept based on NixOS that fulfills most of these properties, with the remaining limitations and future plans detailed below.
+We created a modular proof‑of‑concept based on NixOS that fulfills most of these properties, with the remaining limitations and future plans detailed below. Usage instructions can be found in [./user-guide.pdf](./user-guide.pdf).
 
 ## Limitations and Further Work
 
@@ -131,7 +131,7 @@ It also adds 3 scripts, added for convinience:
 - `build-android` loads the shell setup, sets the configured `lunch` target and builds a given `m` target.
 - `sbom-android` is a thin wrapper around `build-android` to run upstream's Software Bill Of Materials facilities.
 
-Please refer to the [Options Reference](#options-reference) below to see available options & flag.
+Please refer to the options reference in [user-guide.pdf](user-guide.pdf).
 
 \pagebreak
 # Sequence Chart
@@ -202,7 +202,7 @@ Main components are:
 All that's left to do, is to sign it and prepare it for Secure Boot.
 The `UKI` is not yet signed, as doing so inside the nix sandbox, might expose the signing keys.
 So the user is asked to copy the built image from the nix store to a writable location and execute `sign-disk-image.sh` on it.
-Usage is documented in [README.md](../README.md). `sign-disk-image.sh` manipulates the `vfat` partition inside the disk image directly, in order to:
+Usage is documented in [user-guide.pdf](user-guide.pdf). `sign-disk-image.sh` manipulates the `vfat` partition inside the disk image directly, in order to:
 
 - **(6)** The `UKI` is copied to a temporary file, signed, and copied back into the `esp` again.
 - **(7)** Secure Boot update bundles (`*.auth` files) are copied to the `esp` to ensure that `ensure-secure-boot-enrollment.service` can find them during boot.
@@ -287,10 +287,3 @@ flowchart TB
    E.g. `/var/lib/build/source/out/target/product/vsoc_x86_64_only`. Those are currently not persisted on the builder, so manual copying is required if build outputs should be kept.
 
 \pagebreak
-# Options Reference {#options-reference}
-
-The following NixOS Options are available to customize features & behaviour of NixOS Android Builder at build-time.
-Some, e.g. those in the `nixosAndroidBuilder.build` namespace, also have equivalent flags to use at run-time where an interactive shell is available.
-Settings can be set in `configuration.nix` or custom NixOS Modules.
-
-{{nixos-options}}

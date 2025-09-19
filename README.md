@@ -63,16 +63,15 @@ This will take a while on first build, but eventually result in read-only disk i
 
 ## Secure Boot
 
-To prepare our image for SecureBoot, we first have to copy it to a location where we can write to it, and then run two of our included scripts for key creation and image signing.
-Those scripts can be run from the included devshell (`nix develop`) or by using `nix run`, i.e. `nix run .#create-signing-keys`:
+To prepare our image for SecureBoot, we first have to copy it to a location where we can write to it in order to then sign the `UKI` and add our Secure boot update bundles.
+Below scripts can be run from the included devshell (`nix develop`) or by using `nix run`, i.e. `nix run .#create-signing-keys`:
 
 ```shell-session
 # Create SecureBoot keys
 create-signing-keys
-# Build the image, copy it to our current working directory and make it writable
-install -T $(nix build --no-link --print-out-paths .#image)/*.raw android_builder.raw
-# Finally, sign the UKI on the images ESP partition
-sign-disk-image android_builder.raw
+# Build the image, sign the UKI on the images ESP partition and copy everything to the
+# repositoryes top-level directory when done.
+sign-disk-image android_builder.raw "$(nix build --no-link --print-out-paths .#image)/*.raw"
 ```
 
 `openssl` is used to generate new secure boot keys. The keys are stored into `$PWD/keys` directory.
