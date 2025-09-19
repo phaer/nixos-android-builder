@@ -62,17 +62,18 @@
         text = ''
           cd "$(git rev-parse --show-toplevel 2>/dev/null)/docs"
             pandoc \
-              -V linkcolor:blue \
-              -V geometry:a4paper \
-              -V geometry:margin=3cm \
               --pdf-engine=xelatex \
               --toc \
               --standalone \
+              --metadata=options_json:${optionDocs}/share/doc/nixos/options.json \
               --lua-filter=./nixos-options.lua  \
-              --include-in-header ./header.tex \
-              --highlight-style ./pygments.theme \
-              -F mermaid-filter \
-              -o "./$1.pdf" "./$1.md"
+              --include-in-header=./header.tex \
+              --highlight-style=./pygments.theme \
+              --filter=mermaid-filter \
+              --variable=linkcolor:blue \
+              --variable=geometry:a4paper \
+              --variable=geometry:margin=3cm \
+              --output "./$1.pdf" "./$1.md"
         '';
       };
 
@@ -108,7 +109,7 @@
           inherit (vm) options;
           transformOptions =
             opt: if isDefinedInThisRepo opt && !isMocked opt then opt else opt // { visible = false; };
-        }).optionsCommonMark;
+        }).optionsJSON;
 
     in
     {
@@ -129,7 +130,7 @@
       };
 
       packages.${system} = {
-        inherit run-vm image optionDocs;
+        inherit run-vm image;
         inherit (secureBootScripts) create-signing-keys sign-disk-image;
         default = image;
       };
