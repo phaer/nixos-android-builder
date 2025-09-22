@@ -49,14 +49,46 @@
 
       secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
 
-      build-docs = pkgs.writeShellScriptBin "build-docs" ''
-        cd $(git rev-parse --show-toplevel 2>/dev/null)/docs
-        pandoc -V geometry:margin=1.5in --toc -s --lua-filter=./nixos-options.lua  -F mermaid-filter -o ./docs.pdf ./docs.md
-      '';
-      watch-docs = pkgs.writeShellScriptBin "watch-docs" ''
-        cd $(git rev-parse --show-toplevel 2>/dev/null)/docs
-        ls *.md | entr -s ${build-docs}/bin/build-docs
-      '';
+      build-docs = pkgs.writeShellApplication {
+        name = "build-docs";
+        runtimeInputs = [
+          pkgs.pandoc
+          pkgs.mermaid-filter
+          pkgs.gitMinimal
+          (pkgs.texliveSmall.withPackages (ps: [
+            ps.framed
+            ps.fvextra
+          ]))
+        ];
+        text = ''
+          cd "$(git rev-parse --show-toplevel 2>/dev/null)/docs"
+            pandoc \
+              --pdf-engine=xelatex \
+              --toc \
+              --standalone \
+              --metadata=options_json:${optionDocs}/share/doc/nixos/options.json \
+              --lua-filter=./nixos-options.lua  \
+              --include-in-header=./header.tex \
+              --highlight-style=./pygments.theme \
+              --filter=mermaid-filter \
+              --variable=linkcolor:blue \
+              --variable=geometry:a4paper \
+              --variable=geometry:margin=3cm \
+              --output "./$1.pdf" "./$1.md"
+        '';
+      };
+
+      watch-docs = pkgs.writeShellApplication {
+        name = "watch-docs";
+        runtimeInputs = [
+          pkgs.entr
+          pkgs.gitMinimal
+        ];
+        text = ''
+          find "$(git rev-parse --show-toplevel 2>/dev/null)/docs" -name '*.md' \
+          | entr -s "${build-docs}/bin/build-docs $*"
+        '';
+      };
 
       optionDocs =
         let
@@ -78,7 +110,7 @@
           inherit (vm) options;
           transformOptions =
             opt: if isDefinedInThisRepo opt && !isMocked opt then opt else opt // { visible = false; };
-        }).optionsCommonMark;
+        }).optionsJSON;
 
     in
     {
@@ -92,14 +124,6 @@
           packages = with secureBootScripts; [
             create-signing-keys
             sign-disk-image
-          ];
-        };
-        docs = pkgs.mkShell {
-          packages = [
-            pkgs.pandoc
-            pkgs.mermaid-filter
-            pkgs.texliveSmall
-            pkgs.entr
             build-docs
             watch-docs
           ];
@@ -107,7 +131,7 @@
       };
 
       packages.${system} = {
-        inherit run-vm image optionDocs;
+        inherit run-vm image;
         inherit (secureBootScripts) create-signing-keys sign-disk-image;
         default = image;
       };
