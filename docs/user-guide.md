@@ -8,7 +8,7 @@ This document describes the steps needed to build a disk image for NixOS Android
 
 At the end, it provides an overview on customization options as well as guidance on keeping the project up to date with upstream sources.
 
-A more detailed description is available in [docs.pdf](docs.pdf).
+A more detailed architecture and technical description is available in [docs.pdf](docs.pdf).
 
 # Requirements
 
@@ -93,7 +93,7 @@ Let’s build a ready-to-boot disk image from the nix expressions in this reposi
 The following command will automatically download dependencies from the binary cache at [cache.nixos.org](https://cache.nixos.org) and build those not already cached.
 Depending on your internet uplink and the speed of your local machine, the first run may take a long time, but subsequent runs will be much faster due to local caching of artifacts.
 
-*Note*: A 3rd-party tool such as [nix-output-monitor](https://github.com/maralorn/nix-output-monitor) can help to gain a better overview on whats currently being downloaded
+*Note*: A 3rd-party tool such as [nix-output-monitor](https://github.com/maralorn/nix-output-monitor) can help to gain a better overview of what’s currently being downloaded
 or built.
 `nix shell nixpkgs#nom` starts a shell with it, where you can just replace `nix build` with `nom build` below.
 
@@ -120,7 +120,7 @@ but not yet signed for secure boot. We are going to fix that in the next step!
 We can see the full path as well as the size of the generated disk image by running i.e.:
 
 ```bash
-$ du du --human-readable --apparent-size "$(realpath result/*.raw)"
+$ du --human-readable --apparent-size "$(realpath result/*.raw)"
 ```
 
 ``` text
@@ -139,7 +139,7 @@ With our disk image built, we still need to sign it for secure boot, as it still
 So the script starts by copying the image out of the nix store to a temporary file, before signing the `UKI`, copying secure boot update bundles, and - finally moving
 the image to the repository’s top-level directory.
 
-So to sign your image, run:
+To sign your image, run:
 
 ```bash
 $ nix run .#sign-disk-image ./results/*.raw
@@ -165,7 +165,7 @@ Ready to be flashed to a block device in the next step!
 
 ## Flash the Image
 
-With our image both built and signed, we are now ready to flash it to a block device, such as an USB stick or external hard drive.
+With our image both built and signed, we are now ready to flash it to a block device, such as a USB stick or external hard drive.
 
 Attach the block device to your local machine and make sure you find its *device path*, e.g. via `lsblk`. We will use `/dev/sdX` as the block
 device, `android-builder_25.11pre-git.raw` as our image name in this example. While any tool to write a disk image to a block device could do
@@ -186,7 +186,7 @@ $ sudo sync
 
 Replace `/dev/sdX` with the path to your removable device (e.g. `/dev/disk/by-id/...`).
 
-After the `sync` is finished, you can safely move the block device to the your target machine.
+After the `sync` is finished, you can safely move the USB stick or external hard drive to your target machine.
 
 Be sure to enable secure boot setup mode before booting the target machine from the block device for the first time.
 This is needed to automatically enroll our keys on first boot of the machine.
@@ -366,7 +366,7 @@ Copying them to a remote or local persistent storage medium is left to the user 
 
 To start a fresh build, simply reboot.
 
-Shuting down the machine, even sudden power loss, will flush the disk encryption key from RAM and render all previous build artifacts inaccessible.
+Shutting down the machine, even sudden power loss, will flush the disk encryption key from RAM and render all previous build artifacts inaccessible.
 Upon reboot, the `/var/lib` partition will be re-formatted and re-encrypted.
 
 To reboot, use your machine’s physical power buttons or run the following in a shell:
