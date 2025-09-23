@@ -21,7 +21,6 @@
         };
 
         boot.initrd.systemd.services = {
-          ensure-secure-boot-enrollment.enable = lib.mkForce false;
           disk-installer.serviceConfig.TTYPath = lib.mkForce "/dev/ttyS0";
         };
       };
@@ -32,6 +31,7 @@
     ''
       import os
       import subprocess
+      import time
       env = os.environ.copy()
 
       # Use world-readable, throw-away test keys to sign the writable image
@@ -45,7 +45,12 @@
 
       serial_stdout_on()
       machine.start(allow_reboot=True)
-      machine.wait_for_unit("initrd-root-device.target")
+
+      # TODO: Secure Boot enrollment needs to reboot the machine
+      # once, before the installer gets a chance to run. I wasted
+      # too much time, trying to search for "enrolled. Rebooting"
+      # with wait_for_console_text() and friends, before succumbing to a long-enough wait
+      time.sleep(15)
 
       machine.wait_for_file("/run/installer_done")
       machine.shutdown()
@@ -68,6 +73,9 @@
       machine.start()
       machine.switch_root()
       machine.wait_for_unit("multi-user.target")
+      t.assertIn(
+          "Secure Boot: enabled (user)", machine.succeed("bootctl status"),
+          "Secure Boot is NOT active")
       machine.shutdown()
     '';
 }
