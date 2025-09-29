@@ -19,10 +19,6 @@
             (31 * 1024)
           ];
         };
-
-        boot.initrd.systemd.services = {
-          disk-installer.serviceConfig.TTYPath = lib.mkForce "/dev/ttyS0";
-        };
       };
     };
 
