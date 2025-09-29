@@ -42,15 +42,18 @@
           Type = "oneshot";
           RemainAfterExit = true;
           StandardInput = "tty-force";
-          StandardOutput = "tty";
-          StandardError = "tty";
-          TTYPath = "/dev/tty0";
+          StandardOutput = "journal+console";
+          StandardError = "journal+console";
+          TTYPath = "/dev/console";
           TTYReset = true;
           TTYVHangup = true;
           TTYVTDisallocate = true;
         };
 
         script = ''
+          set -euxo pipefail
+          echo -e "\nDisk Installer\n"
+
           if [ ! -f /boot/install_target ]; then
             echo >&2 "/boot/install_target not found."
             exit 0
