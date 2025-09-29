@@ -71,7 +71,9 @@ in
               echo >&2 "Signing UKI in ${cfg.diskImage}"
               export keystore="${config.system.build.secureBootKeysForTests}"
               bash ${lib.getExe secureBootScripts.sign-disk-image} "${cfg.diskImage}"
-              bash ${lib.getExe configure-disk-installer} "${cfg.diskImage}" "/dev/vdb"
+              ${lib.optionalString ((builtins.length cfg.emptyDiskImages) >= 1) ''
+                bash ${lib.getExe configure-disk-installer} "${cfg.diskImage}" "/dev/vdb"
+              ''}
             else
               echo "${cfg.diskImage} already exists, skipping creation & signing"
           fi
