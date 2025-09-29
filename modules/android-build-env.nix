@@ -215,7 +215,13 @@
         done
 
         cd $SOURCE_DIR
-        repo forall -c 'echo $REPO_PATH $(git rev-parse HEAD^{tree})' | sort | sha256sum | cut -d ' ' -f 1
+
+        repo forall -c '
+          git ls-files | while read file
+          do
+            echo "$(sha256sum "$file")"
+          done
+        ' | sort | sha256sum
       '';
 
     in
