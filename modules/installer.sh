@@ -2,7 +2,7 @@ set -euo pipefail
 
 ddrescue2gauge() {
     local pct="0"
-    local rescued="0 B"
+    local copied="0 B"
     local rate="0 B/s"
     local remaining="unknown"
     local errors="0"
@@ -12,7 +12,7 @@ ddrescue2gauge() {
             pct="${BASH_REMATCH[1]}"
         fi
         if [[ "$line" =~ rescued:[[:space:]]*([^,]+) ]]; then
-            rescued="${BASH_REMATCH[1]}"
+            copied="${BASH_REMATCH[1]}"
         fi
         if [[ "$line" =~ current\ rate:[[:space:]]*([^[:space:]]+) ]]; then
             rate="${BASH_REMATCH[1]}"
@@ -29,7 +29,7 @@ ddrescue2gauge() {
             pct_int=${pct%.*}
             echo "$pct_int"
             echo "XXX"
-            echo "Rescued: ${rescued} (${pct}%)"
+            echo "Copied: ${copied} (${pct}%)"
             echo "Rate: ${rate} | Remaining: ${remaining}"
             echo "Errors: ${errors}"
             echo "XXX"
@@ -70,7 +70,7 @@ select_disk() {
     fi
 
     selected_disk="$(
-    whiptail \
+    dialog \
         --title "Disk Selection" \
         --menu "Select a disk to install to. All existing data will be WIPED!" \
         --nocancel \
@@ -146,7 +146,7 @@ fi
 echo "Copying source disk \"$install_source\" to target disk \"$install_target\"."
 ddrescue -f -v "$install_source" "$install_target" 2>&1 \
     | ddrescue2gauge \
-    | whiptail --gauge "Installing to $install_target" 10 60 0
+    | dialog --gauge "Copying $install_source to $install_target" 16 60 10
 
 
 printf "fix\n" | parted ---pretend-input-tty "$install_target" print
@@ -154,7 +154,7 @@ sync
 
 echo 1 > /run/installer_done  # marker file for automated tests
 
-whiptail  --msgbox "Installation to $install_target done.\n\nPlease remove the installation media before pressing enter to reboot." 10 60 --ok-button " Reboot "
+dialog  --msgbox "Installation to $install_target done.\n\nPlease remove the installation media before pressing enter to reboot." 10 60 --ok-button " Reboot "
 
 restore_console
 systemctl reboot
