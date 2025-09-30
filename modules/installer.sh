@@ -37,6 +37,16 @@ ddrescue2gauge() {
     done
 }
 
+grab_console() {
+    exec 3>&1 # save original stdout in fd 3
+    exec > >(tee /dev/console) 2>&1 # duplicate stdout&err to console+journal.
+}
+
+restore_console() {
+    exec 1>&3 2>&1 # restore stdout/stderr
+    exec 3>&- # close fd 3
+}
+
 select_disk() {
     disk_json="$(lsblk -J -d -o NAME,SIZE,TYPE,MODEL 2>/dev/null)"
     if [ $? -ne 0 ]; then
@@ -70,6 +80,8 @@ select_disk() {
 
     echo "$selected_disk"
 }
+
+grab_console
 
 echo -e "\nDisk Installer\n"
 
@@ -144,4 +156,5 @@ echo 1 > /run/installer_done  # marker file for automated tests
 
 whiptail  --msgbox "Installation to $install_target done.\n\nPlease remove the installation media before pressing enter to reboot." 10 60 --ok-button " Reboot "
 
+restore_console
 systemctl reboot
