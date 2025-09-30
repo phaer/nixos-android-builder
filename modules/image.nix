@@ -238,7 +238,7 @@
           # backing "/", or this path. So this enables systemd-repart to find the
           # right device at boot.
           link-volatile-root = {
-            description = "Create volatile-root to tell systemd-repart which disk to user";
+            description = "Create volatile-root to tell systemd-repart which disk to use";
             wantedBy = [ "initrd.target" ];
             before = [ "systemd-repart.service" ];
             requiredBy = [ "systemd-repart.service" ];
