@@ -11,10 +11,9 @@
 # environments such as the nix sandbox or different CI runners.
 set -euo pipefail
 
-repository="$(git rev-parse --show-toplevel 2>/dev/null)"
-keystore="${keystore:-$repository/keys}"
+keystore="${keystore:-$PWD/keys}"
 target_image_readonly_file="$1"
-target_image_out_file="$repository/$(basename "$target_image_readonly_file")"
+target_image_out_file="$PWD/$(basename "$target_image_readonly_file")"
 target_image_temp_file="$(mktemp --suffix "android-builder.raw")"
 temp_dir=$(mktemp -d --suffix "efi")
 esp_uki="EFI/BOOT/BOOTX64.EFI"
@@ -32,7 +31,6 @@ then
 else
     echo >&2 "Using keystore ${keystore}".
 fi
-
 echo >&2 "Copying $target_image_readonly_file to $target_image_temp_file"
 install -T "$target_image_readonly_file" "$target_image_temp_file"
 

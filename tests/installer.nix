@@ -36,7 +36,7 @@
       # Prepare the writable disk image
       subprocess.run([
         "${lib.getExe nodes.machine.system.build.prepareWritableDisk}"
-      ], env=env, cwd=machine.state_dir)
+      ], env=env, cwd=machine.state_dir, check=True)
       disk_image = "${nodes.machine.virtualisation.diskImage}"
 
       serial_stdout_on()
