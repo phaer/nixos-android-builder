@@ -11,7 +11,7 @@
       pv = "${pkgs.pv}/bin/pv";
       jq = "${pkgs.jq}/bin/jq";
       ddrescue = "${pkgs.ddrescue}/bin/ddrescue";
-      whiptail = "${pkgs.newt}/bin/whiptail";
+      dialog = "${pkgs.dialog}/bin/dialog";
     };
 
     services = {
