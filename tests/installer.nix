@@ -2,7 +2,7 @@
 {
   name = "nixos-android-builder-installer-test";
   nodes.machine =
-    { ... }:
+    { config, ... }:
     {
       imports = modules;
       config = {
@@ -16,7 +16,7 @@
           cores = 8;
           emptyDiskImages = [
             # Empty disk image as installation target
-            (31 * 1024)
+            config.virtualisation.diskSize
           ];
         };
       };
