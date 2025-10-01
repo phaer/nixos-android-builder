@@ -27,7 +27,6 @@
     ''
       import os
       import subprocess
-      import time
       env = os.environ.copy()
 
       # Use world-readable, throw-away test keys to sign the writable image
@@ -40,14 +39,12 @@
       disk_image = "${nodes.machine.virtualisation.diskImage}"
 
       serial_stdout_on()
-      machine.start(allow_reboot=True)
+      machine.start()
 
-      # TODO: Secure Boot enrollment needs to reboot the machine
-      # once, before the installer gets a chance to run. I wasted
-      # too much time, trying to search for "enrolled. Rebooting"
-      # with wait_for_console_text() and friends, before succumbing to a long-enough wait
-      time.sleep(15)
+      machine.wait_for_console_text("enrolled. Rebooting...")
+      machine.wait_for_shutdown()
 
+      machine.start()
       machine.wait_for_file("/run/installer_done")
       machine.shutdown()
 
