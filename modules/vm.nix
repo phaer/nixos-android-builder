@@ -9,7 +9,7 @@ let
   hostPkgs = cfg.host.pkgs;
 
   secureBootScripts = hostPkgs.callPackage ../packages/secure-boot-scripts { };
-  configure-disk-installer = hostPkgs.callPackage ../packages/configure-disk-installer { };
+  disk-installer = hostPkgs.callPackage ../packages/disk-installer { };
 in
 {
   config = {
@@ -72,7 +72,7 @@ in
               export keystore="${config.system.build.secureBootKeysForTests}"
               bash ${lib.getExe secureBootScripts.sign-disk-image} "${cfg.diskImage}"
               ${lib.optionalString ((builtins.length cfg.emptyDiskImages) >= 1) ''
-                bash ${lib.getExe configure-disk-installer} "${cfg.diskImage}" "/dev/vdb"
+                bash ${lib.getExe disk-installer.configure} "${cfg.diskImage}" "/dev/vdb"
               ''}
             else
               echo "${cfg.diskImage} already exists, skipping creation & signing"

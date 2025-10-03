@@ -1,12 +1,16 @@
 {
+  lib,
   pkgs,
   ...
 }:
+let
+  disk-installer = pkgs.callPackage ../packages/disk-installer { };
+in
 {
   boot.initrd.systemd = {
     contents."/etc/terminfo".source = "${pkgs.ncurses}/share/terminfo";
 
-    initrdBin = [ pkgs.parted ];
+    initrdBin = [ pkgs.parted disk-installer.run ];
     extraBin = {
       lsblk = "${pkgs.util-linux}/bin/lsblk";
       jq = "${pkgs.jq}/bin/jq";
@@ -52,7 +56,7 @@
           TTYVTDisallocate = true;
         };
 
-        script = builtins.readFile ./installer.sh;
+        script = lib.getExe disk-installer.run;
       };
     };
   };

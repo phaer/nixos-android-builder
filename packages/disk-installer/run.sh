@@ -1,6 +1,7 @@
 set -euo pipefail
 
 ddrescue2gauge() {
+    local total="$1"
     local pct="0"
     local copied="0 B"
     local rate="0 B/s"
@@ -11,26 +12,26 @@ ddrescue2gauge() {
         if [[ "$line" =~ pct\ rescued:[[:space:]]*([0-9.]+)% ]]; then
             pct="${BASH_REMATCH[1]}"
         fi
-        if [[ "$line" =~ rescued:[[:space:]]*([^,]+) ]]; then
+        if [[ "$line" =~ rescued:[[:space:]]*([0-9.]+[[:space:]]*[kMGT]?B) ]]; then
             copied="${BASH_REMATCH[1]}"
         fi
-        if [[ "$line" =~ current\ rate:[[:space:]]*([^[:space:]]+) ]]; then
+        if [[ "$line" =~ current\ rate:[[:space:]]*([0-9.]+[[:space:]]*[kMGT]?B/s) ]]; then
             rate="${BASH_REMATCH[1]}"
         fi
-        if [[ "$line" =~ remaining\ time:[[:space:]]*([^[:space:]]+) ]]; then
+        if [[ "$line" =~ remaining\ time:[[:space:]]*([^,[:space:]]+) ]]; then
             remaining="${BASH_REMATCH[1]}"
         fi
         if [[ "$line" =~ read\ errors:[[:space:]]*([0-9]+) ]]; then
             errors="${BASH_REMATCH[1]}"
         fi
 
-        # When we hit a complete status block, output to gauge
         if [[ "$line" =~ time\ since\ last\ successful\ read ]]; then
             pct_int=${pct%.*}
             echo "$pct_int"
             echo "XXX"
-            echo "Copied: ${copied} (${pct}%)"
-            echo "Rate: ${rate} | Remaining: ${remaining}"
+            echo "Copied: ${copied} of ${total}"
+            echo "Rate: ${rate}"
+            echo "Estimated Time Remaining: ${remaining}"
             echo "Errors: ${errors}"
             echo "XXX"
         fi
@@ -38,8 +39,7 @@ ddrescue2gauge() {
 }
 
 select_disk() {
-    disk_json="$(lsblk -J -d -o NAME,SIZE,TYPE,MODEL 2>/dev/null)"
-    if [ $? -ne 0 ]; then
+    if ! disk_json="$(lsblk --json --nodeps --output NAME,SIZE,TYPE,MODEL 2>/dev/null)"; then
         echo "Error: Failed to retrieve disk information"
         exit 1
     fi
@@ -62,8 +62,8 @@ select_disk() {
     selected_disk="$(
     dialog 3>&1 1>&2 2>&3 \
         --title "Disk Selection" \
-        --menu "Select a disk to install to. All existing data on it will be WIPED!" \
         --nocancel \
+        --menu "Select a disk to install to. All existing data on it will be WIPED!" \
         20 60 10 \
         "${menu_options[@]}"
     )"
@@ -71,29 +71,30 @@ select_disk() {
     echo "$selected_disk"
 }
 
-set -x
 exec 4> >(systemd-cat -p info)
 exec 5> >(systemd-cat -p err)
 
 echo -e "\nDisk Installer\n" >&4
 
-if [ -t 1 ]; then
-    echo "stdout is a tty" >&4
-else
-    echo "stdout is NOT a tty" >&4
-fi
+
 
 if [ ! -f /boot/install_target ]; then
   echo "/boot/install_target not found." >&5
   exit 0
 fi
 
+if [ ! -t 1 ]; then
+    echo "stdout is NOT a tty" >&5
+    exit 1
+fi
+
 install_source="$(
-  lsblk -J -o NAME,MOUNTPOINT,PKNAME | jq -r '
+  lsblk --json --output NAME,MOUNTPOINT,PKNAME | jq -r '
     .. | objects | select(.mountpoint=="/boot") |
     "/dev/\(if .pkname then .pkname else .name end)"
   '
 )"
+install_source_size="$(lsblk --raw --noheadings --nodeps --output SIZE "$install_source")"
 if [ ! -b "$install_source" ]; then
   echo "ERROR: installation source \"$install_source\" is not a block device." >&5
   exit 1
@@ -109,7 +110,12 @@ if [ ! -b "$install_target" ]; then
   exit 1
 fi
 
-echo "About to install from $install_source to $install_target" >&4
+intro_msg="About to install from $install_source to $install_target"
+echo  "$intro_msg" >&4
+if ! dialog --pause "$intro_msg" 10 40 3; then
+    echo "User cancelled installation." >&4
+    exit
+fi
 
 echo "removing /boot/install_target" >&4
 rm /boot/install_target
@@ -118,7 +124,7 @@ echo "unmounting /boot before copying" >&4
 systemctl stop boot.mount
 
 echo "ensuring that $install_target >= $install_source." >&4
-if ! out=$(lsblk -b -J "$install_source" "$install_target" \
+if ! out=$(lsblk --bytes --json "$install_source" "$install_target" \
   | jq -e --arg src "${install_source#/dev/}" --arg tgt "${install_target#/dev/}" '
     .blockdevices
     | map({(.name): .size})
@@ -137,10 +143,11 @@ else
   echo "$out" >&4
 fi
 
-echo "Copying source disk \"$install_source\" to target disk \"$install_target\"." >&4
+msg_copy="Copying source disk $install_source to target disk $install_target"
+echo $msg_copy >&4
 ddrescue -f -v "$install_source" "$install_target" 2>&1 \
-    | ddrescue2gauge \
-    | dialog --gauge "Copying $install_source to $install_target" 16 60 10
+    | ddrescue2gauge "$install_source_size" \
+    | dialog --title "$msg_copy" --gauge "Starting..." 16 60 10
 
 
 printf "fix\n" | parted ---pretend-input-tty "$install_target" print
@@ -148,8 +155,8 @@ sync
 
 echo 1 > /run/installer_done  # marker file for automated tests
 
-done="Installation to $install_target done.\n\nPlease remove the installation media before pressing enter to reboot."
-echo "$done" >&4
-dialog  --msgbox "$done" 10 60 --ok-button " Reboot "
+msg_done="Installation to $install_target done.\n\nPlease remove the installation media before pressing enter to reboot."
+echo "$msg_done" >&4
+dialog --ok-button " Reboot " --msgbox "$msg_done" 10 60
 
 systemctl reboot
