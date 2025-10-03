@@ -89,7 +89,7 @@
       # Prepare the writable disk image
       subprocess.run([
         "${lib.getExe nodes.machine.system.build.prepareWritableDisk}"
-      ], env=env, cwd=machine.state_dir)
+      ], env=env, cwd=machine.state_dir, check=True)
 
       serial_stdout_on()
       machine.start(allow_reboot=True)

@@ -137,7 +137,7 @@ With our disk image built, we still need to sign it for secure boot, as it still
 
 `sign-disk-image` deliberately runs outside the nix sandbox in order to be able to access our keys in `keys/` without copying them to the world-readable `/nix/store`.
 So the script starts by copying the image out of the nix store to a temporary file, before signing the `UKI`, copying secure boot update bundles, and - finally moving
-the image to the repository’s top-level directory.
+the image to your current working directory.
 
 To sign your image, run:
 
