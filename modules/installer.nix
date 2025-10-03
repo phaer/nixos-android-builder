@@ -4,14 +4,15 @@
 }:
 {
   boot.initrd.systemd = {
+    contents."/etc/terminfo".source = "${pkgs.ncurses}/share/terminfo";
+
     initrdBin = [ pkgs.parted ];
     extraBin = {
       lsblk = "${pkgs.util-linux}/bin/lsblk";
-      blockdev = "${pkgs.util-linux}/bin/blockdev";
-      pv = "${pkgs.pv}/bin/pv";
       jq = "${pkgs.jq}/bin/jq";
       ddrescue = "${pkgs.ddrescue}/bin/ddrescue";
       dialog = "${pkgs.dialog}/bin/dialog";
+      systemd-cat = "${pkgs.systemdMinimal}/bin/systemd-cat";
     };
 
     services = {
@@ -43,8 +44,8 @@
           Type = "oneshot";
           RemainAfterExit = true;
           StandardInput = "tty-force";
-          StandardOutput = "journal+console";
-          StandardError = "journal+console";
+          StandardOutput = "tty";
+          StandardError = "tty";
           TTYPath = "/dev/console";
           TTYReset = true;
           TTYVHangup = true;

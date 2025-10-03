@@ -37,16 +37,6 @@ ddrescue2gauge() {
     done
 }
 
-grab_console() {
-    exec 3>&1 # save original stdout in fd 3
-    exec > >(tee /dev/console) 2>&1 # duplicate stdout&err to console+journal.
-}
-
-restore_console() {
-    exec 1>&3 2>&1 # restore stdout/stderr
-    exec 3>&- # close fd 3
-}
-
 select_disk() {
     disk_json="$(lsblk -J -d -o NAME,SIZE,TYPE,MODEL 2>/dev/null)"
     if [ $? -ne 0 ]; then
@@ -70,29 +60,31 @@ select_disk() {
     fi
 
     selected_disk="$(
-    dialog \
+    dialog 3>&1 1>&2 2>&3 \
         --title "Disk Selection" \
-        --menu "Select a disk to install to. All existing data will be WIPED!" \
+        --menu "Select a disk to install to. All existing data on it will be WIPED!" \
         --nocancel \
         20 60 10 \
-        "${menu_options[@]}" \
-        3>&1 1>&2 2>&3)"
+        "${menu_options[@]}"
+    )"
 
     echo "$selected_disk"
 }
 
-grab_console
+set -x
+exec 4> >(systemd-cat -p info)
+exec 5> >(systemd-cat -p err)
 
-echo -e "\nDisk Installer\n"
+echo -e "\nDisk Installer\n" >&4
 
 if [ -t 1 ]; then
-    echo "stdout is a tty"
+    echo "stdout is a tty" >&4
 else
-    echo "stdout is NOT a tty"
+    echo "stdout is NOT a tty" >&4
 fi
 
 if [ ! -f /boot/install_target ]; then
-  echo "/boot/install_target not found."
+  echo "/boot/install_target not found." >&5
   exit 0
 fi
 
@@ -103,7 +95,7 @@ install_source="$(
   '
 )"
 if [ ! -b "$install_source" ]; then
-  echo "ERROR: installation source \"$install_source\" is not a block device."
+  echo "ERROR: installation source \"$install_source\" is not a block device." >&5
   exit 1
 fi
 
@@ -113,17 +105,19 @@ if [ "$install_target" = "select" ]; then
 fi
 
 if [ ! -b "$install_target" ]; then
-  echo "ERROR: installation target \"$install_target\" is not a block device."
+  echo "ERROR: installation target \"$install_target\" is not a block device." >&5
   exit 1
 fi
 
-echo "removing /boot/install_target"
+echo "About to install from $install_source to $install_target" >&4
+
+echo "removing /boot/install_target" >&4
 rm /boot/install_target
 
-echo "unmounting /boot before copying"
+echo "unmounting /boot before copying" >&4
 systemctl stop boot.mount
 
-echo "ensuring that $install_target >= $install_source."
+echo "ensuring that $install_target >= $install_source." >&4
 if ! out=$(lsblk -b -J "$install_source" "$install_target" \
   | jq -e --arg src "${install_source#/dev/}" --arg tgt "${install_target#/dev/}" '
     .blockdevices
@@ -137,13 +131,13 @@ if ! out=$(lsblk -b -J "$install_source" "$install_target" \
         error("\($tgt) (\(.tgt) GB) < \($src) (\(.src) GB)")
       end
   ' 2>&1); then
-  echo "ERROR: $install_target too small: $out"
+  echo "ERROR: $install_target too small: $out" >&5
   exit 1
 else
-  echo "$out"
+  echo "$out" >&4
 fi
 
-echo "Copying source disk \"$install_source\" to target disk \"$install_target\"."
+echo "Copying source disk \"$install_source\" to target disk \"$install_target\"." >&4
 ddrescue -f -v "$install_source" "$install_target" 2>&1 \
     | ddrescue2gauge \
     | dialog --gauge "Copying $install_source to $install_target" 16 60 10
@@ -154,7 +148,8 @@ sync
 
 echo 1 > /run/installer_done  # marker file for automated tests
 
-dialog  --msgbox "Installation to $install_target done.\n\nPlease remove the installation media before pressing enter to reboot." 10 60 --ok-button " Reboot "
+done="Installation to $install_target done.\n\nPlease remove the installation media before pressing enter to reboot."
+echo "$done" >&4
+dialog  --msgbox "$done" 10 60 --ok-button " Reboot "
 
-restore_console
 systemctl reboot
