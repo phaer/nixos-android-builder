@@ -142,7 +142,7 @@ the image to the repository’s top-level directory.
 To sign your image, run:
 
 ```bash
-$ nix run .#sign-disk-image ./results/*.raw
+$ nix run .#sign-disk-image ./result/*.raw
 ```
 
 ``` text
