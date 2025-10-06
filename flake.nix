@@ -48,6 +48,7 @@
       image = vm.config.system.build.finalImage;
 
       secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
+      diskInstaller = pkgs.callPackage ./packages/disk-installer { };
 
       build-docs = pkgs.writeShellApplication {
         name = "build-docs";
@@ -124,6 +125,7 @@
           packages = with secureBootScripts; [
             create-signing-keys
             sign-disk-image
+            diskInstaller.configure
             build-docs
             watch-docs
           ];
@@ -133,6 +135,7 @@
       packages.${system} = {
         inherit run-vm image;
         inherit (secureBootScripts) create-signing-keys sign-disk-image;
+        configure-disk-installer = diskInstaller.configure;
         default = image;
       };
 
