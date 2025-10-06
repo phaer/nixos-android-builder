@@ -32,13 +32,15 @@ let
       echo "Secure Boot in Setup Mode, enrolling" | systemd-cat -p info
       ${lib.getExe enroll-secure-boot}
       echo "enrolled. Rebooting..." | systemd-cat -p info
-      systemctl isolate reboot.target
+      systemctl --no-block reboot
     elif [ "$sb_status" = "enabled (user)" ]
     then
       echo "Secure Boot active" | systemd-cat -p info
     else
-      echo "Secure Boot neither active nor in setup mode. Halting..." | systemd-cat -p crit
-      systemctl isolate halt.target
+      msg_error="Secure Boot is neither active nor in setup mode. Please enable it in firmware settings."
+      echo "$msg_error" | systemd-cat -p crit
+      echo "$msg_error" > /run/fatal-error
+      systemctl isolate fatal-error.target
     fi
   '';
 
@@ -78,6 +80,15 @@ in
         }
       ];
 
+    targets.fatal-error = {
+      description = "Display a fatal error to the user";
+      unitConfig = {
+        DefaultDependencies = "no";
+        AllowIsolate = "yes";
+      };
+      wants = [ "fatal-error.service" ];
+    };
+
     services = {
       ensure-secure-boot-enrollment = {
         description = "Ensure secure boot is active. If setup mode, enroll. if disabled, halt";
@@ -96,6 +107,35 @@ in
           RemainAfterExit = true;
           ExecStart = ensureSecureBootEnrollment;
         };
+      };
+
+      fatal-error = {
+        description = "Display a fatal error to the user";
+        unitConfig = {
+          DefaultDependencies = "no";
+        };
+        serviceConfig = {
+          Type = "oneshot";
+          StandardInput = "tty-force";
+          StandardOutput = "inherit";
+          StandardError = "inherit";
+          TTYPath = "/dev/console";
+          TTYReset = "yes";
+          TTYVHangup = "yes";
+          TTYVTDisallocate = "yes";
+          Restart = "no";
+        };
+        script = ''
+          dialog \
+          --clear \
+          --colors \
+          --ok-button " Shutdown " \
+          --title "Error" \
+          --msgbox "$(cat /run/fatal-error)" \
+          10 60
+
+          systemctl --no-block poweroff
+        '';
       };
     };
   };

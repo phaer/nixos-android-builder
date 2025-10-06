@@ -48,12 +48,13 @@ in
           Type = "oneshot";
           RemainAfterExit = true;
           StandardInput = "tty-force";
-          StandardOutput = "tty";
-          StandardError = "tty";
+          StandardOutput = "inherit";
+          StandardError = "inherit";
           TTYPath = "/dev/console";
           TTYReset = true;
           TTYVHangup = true;
           TTYVTDisallocate = true;
+          Restart = "no";
         };
 
         script = lib.getExe disk-installer.run;

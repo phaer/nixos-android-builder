@@ -61,6 +61,7 @@ select_disk() {
 
     selected_disk="$(
     dialog 3>&1 1>&2 2>&3 \
+        --colors \
         --title "Disk Selection" \
         --nocancel \
         --menu "Select a disk to install to. All existing data on it will be WIPED!" \
@@ -112,7 +113,7 @@ fi
 
 intro_msg="About to install from $install_source to $install_target"
 echo  "$intro_msg" >&4
-if ! dialog --pause "$intro_msg" 10 40 3; then
+if ! dialog --colors --pause "$intro_msg" 10 40 3; then
     echo "User cancelled installation." >&4
     exit
 fi
@@ -147,7 +148,7 @@ msg_copy="Copying source disk $install_source to target disk $install_target"
 echo $msg_copy >&4
 ddrescue -f -v "$install_source" "$install_target" 2>&1 \
     | ddrescue2gauge "$install_source_size" \
-    | dialog --title "$msg_copy" --gauge "Starting..." 16 60 10
+    | dialog --colors --title "$msg_copy" --gauge "Starting..." 16 60 10
 
 
 printf "fix\n" | parted ---pretend-input-tty "$install_target" print
@@ -157,6 +158,6 @@ echo 1 > /run/installer_done  # marker file for automated tests
 
 msg_done="Installation to $install_target done.\n\nPlease remove the installation media before pressing enter to reboot."
 echo "$msg_done" >&4
-dialog --ok-button " Reboot " --msgbox "$msg_done" 10 60
+dialog --colors --ok-button " Reboot " --msgbox "$msg_done" 10 60
 
 systemctl reboot
