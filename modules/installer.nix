@@ -1,5 +1,6 @@
 {
   lib,
+  config,
   pkgs,
   ...
 }:
@@ -10,7 +11,10 @@ in
   boot.initrd.systemd = {
     contents."/etc/terminfo".source = "${pkgs.ncurses}/share/terminfo";
 
-    initrdBin = [ pkgs.parted disk-installer.run ];
+    initrdBin = [
+      pkgs.parted
+      disk-installer.run
+    ];
     extraBin = {
       lsblk = "${pkgs.util-linux}/bin/lsblk";
       tee = "${pkgs.coreutils}/bin/tee";
@@ -30,6 +34,49 @@ in
     };
 
     services = {
+      find-boot-partition = {
+        description = "Find /boot partition of the installer";
+
+        before = [ "boot.mount" ];
+        wantedBy = [ "initrd-fs.target" ];
+
+        serviceConfig.Type = "oneshot";
+        unitConfig = {
+          DefaultDependencies = false;
+        };
+
+        onFailure = [ "fatal-error.target" ];
+        script = ''
+          boot=""
+          mkdir -p /boot;
+          sleep 2
+          udevadm settle -t 10
+          for partition in $(lsblk -o NAME,FSTYPE --list --json | jq -r '.blockdevices[] | select(.fstype=="vfat") | "/dev/\(.name)"'); do
+            mount -o ro "$partition" /boot
+            if [ -e /boot/install_target ]; then
+               boot="$partition"
+               umount /boot
+               break
+            fi
+            umount /boot
+          done
+          if [ -z "$boot" ]; then
+            echo "Couldn't find installers /boot partition, skipping instalkler" >&2
+            exit 0
+          else
+            echo "Found installers /boot partition in $partition, remounting"
+            mkdir -p /run/systemd/system/boot.mount.d
+            cat > /run/systemd/system/boot.mount.d/override.conf <<EOF
+          [Mount]
+          What=$boot
+          EOF
+            systemctl daemon-reload
+            systemctl restart boot.mount
+          fi
+        '';
+
+      };
+
       disk-installer = {
         description = "Early user prompt during initrd";
 
