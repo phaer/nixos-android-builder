@@ -135,7 +135,7 @@ in
           --colors \
           --ok-button " Shutdown " \
           --title "Error" \
-          --msgbox "$(cat /run/fatal-error)" \
+          --msgbox "$(cat /run/fatal-error || echo "Unknown error, please consult logs (ctrl+alt+f1)")" \
           10 60
 
           chvt 1
