@@ -40,7 +40,7 @@ ddrescue2gauge() {
 
 select_disk() {
     if ! disk_json="$(lsblk --json --nodeps --output NAME,SIZE,TYPE,MODEL 2>/dev/null)"; then
-        echo "Error: Failed to retrieve disk information"
+        echo "Error: Failed to retrieve disk information" | tee /run/fatal-error >&5
         exit 1
     fi
 
@@ -55,7 +55,7 @@ select_disk() {
     done < <(echo "$disk_json" | jq -r '.blockdevices[] | select(.type == "disk") | "\(.name)|\(.size)|\(.model // "Unknown")"')
 
     if [ ${#menu_options[@]} -eq 0 ]; then
-        echo "Error: No disks found"
+        echo "Error: No disks found" | tee /run/fatal-error >&5
         exit 1
     fi
 
@@ -101,6 +101,7 @@ if [ ! -b "$install_source" ]; then
   echo "ERROR: installation source \"$install_source\" is not a block device." | tee /run/fatal-error >&5
   exit 1
 fi
+echo "Using $install_source as installation source" >&4
 
 install_target="$(cat /boot/install_target)"
 if [ "$install_target" = "select" ]; then
