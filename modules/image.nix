@@ -108,7 +108,6 @@
           "00-esp".repartConfig = {
             Type = "esp";
             Label = "boot";
-            UUID = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"; # Well known
             Format = "vfat";
             SizeMinBytes = "128M";
           };
@@ -131,7 +130,6 @@
           };
           "30-var-lib".repartConfig = {
             Type = "var";
-            UUID = "4d21b016-b534-45c2-a9fb-5c16e091fd2d"; # Well known
             Format = "ext4";
             Label = "var-lib";
             # We want to start out with a very small partition in the image, and add
