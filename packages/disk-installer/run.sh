@@ -72,6 +72,7 @@ select_disk() {
     echo "$selected_disk"
 }
 
+chvt 2
 exec 4> >(systemd-cat -p info)
 exec 5> >(systemd-cat -p err)
 
@@ -85,7 +86,7 @@ if [ ! -f /boot/install_target ]; then
 fi
 
 if [ ! -t 1 ]; then
-    echo "stdout is NOT a tty" >&5
+    echo "stdout is NOT a tty" | tee /run/fatal-error >&5
     exit 1
 fi
 
@@ -97,7 +98,7 @@ install_source="$(
 )"
 install_source_size="$(lsblk --raw --noheadings --nodeps --output SIZE "$install_source")"
 if [ ! -b "$install_source" ]; then
-  echo "ERROR: installation source \"$install_source\" is not a block device." >&5
+  echo "ERROR: installation source \"$install_source\" is not a block device." | tee /run/fatal-error >&5
   exit 1
 fi
 
@@ -107,15 +108,15 @@ if [ "$install_target" = "select" ]; then
 fi
 
 if [ ! -b "$install_target" ]; then
-  echo "ERROR: installation target \"$install_target\" is not a block device." >&5
+  echo "ERROR: installation target \"$install_target\" is not a block device." | tee /run/fatal-error >&5
   exit 1
 fi
 
 intro_msg="About to install from $install_source to $install_target"
 echo  "$intro_msg" >&4
 if ! dialog --colors --pause "$intro_msg" 10 40 3; then
-    echo "User cancelled installation." >&4
-    exit
+    echo "User cancelled installation." | tee /run/fatal-error >&5
+    exit 1
 fi
 
 echo "removing /boot/install_target" >&4
@@ -138,7 +139,7 @@ if ! out=$(lsblk --bytes --json "$install_source" "$install_target" \
         error("\($tgt) (\(.tgt) GB) < \($src) (\(.src) GB)")
       end
   ' 2>&1); then
-  echo "ERROR: $install_target too small: $out" >&5
+  echo "ERROR: $install_target too small: $out" | tee /run/fatal-error >&5
   exit 1
 else
   echo "$out" >&4
@@ -160,4 +161,6 @@ msg_done="Installation to $install_target done.\n\nPlease remove the installatio
 echo "$msg_done" >&4
 dialog --colors --ok-button " Reboot " --msgbox "$msg_done" 10 60
 
-systemctl reboot
+chvt 1
+
+systemctl reboot --no-block --force

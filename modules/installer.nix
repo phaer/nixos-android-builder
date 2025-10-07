@@ -13,10 +13,20 @@ in
     initrdBin = [ pkgs.parted disk-installer.run ];
     extraBin = {
       lsblk = "${pkgs.util-linux}/bin/lsblk";
+      tee = "${pkgs.coreutils}/bin/tee";
       jq = "${pkgs.jq}/bin/jq";
       ddrescue = "${pkgs.ddrescue}/bin/ddrescue";
       dialog = "${pkgs.dialog}/bin/dialog";
       systemd-cat = "${pkgs.systemdMinimal}/bin/systemd-cat";
+      chvt = "${pkgs.kbd}/bin/chvt";
+    };
+
+    # keep /var/lib from timing out during installer run
+    units."dev-disk-by\\x2dpartlabel-var\\x2dlib.device.d/timeout.conf" = {
+      text = ''
+        [Unit]
+        JobTimeoutSec=Infinity
+      '';
     };
 
     services = {
@@ -34,13 +44,14 @@ in
           "generate-disk-key.service"
           "sysroot.mount"
           "sysusr-usr.mount"
+          "systemd-cryptsetup@var\\x2dlib.service"
         ];
+
         wants = [ "initrd-root-device.target" ];
         wantedBy = [ "initrd-root-fs.target" ];
 
         unitConfig = {
           DefaultDependencies = false;
-          OnFailure = "halt.target";
           ConditionPathExists = "/boot/install_target";
         };
 
@@ -48,15 +59,14 @@ in
           Type = "oneshot";
           RemainAfterExit = true;
           StandardInput = "tty-force";
-          StandardOutput = "inherit";
-          StandardError = "inherit";
-          TTYPath = "/dev/console";
+          StandardOutput = "tty";
+          StandardError = "tty";
+          TTYPath = "/dev/tty2";
           TTYReset = true;
-          TTYVHangup = true;
-          TTYVTDisallocate = true;
           Restart = "no";
         };
 
+        onFailure = [ "fatal-error.target" ];
         script = lib.getExe disk-installer.run;
       };
     };
