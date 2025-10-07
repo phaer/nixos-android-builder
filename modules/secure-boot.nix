@@ -87,20 +87,24 @@ in
         AllowIsolate = "yes";
       };
       wants = [ "fatal-error.service" ];
+      before = [ "initrd-root-fs.target" ];
     };
 
     services = {
       ensure-secure-boot-enrollment = {
-        description = "Ensure secure boot is active. If setup mode, enroll. if disabled, halt";
+        description = "Ensure secure boot is active. If setup mode, enroll. if disabled, show error";
         wantedBy = [ "initrd.target" ];
-        before = [ "systemd-repart.service" ];
+        before = [
+          "systemd-repart.service"
+          "disk-installer.service"
+        ];
         unitConfig = {
           AssertPathExists = "/boot/EFI/KEYS";
           RequiresMountsFor = [
             "/boot"
           ];
           DefaultDependencies = false;
-          OnFailure = "halt.target";
+          OnFailure = "fatal-error.target";
         };
         serviceConfig = {
           Type = "oneshot";
@@ -116,16 +120,16 @@ in
         };
         serviceConfig = {
           Type = "oneshot";
+          RemainAfterExit = true;
           StandardInput = "tty-force";
-          StandardOutput = "inherit";
-          StandardError = "inherit";
-          TTYPath = "/dev/console";
-          TTYReset = "yes";
-          TTYVHangup = "yes";
-          TTYVTDisallocate = "yes";
+          StandardOutput = "tty";
+          StandardError = "tty";
+          TTYPath = "/dev/tty2";
+          TTYReset = true;
           Restart = "no";
         };
         script = ''
+          chvt 2
           dialog \
           --clear \
           --colors \
@@ -134,6 +138,7 @@ in
           --msgbox "$(cat /run/fatal-error)" \
           10 60
 
+          chvt 1
           systemctl --no-block poweroff
         '';
       };
