@@ -48,17 +48,21 @@ in
         onFailure = [ "fatal-error.target" ];
         script = ''
           boot=""
-          mkdir -p /boot;
+          temp_dir=$(mktemp -d --suffix "boot")
+          cleanup() {
+              umount $temp_dir || true
+              rm -rf "$temp_dir"
+          }
+          trap "cleanup" EXIT
+
           sleep 2
           udevadm settle -t 10
           for partition in $(lsblk -o NAME,FSTYPE --list --json | jq -r '.blockdevices[] | select(.fstype=="vfat") | "/dev/\(.name)"'); do
-            mount -o ro "$partition" /boot
-            if [ -e /boot/install_target ]; then
+            mount -o ro "$partition" $temp_dir
+            if [ -e $temp_dir/install_target ]; then
                boot="$partition"
-               umount /boot
                break
             fi
-            umount /boot
           done
           if [ -z "$boot" ]; then
             echo "Couldn't find installers /boot partition, skipping instalkler" >&2
@@ -71,7 +75,6 @@ in
           What=$boot
           EOF
             systemctl daemon-reload
-            systemctl restart boot.mount
           fi
         '';
 
