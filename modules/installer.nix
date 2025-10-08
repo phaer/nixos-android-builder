@@ -94,7 +94,8 @@ in
           "generate-disk-key.service"
           "sysroot.mount"
           "sysusr-usr.mount"
-          "systemd-cryptsetup@var\\x2dlib.service"
+          "systemd-cryptsetup@var_lib_crypt.service"
+          "systemd-veritysetup@usr.service"
         ];
 
         wants = [ "initrd-root-device.target" ];
