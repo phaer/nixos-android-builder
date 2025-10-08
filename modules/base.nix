@@ -45,8 +45,8 @@
 
     # Console on tty0 for bare-metal and serial output for VMS.
     boot.kernelParams = [
-      "console=tty0"
       "console=ttyS0,115200"
+      "console=tty1"
     ]
     ++ (lib.optional (
       pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64
