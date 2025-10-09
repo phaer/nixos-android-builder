@@ -37,10 +37,24 @@ in
       find-boot-partition = {
         description = "Find /boot partition of the installer";
 
-        before = [ "boot.mount" ];
+        before = [
+          "boot.mount"
+
+          "initrd-root-fs.target"
+          "systemd-repart.service"
+          "generate-disk-key.service"
+          "sysroot.mount"
+          "sysusr-usr.mount"
+          "systemd-cryptsetup@var_lib_crypt.service"
+          "systemd-veritysetup@usr.service"
+        ];
         wantedBy = [ "initrd-fs.target" ];
 
-        serviceConfig.Type = "oneshot";
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          Restart = "no";
+        };
         unitConfig = {
           DefaultDependencies = false;
         };
@@ -50,8 +64,7 @@ in
           boot=""
           temp_dir=$(mktemp -d --suffix "boot")
           cleanup() {
-              umount $temp_dir || true
-              rm -rf "$temp_dir"
+              umount $temp_dir && rm -rf "$temp_dir" || true
           }
           trap "cleanup" EXIT
 
@@ -65,7 +78,7 @@ in
             fi
           done
           if [ -z "$boot" ]; then
-            echo "Couldn't find installers /boot partition, skipping instalkler" >&2
+            echo "Couldn't find installers /boot partition, skipping installer" >&2
             exit 0
           else
             echo "Found installers /boot partition in $partition, remounting"
