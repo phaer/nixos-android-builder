@@ -163,6 +163,55 @@ After this step, a `.raw` disk image with the same name `android-builder_25.11pr
 
 Ready to be flashed to a block device in the next step!
 
+## Optional: Configure the disk-installer
+
+Each NixOS Android builder image contains an optional installer mode during early boot, that clones itself to another disk.
+This can be used to flash the image to a USB device on your local machine before booting from that device in installer mode on
+the target machine.
+
+To configure a given image to clone itself to `/dev/sda` on first boot:
+
+```shell-session
+$ nix run .#configure-disk-installer android-builder_25.11pre-git.raw /dev/sda
+Searching ESP partition offset in android-builder_25.11pre-git.raw
+Configuring installer in android-builder_25.11pre-git.raw
+Copying install_target
+Done. Image will be copied to /dev/sda upon boot.
+```
+
+The first argument can be either a disk image, or a block device if the image has already been flashed.
+The second argument can be:
+
+* a device path on the target machine.
+* "select" to start an interactive menu during boot.
+* "none" to skip the installer an just boot the image directly.
+
+If the second argument is not given at all, the current configuration will be shown.
+
+```shell-session
+$ nix run .#configure-disk-installer /dev/sdd select
+Target is a block device, but we are not root. Running sudo
+Searching ESP partition offset in /dev/sdd
+Configuring installer in /dev/sdd
+Copying install_target
+Done. Image will offer an interactive menu for the installer upon boot.
+
+$ nix run .#configure-disk-installer /dev/sdd none
+Target is a block device, but we are not root. Running sudo
+Searching ESP partition offset in /dev/sdd
+Deactivating installer in /dev/sdd
+Done. Image will boot without running the installer
+
+$ nix run .#configure-disk-installer /dev/sdd
+Target is a block device, but we are not root. Running sudo
+[sudo] password for user:
+Searching ESP partition offset in /dev/sdd
+/dev/sdd will not run the installer
+```
+
+Once the installer has been configured, it can be booted as normal but will reset itself after each installation.
+
+
 ## Flash the Image
 
 With our image both built and signed, we are now ready to flash it to a block device, such as a USB stick or external hard drive.
