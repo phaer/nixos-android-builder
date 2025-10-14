@@ -1,12 +1,28 @@
-name: Format check 
+name: CI Checks
 on:
   push:
   pull_request:
 
 jobs:
-  check:
+  format-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v30
+      - uses: cachix/install-nix-action@v31
       - run: nix run nixpkgs#nixfmt-tree -- --ci
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: cachix/install-nix-action@v31
+    - uses: cachix/cachix-action@v16
+      with:
+        name: nixos-android-builder
+        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+    - name: integration test
+      run: nix build -L .#checks.x86_64-linux.integration
+
+    #- name: image build
+    #  run: nix build -L .#packages.x86_64-linux.image
