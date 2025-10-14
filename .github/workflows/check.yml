@@ -21,6 +21,8 @@ jobs:
         name: nixos-android-builder
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
+    - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
     - name: integration test
       run: nix build -L .#checks.x86_64-linux.integration
 
