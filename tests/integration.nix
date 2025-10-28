@@ -72,8 +72,9 @@
 
       testSecureBoot = ''
         with subtest("secure boot works"):
+          _status, stdout = machine.execute("bootctl status")
           t.assertIn(
-            "Secure Boot: enabled (user)", machine.succeed("bootctl status"),
+            "Secure Boot: enabled (user)", stdout,
             "Secure Boot is NOT active")
       '';
     in

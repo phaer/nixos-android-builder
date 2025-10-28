@@ -66,9 +66,10 @@
       machine.start()
       machine.switch_root()
       machine.wait_for_unit("multi-user.target")
+      _status, stdout = machine.execute("bootctl status")
       t.assertIn(
-          "Secure Boot: enabled (user)", machine.succeed("bootctl status"),
-          "Secure Boot is NOT active")
+        "Secure Boot: enabled (user)", stdout,
+        "Secure Boot is NOT active")
       machine.shutdown()
     '';
 }
