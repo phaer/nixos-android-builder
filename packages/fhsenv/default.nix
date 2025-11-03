@@ -7,7 +7,7 @@
   lib,
   writers,
   writeText,
-  runCommandNoCC,
+  runCommand,
 }:
 {
   pins,
@@ -20,6 +20,6 @@ let
 
   pins' = writeText "pins" (lib.concatMapStringsSep "\n" builtins.toString pins);
 in
-runCommandNoCC "fhsenv" { } ''
+runCommand "fhsenv" { } ''
   ${buildFHSEnv} ${storePaths} $out ${pins'}
 ''
