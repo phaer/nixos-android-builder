@@ -38,8 +38,6 @@ in
     };
   };
 
-
-
   config = lib.mkIf config.nixosAndroidBuilder.enable {
     # Expose the built fhs env in `system.build`, primarily for debugging
     system.build.fhsEnv = fhsEnv;

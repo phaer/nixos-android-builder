@@ -1,4 +1,9 @@
-{ lib, pkgs, modulesPath, ...}:
+{
+  lib,
+  pkgs,
+  modulesPath,
+  ...
+}:
 {
   disabledModules = [
     "${modulesPath}/profiles/perlless.nix"

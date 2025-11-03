@@ -49,7 +49,10 @@
         "/usr/bin/env" = {
           # Bind-mount /usr/bin/env in place
           device = pkgs.lib.getExe' pkgs.coreutils "env";
-          options = ["bind" "ro"];
+          options = [
+            "bind"
+            "ro"
+          ];
           neededForBoot = false;
         };
         "/nix/store" = {
