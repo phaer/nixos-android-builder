@@ -6,6 +6,7 @@
 }:
 {
   options.nixosAndroidBuilder = {
+    enable = lib.mkEnableOption "enable build support for android via custom fhs environment";
     debug = lib.mkEnableOption "image customizations for interactive access during run-time";
   };
   config = {

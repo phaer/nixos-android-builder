@@ -225,7 +225,7 @@
       '';
 
     in
-    {
+    lib.mkIf config.nixosAndroidBuilder.enable {
       environment.variables = {
         "SOURCE_DIR" = cfg.sourceDir;
       };

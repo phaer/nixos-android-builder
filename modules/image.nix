@@ -6,18 +6,11 @@
 }:
 {
   config = {
-    # The NixOS default activation script to create /usr/bin/env assumes a
-    # writable /usr/ file system. That's not the case for us, so we disable
-    # it and add a bind mount from /usr/bin to /bin while building the image
-    # below.
     system = {
       image = {
         id = config.system.name;
         version = config.system.nixos.version;
       };
-      # Disable activation script that tries to create /usr/bin/env at runtime,
-      # as that will fail with a verity-backed, read-only /usr
-      activationScripts.usrbinenv = lib.mkForce "";
     };
 
     # Updating the random seed on /boot can not work with a read-only /boot.
@@ -220,6 +213,7 @@
             before = [
               "systemd-cryptsetup@var_lib_crypt.service"
             ];
+            environment."SYSTEMD_REPART_MKFS_OPTIONS_EXT4" = "-O ^dir_index";
             serviceConfig.ExecStartPost = waitForDisk;
           };
 
