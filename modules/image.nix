@@ -46,15 +46,10 @@
           fsType = parts."00-esp".repartConfig.Format;
           options = [ "ro" ];
         };
-        "/usr/bin" = {
-          # Bind-mount /usr/bin to /bin. Mostly to get /usr/bin/env in place.
-          # We bind the whole directory because it has no extra cost and
-          # we don't know what tools inside the fhsenv might expect /usr/bin paths.
-          device = "/bin";
-          options = [
-            "bind"
-            "x-systemd.requires=bin.mount"
-          ];
+        "/usr/bin/env" = {
+          # Bind-mount /usr/bin/env in place
+          device = pkgs.lib.getExe' pkgs.coreutils "env";
+          options = ["bind" "ro"];
           neededForBoot = false;
         };
         "/nix/store" = {
@@ -120,7 +115,7 @@
             contents = {
               # Create an empty dir at /usr/bin, in order to bind-mount /bin at run-time
               "/bin".source = pkgs.runCommand "usr-bin-symlink" { } ''
-                mkdir -p $out
+                mkdir -p $out; touch $out/env
               '';
             };
             repartConfig = {
