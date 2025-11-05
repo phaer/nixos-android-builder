@@ -2,13 +2,15 @@
 {
   name = "nixos-android-builder-integration-test";
   nodes.machine =
-    { ... }:
+    { config, ... }:
     {
       imports = modules;
       config = {
         # Decrease resource usage for VM tests a bit as long as we are not actually
         # building android as part of the test suite.
-        systemd.repart.partitions."30-var-lib".SizeMinBytes = lib.mkVMOverride "10G";
+        systemd.repart.partitions = lib.optionalAttrs (config.nixosAndroidBuilder.ephemeralVarLib) {
+          "30-var-lib".SizeMinBytes = lib.mkVMOverride "10G";
+        };
         virtualisation = lib.mkVMOverride {
           diskSize = 30 * 1024;
           memorySize = 8 * 1024;
@@ -97,7 +99,7 @@
       machine.wait_for_unit("default.target")
       ${testSecureBoot}
       ${testVerity}
-      ${testFHSEnv}
+      ${lib.optionalString (lib.hasAttr "fhsEnv" nodes.machine.system.build) testFHSEnv}
       machine.shutdown()
     '';
 }

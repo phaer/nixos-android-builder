@@ -25,14 +25,6 @@ in
       chvt = "${pkgs.kbd}/bin/chvt";
     };
 
-    # keep /var/lib from timing out during installer run
-    units."dev-disk-by\\x2dpartlabel-var\\x2dlib.device.d/timeout.conf" = {
-      text = ''
-        [Unit]
-        JobTimeoutSec=Infinity
-      '';
-    };
-
     services = {
       find-boot-partition = {
         description = "Find /boot partition of the installer";
@@ -45,7 +37,6 @@ in
           "generate-disk-key.service"
           "sysroot.mount"
           "sysusr-usr.mount"
-          "systemd-cryptsetup@var_lib_crypt.service"
           "systemd-veritysetup@usr.service"
         ];
         wantedBy = [ "initrd-fs.target" ];
@@ -107,7 +98,6 @@ in
           "generate-disk-key.service"
           "sysroot.mount"
           "sysusr-usr.mount"
-          "systemd-cryptsetup@var_lib_crypt.service"
           "systemd-veritysetup@usr.service"
         ];
 

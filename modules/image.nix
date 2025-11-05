@@ -42,11 +42,6 @@
             "mode=0755"
           ];
         };
-        "/var/lib" = {
-          device = "/dev/mapper/var_lib_crypt";
-          fsType = parts."30-var-lib".repartConfig.Format;
-          neededForBoot = true;
-        };
         "/boot" = {
           device = "/dev/disk/by-partlabel/${parts."00-esp".repartConfig.Label}";
           fsType = parts."00-esp".repartConfig.Format;
@@ -132,34 +127,8 @@
               Minimize = "best";
             };
           };
-          "30-var-lib".repartConfig = {
-            Type = "var";
-            Format = "ext4";
-            Label = "var-lib";
-            # We want to start out with a very small partition in the image, and add
-            # the real minimum size to to systemd.repart.partitions below instead,
-            # in order to resize it during boot.
-            SizeMinBytes = "10M";
-          };
         };
       };
-    };
-
-    ## Run-time configuration of systemd-repart on first boot.
-    # Reuse settings of the repart-generated image file on first boot
-    systemd.repart.partitions."30-var-lib" =
-      config.image.repart.partitions."30-var-lib".repartConfig
-      // {
-        Encrypt = "key-file";
-        SizeMinBytes = "250G";
-        # Tell systemd-repart to re-format and re-encrypt this partition on each boot
-        # if run with --factory-reset, which we do by default.
-        FactoryReset = true;
-      };
-
-    boot.initrd.luks.devices."var_lib_crypt" = {
-      keyFile = "/etc/disk.key";
-      device = "/dev/disk/by-partlabel/var-lib";
     };
 
     boot.initrd.systemd =
@@ -169,12 +138,6 @@
           set -e
           partprobe
           udevadm settle -t 5
-        '';
-        generateDiskKey = pkgs.writeScript "generate-disk-key" ''
-          #!/bin/sh
-          set -e
-          umask 0077
-          head -c 64 /dev/urandom > /etc/disk.key
         '';
       in
       {
@@ -187,7 +150,6 @@
         # We need to list our scripts here, otherwise store paths won't be in initrd
         storePaths = [
           waitForDisk
-          generateDiskKey
         ];
 
         # Link /var/run to /run to appease systemd
@@ -204,36 +166,19 @@
         # Run systemd-repart in initrd at boot
         repart = {
           enable = true;
-          extraArgs = [
-            "--key-file=/etc/disk.key"
-            # --factory-reset instructs systemd-repart to reset all partitions marked with FactoryReset=true,
-            # only /var/lib in our case. The read-only partitions stay in place.
-            "--factory-reset=true"
-          ];
+          extraArgs =
+            (lib.optional config.nixosAndroidBuilder.ephemeralVarLib "--key-file=/etc/disk.key")
+            ++ [
+              # --factory-reset instructs systemd-repart to reset all partitions marked with FactoryReset=true,
+              # only /var/lib in our case. The read-only partitions stay in place.
+              "--factory-reset=true"
+            ];
         };
 
         services = {
           systemd-repart = {
-            before = [
-              "systemd-cryptsetup@var_lib_crypt.service"
-            ];
             environment."SYSTEMD_REPART_MKFS_OPTIONS_EXT4" = "-O ^dir_index";
             serviceConfig.ExecStartPost = waitForDisk;
-          };
-
-          generate-disk-key = {
-            description = "Generate a secure, ephemeral key to encrypt the persistent disk with";
-            wantedBy = [ "initrd.target" ];
-            before = [ "systemd-repart.service" ];
-            requiredBy = [ "systemd-repart.service" ];
-            unitConfig = {
-              DefaultDependencies = false;
-            };
-            serviceConfig = {
-              Type = "oneshot";
-              RemainAfterExit = true;
-              ExecStart = generateDiskKey;
-            };
           };
 
           # Link the read-only nix store to /run/systemd/volatile-root before
@@ -252,7 +197,7 @@
               Type = "oneshot";
               RemainAfterExit = true;
               ExecStart = ''/bin/ln -sf /dev/disk/by-partlabel/${
-                config.image.repart.partitions."30-var-lib".repartConfig.Label
+                config.image.repart.partitions."20-store".repartConfig.Label
               } /run/systemd/volatile-root'';
             };
           };
