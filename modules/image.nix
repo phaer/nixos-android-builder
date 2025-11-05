@@ -23,6 +23,13 @@
     # Updating the random seed on /boot can not work with a read-only /boot.
     systemd.services.systemd-boot-random-seed.enable = lib.mkForce false;
 
+    # Disable activation script that tries to create /usr/bin/env at runtime,
+    # as that will fail with a verity-backed, read-only /usr
+    # The NixOS default activation script to create /usr/bin/env assumes a
+    # writable /usr/ file system. That's not the case for us, so we disable
+    # it and add a bind mount from /usr/bin to /bin.
+    system.activationScripts.usrbinenv = lib.mkForce "";
+
     fileSystems =
       let
         parts = config.image.repart.partitions;
@@ -108,7 +115,6 @@
           "00-esp".repartConfig = {
             Type = "esp";
             Label = "boot";
-            UUID = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"; # Well known
             Format = "vfat";
             SizeMinBytes = "128M";
           };
@@ -131,7 +137,6 @@
           };
           "30-var-lib".repartConfig = {
             Type = "var";
-            UUID = "4d21b016-b534-45c2-a9fb-5c16e091fd2d"; # Well known
             Format = "ext4";
             Label = "var-lib";
             # We want to start out with a very small partition in the image, and add
@@ -238,7 +243,7 @@
           # backing "/", or this path. So this enables systemd-repart to find the
           # right device at boot.
           link-volatile-root = {
-            description = "Create volatile-root to tell systemd-repart which disk to user";
+            description = "Create volatile-root to tell systemd-repart which disk to use";
             wantedBy = [ "initrd.target" ];
             before = [ "systemd-repart.service" ];
             requiredBy = [ "systemd-repart.service" ];

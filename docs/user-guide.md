@@ -137,7 +137,7 @@ With our disk image built, we still need to sign it for secure boot, as it still
 
 `sign-disk-image` deliberately runs outside the nix sandbox in order to be able to access our keys in `keys/` without copying them to the world-readable `/nix/store`.
 So the script starts by copying the image out of the nix store to a temporary file, before signing the `UKI`, copying secure boot update bundles, and - finally moving
-the image to the repository’s top-level directory.
+the image to your current working directory.
 
 To sign your image, run:
 
@@ -162,6 +162,55 @@ Done. You can now flash the signed image:
 After this step, a `.raw` disk image with the same name `android-builder_25.11pre-git.raw` should show up in the repository’s top-level directory.
 
 Ready to be flashed to a block device in the next step!
+
+## Optional: Configure the disk-installer
+
+Each NixOS Android builder image contains an optional installer mode during early boot, that clones itself to another disk.
+This can be used to flash the image to a USB device on your local machine before booting from that device in installer mode on
+the target machine.
+
+To configure a given image to clone itself to `/dev/sda` on first boot:
+
+```shell-session
+$ nix run .#configure-disk-installer android-builder_25.11pre-git.raw /dev/sda
+Searching ESP partition offset in android-builder_25.11pre-git.raw
+Configuring installer in android-builder_25.11pre-git.raw
+Copying install_target
+Done. Image will be copied to /dev/sda upon boot.
+```
+
+The first argument can be either a disk image, or a block device if the image has already been flashed.
+The second argument can be:
+
+* a device path on the target machine.
+* "select" to start an interactive menu during boot.
+* "none" to skip the installer an just boot the image directly.
+
+If the second argument is not given at all, the current configuration will be shown.
+
+```shell-session
+$ nix run .#configure-disk-installer /dev/sdd select
+Target is a block device, but we are not root. Running sudo
+Searching ESP partition offset in /dev/sdd
+Configuring installer in /dev/sdd
+Copying install_target
+Done. Image will offer an interactive menu for the installer upon boot.
+
+$ nix run .#configure-disk-installer /dev/sdd none
+Target is a block device, but we are not root. Running sudo
+Searching ESP partition offset in /dev/sdd
+Deactivating installer in /dev/sdd
+Done. Image will boot without running the installer
+
+$ nix run .#configure-disk-installer /dev/sdd
+Target is a block device, but we are not root. Running sudo
+[sudo] password for user:
+Searching ESP partition offset in /dev/sdd
+/dev/sdd will not run the installer
+```
+
+Once the installer has been configured, it can be booted as normal but will reset itself after each installation.
+
 
 ## Flash the Image
 

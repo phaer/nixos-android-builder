@@ -72,8 +72,9 @@
 
       testSecureBoot = ''
         with subtest("secure boot works"):
+          _status, stdout = machine.execute("bootctl status")
           t.assertIn(
-            "Secure Boot: enabled (user)", machine.succeed("bootctl status"),
+            "Secure Boot: enabled (user)", stdout,
             "Secure Boot is NOT active")
       '';
     in
@@ -89,7 +90,7 @@
       # Prepare the writable disk image
       subprocess.run([
         "${lib.getExe nodes.machine.system.build.prepareWritableDisk}"
-      ], env=env, cwd=machine.state_dir)
+      ], env=env, cwd=machine.state_dir, check=True)
 
       serial_stdout_on()
       machine.start(allow_reboot=True)

@@ -32,13 +32,15 @@ let
       echo "Secure Boot in Setup Mode, enrolling" | systemd-cat -p info
       ${lib.getExe enroll-secure-boot}
       echo "enrolled. Rebooting..." | systemd-cat -p info
-      systemctl isolate reboot.target
+      systemctl --no-block reboot
     elif [ "$sb_status" = "enabled (user)" ]
     then
       echo "Secure Boot active" | systemd-cat -p info
     else
-      echo "Secure Boot neither active nor in setup mode. Halting..." | systemd-cat -p crit
-      systemctl isolate halt.target
+      msg_error="Secure Boot is neither active nor in setup mode. Please enable it in firmware settings."
+      echo "$msg_error" | systemd-cat -p crit
+      echo "$msg_error" > /run/fatal-error
+      systemctl isolate fatal-error.target
     fi
   '';
 
@@ -78,24 +80,67 @@ in
         }
       ];
 
+    targets.fatal-error = {
+      description = "Display a fatal error to the user";
+      unitConfig = {
+        DefaultDependencies = "no";
+        AllowIsolate = "yes";
+      };
+      wants = [ "fatal-error.service" ];
+      before = [ "initrd-root-fs.target" ];
+    };
+
     services = {
       ensure-secure-boot-enrollment = {
-        description = "Ensure secure boot is active. If setup mode, enroll. if disabled, halt";
+        description = "Ensure secure boot is active. If setup mode, enroll. if disabled, show error";
         wantedBy = [ "initrd.target" ];
-        before = [ "systemd-repart.service" ];
+        before = [
+          "systemd-repart.service"
+          "disk-installer.service"
+        ];
         unitConfig = {
           AssertPathExists = "/boot/EFI/KEYS";
           RequiresMountsFor = [
             "/boot"
           ];
           DefaultDependencies = false;
-          OnFailure = "halt.target";
+          OnFailure = "fatal-error.target";
         };
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
           ExecStart = ensureSecureBootEnrollment;
         };
+      };
+
+      fatal-error = {
+        description = "Display a fatal error to the user";
+        unitConfig = {
+          DefaultDependencies = "no";
+        };
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          StandardInput = "tty-force";
+          StandardOutput = "tty";
+          StandardError = "tty";
+          TTYPath = "/dev/tty2";
+          TTYReset = true;
+          Restart = "no";
+        };
+        script = ''
+          chvt 2
+          dialog \
+          --clear \
+          --colors \
+          --ok-button " Shutdown " \
+          --title "Error" \
+          --msgbox "$(cat /run/fatal-error || echo "Unknown error, please consult logs (ctrl+alt+f1)")" \
+          10 60
+
+          chvt 1
+          systemctl --no-block poweroff
+        '';
       };
     };
   };
