@@ -23,6 +23,13 @@
     # Updating the random seed on /boot can not work with a read-only /boot.
     systemd.services.systemd-boot-random-seed.enable = lib.mkForce false;
 
+    # Disable activation script that tries to create /usr/bin/env at runtime,
+    # as that will fail with a verity-backed, read-only /usr
+    # The NixOS default activation script to create /usr/bin/env assumes a
+    # writable /usr/ file system. That's not the case for us, so we disable
+    # it and add a bind mount from /usr/bin to /bin.
+    system.activationScripts.usrbinenv = lib.mkForce "";
+
     fileSystems =
       let
         parts = config.image.repart.partitions;
