@@ -38,7 +38,6 @@
     "systemd.show_status=true"
     "systemd.log_level=info"
     "systemd.log_target=console"
-    "systemd.journald.forward_to_console=1"
   ];
 
   # Add grep to the initrd. Feel free to remove, this just makes
