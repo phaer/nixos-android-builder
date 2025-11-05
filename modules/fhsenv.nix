@@ -42,13 +42,6 @@ in
     # Expose the built fhs env in `system.build`, primarily for debugging
     system.build.fhsEnv = fhsEnv;
 
-    # Disable activation script that tries to create /usr/bin/env at runtime,
-    # as that will fail with a verity-backed, read-only /usr
-    # The NixOS default activation script to create /usr/bin/env assumes a
-    # writable /usr/ file system. That's not the case for us, so we disable
-    # it and add a bind mount from /usr/bin to /bin.
-    system.activationScripts.usrbinenv = lib.mkForce "";
-
     nixosAndroidBuilder.fhsEnv = {
       pins = [
         # We always want our custom builds to win
