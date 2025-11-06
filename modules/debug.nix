@@ -33,13 +33,6 @@
   # Enable unauthenticated shell if early boot fails
   boot.initrd.systemd.emergencyAccess = true;
 
-  # Add verbose log output, to aid debugging boot issues. log_level=debug is available as well.
-  boot.kernelParams = [
-    "systemd.show_status=true"
-    "systemd.log_level=info"
-    "systemd.log_target=console"
-  ];
-
   # Add grep to the initrd. Feel free to remove, this just makes
   # inspection and debugging in an emergency shell much more convinient.
   boot.initrd.systemd.initrdBin = [ pkgs.gnugrep ];
