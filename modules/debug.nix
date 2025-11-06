@@ -33,6 +33,13 @@
   # Enable unauthenticated shell if early boot fails
   boot.initrd.systemd.emergencyAccess = true;
 
+  # Put journald logs on tty2, explicit customer requirement
+  services.journald.extraConfig = ''
+    ForwardToConsole=yes
+    TTYPath=/dev/tty2
+  '';
+  systemd.services."getty@tty2".enable = lib.mkForce false;
+
   # Add grep to the initrd. Feel free to remove, this just makes
   # inspection and debugging in an emergency shell much more convinient.
   boot.initrd.systemd.initrdBin = [ pkgs.gnugrep ];
