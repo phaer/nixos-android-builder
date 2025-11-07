@@ -15,9 +15,6 @@
         id = config.system.name;
         version = config.system.nixos.version;
       };
-      # Disable activation script that tries to create /usr/bin/env at runtime,
-      # as that will fail with a verity-backed, read-only /usr
-      activationScripts.usrbinenv = lib.mkForce "";
     };
 
     # Updating the random seed on /boot can not work with a read-only /boot.
