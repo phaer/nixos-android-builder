@@ -86,6 +86,15 @@
     ## Build-time configuration of systemd-repart during image build
     image = {
       repart = {
+        # Compress the erofs image used for /nix/store. This could
+        # be further tweaked with i.e. a larger cluster size and
+        # -Eedupe, but would result in longer build time and we
+        # we saw diminishing returns in terms of file size.
+        mkfsOptions.erofs = [
+          "-zlz4"
+          "-Efragments,ztailpacking"
+        ];
+
         # OVMF does not work with the default repart sector size of 4096
         sectorSize = 512;
 
