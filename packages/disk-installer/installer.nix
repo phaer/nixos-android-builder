@@ -2,6 +2,7 @@
   lib,
   config,
   pkgs,
+  modulesPath,
   ...
 }:
 let
@@ -11,12 +12,17 @@ in
   {
     
 
+  imports = [
+    "${modulesPath}/image/repart.nix"
+  ];
+
   options.diskInstaller = {
       debug = (lib.mkEnableOption "verbose logging and a debug shell") // { default  = true; };
     };
 
     config = {
       system.stateVersion = "25.11";
+      system.name = "disk-installer";
 
       # noop settings to appease nixos modules system
       boot.loader.grub.enable = false;
@@ -26,16 +32,68 @@ in
       };
 
       virtualisation.vmVariant.virtualisation = {
+        diskImage = "${config.system.build.image}/${config.image.filePath}";
         cores = 8;
         memorySize = 1024 * 8;
-        graphics = false;
-        fileSystems = lib.mkForce {};
-        diskImage = lib.mkForce null;
+        directBoot.enable = false;
+        installBootLoader = false;
+        useBootLoader = true;
+        useEFIBoot = true;
+        mountHostNixStore = false;
+        efi.keepVariables = false;
+
+        # NixOS overrides filesystems for VMs by default
+        fileSystems = lib.mkForce { };
+        useDefaultFilesystems = false;
+
+        qemu.drives = lib.mkForce [
+          {
+            deviceExtraOpts = {
+              bootindex = "1";
+              serial = "root";
+            };
+            driveExtraOpts = {
+              cache = "writeback";
+              werror = "report";
+              format = "raw";
+              readonly = "on";
+            };
+            file = "\"$NIX_DISK_IMAGE\"";
+            name = "root";
+          }
+        ];
       };
 
       boot.kernelParams = lib.optionals cfg.debug [
-        "rd.systemd.debug_shell=ttyS0"
+        "rd.systemd.debug_shell=tty1"
       ];
+
+      image.repart = {
+        mkfsOptions.erofs = [
+          "-zlz4"
+          "-Efragments,ztailpacking"
+        ];
+        sectorSize = 512;
+        name = config.system.name;
+
+        partitions = {
+          "00-esp" = let
+            efiArch = config.nixpkgs.hostPlatform.efiArch;
+            efiUki = "/EFI/BOOT/BOOT${lib.toUpper efiArch}.EFI";
+          in {
+            contents = {
+              "${efiUki}".source = "${config.system.build.uki}/nixos.efi";
+            };
+            repartConfig = {
+              Type = "esp";
+              Label = "disk-installer";
+              Format = "vfat";
+              SizeMinBytes = "128M";
+            };
+          };
+        };
+      };
+
 
       boot.initrd.systemd = {
         emergencyAccess = cfg.debug;
