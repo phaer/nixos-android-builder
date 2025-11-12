@@ -33,7 +33,7 @@ in
       useDefaultFilesystems = false;
 
       # Start a headless VM with serial console.
-      graphics = false;
+      graphics = true;
 
       # Use a raw image, not image for the vm (for easier post-processing with mtools & such).
       diskImage = config.image.fileName;
