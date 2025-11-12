@@ -5,9 +5,9 @@
   ...
 }:
 let
-  disk-installer = pkgs.callPackage ../packages/disk-installer { };
+  disk-installer = pkgs.callPackage ./. { };
 in
-{
+  {
   boot.initrd.systemd = {
     contents."/etc/terminfo".source = "${pkgs.ncurses}/share/terminfo";
 

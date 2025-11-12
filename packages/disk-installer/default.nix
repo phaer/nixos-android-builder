@@ -5,6 +5,9 @@
   parted,
 }:
 {
+
+  module = import ./installer.nix;
+
   # Shell script to be run on the local machine in order to
   # pre-configure the installer for unattended installation.
   configure = writeShellApplication {

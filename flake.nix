@@ -44,6 +44,11 @@
         imports = modules;
       };
 
+      installer = pkgs.nixos {
+        nixpkgs.hostPlatform = { inherit system; };
+        imports = [ diskInstaller.module ];
+      };
+
       run-vm = vm.config.system.build.vmWithWritableDisk;
       image = vm.config.system.build.finalImage;
 
@@ -116,7 +121,7 @@
     in
     {
       inherit nixosModules;
-      nixosConfigurations = { inherit vm; };
+      nixosConfigurations = { inherit vm installer; };
 
       formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt-tree;
 

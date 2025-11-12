@@ -96,7 +96,6 @@ in
         wantedBy = [ "initrd.target" ];
         before = [
           "systemd-repart.service"
-          "disk-installer.service"
         ];
         unitConfig = {
           AssertPathExists = "/boot/EFI/KEYS";
