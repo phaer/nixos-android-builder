@@ -90,12 +90,6 @@ if [ ! -t 1 ]; then
     exit 1
 fi
 
-install_source="$(
-  lsblk --json --output NAME,MOUNTPOINT,PKNAME | jq -r '
-    .. | objects | select(.mountpoint=="/boot") |
-    "/dev/\(if .pkname then .pkname else .name end)"
-  '
-)"
 install_source_size="$(lsblk --raw --noheadings --nodeps --output SIZE "$install_source")"
 if [ ! -b "$install_source" ]; then
   echo "ERROR: installation source \"$install_source\" is not a block device." | tee /run/fatal-error >&5
@@ -120,30 +114,16 @@ if ! dialog --colors --pause "$intro_msg" 10 40 3; then
     exit 1
 fi
 
-echo "removing /boot/install_target" >&4
-rm /boot/install_target
-
-echo "unmounting /boot before copying" >&4
-systemctl stop boot.mount
-
 echo "ensuring that $install_target >= $install_source." >&4
-if ! out=$(lsblk --bytes --json "$install_source" "$install_target" \
-  | jq -e --arg src "${install_source#/dev/}" --arg tgt "${install_target#/dev/}" '
-    .blockdevices
-    | map({(.name): .size})
-    | add
-    | {src: (.[ $src ]/1024/1024/1024 | round),
-       tgt: (.[ $tgt ]/1024/1024/1024 | round)}
-    | if .tgt >= .src then
-        "Target disk is big enough: \($tgt) (\(.tgt) GB) >= \($src) (\(.src) GB)"
-      else
-        error("\($tgt) (\(.tgt) GB) < \($src) (\(.src) GB)")
-      end
-  ' 2>&1); then
-  echo "ERROR: $install_target too small: $out" | tee /run/fatal-error >&5
-  exit 1
+
+install_source_size=$(lsblk -bno SIZE -J "$install_source" | jq -r '.blockdevices[0].size')
+install_target_size=$(lsblk -bno SIZE -J "$install_target" | jq -r '.blockdevices[0].size')
+
+if [ "$install_target_size" -lt "$install_source_size" ]; then
+    echo "Error: $install_target ($install_target_size) is smaller than $install_source ($install_source_size)" >&5
+    exit 1
 else
-  echo "$out" >&4
+    echo "OK: $install_target is at least as large as $install_source" >&4
 fi
 
 msg_copy="Copying source disk $install_source to target disk $install_target"
