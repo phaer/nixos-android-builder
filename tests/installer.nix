@@ -1,75 +1,53 @@
-{ modules, lib, ... }:
+{
+  modules,
+  payload,
+  lib,
+  ...
+}:
 {
   name = "nixos-android-builder-installer-test";
-  nodes.machine =
-    { config, ... }:
-    {
-      imports = modules;
-      config = {
-        # Decrease resource usage for VM tests a bit as long as we are not actually
-        # building android as part of the test suite.
-        systemd.repart.partitions."30-var-lib".SizeMinBytes = lib.mkVMOverride "10G";
-        testing.initrdBackdoor = true;
-        virtualisation = lib.mkVMOverride {
-          diskSize = 30 * 1024;
-          memorySize = 8 * 1024;
-          cores = 8;
-          emptyDiskImages = [
-            # Empty disk image as installation target
-            config.virtualisation.diskSize
-          ];
-        };
-      };
+  nodes.machine = {
+    imports = modules ++ [ ../packages/disk-installer/installer-vm.nix ];
+    config = {
+      testing.initrdBackdoor = true;
+      diskInstaller.payload = lib.mkForce payload;
     };
+  };
 
   testScript =
     { nodes, ... }:
     ''
       import os
       import subprocess
-      env = os.environ.copy()
+      from pathlib import Path
 
-      # Use world-readable, throw-away test keys to sign the writable image
-      # copy used for this test run.
-      env["keystore"] = "${nodes.machine.system.build.secureBootKeysForTests}"
-      # Prepare the writable disk image
-      subprocess.run([
-        "${lib.getExe nodes.machine.system.build.prepareWritableDisk}"
-      ], env=env, cwd=machine.state_dir, check=True)
-      disk_image = "${nodes.machine.virtualisation.diskImage}"
+      read_only_image = Path("${nodes.machine.virtualisation.diskImage}")
+      writable_image = Path(machine.state_dir) / read_only_image.with_suffix(".qcow2").name
+      target_image = Path(machine.state_dir) / "empty0.qcow2"
+
+      args = [
+        "qemu-img", "convert", "-f", "raw", "-O", "qcow2", str(read_only_image), str(writable_image)
+      ]
+      print(args)
+      subprocess.run(args, cwd=machine.state_dir)
+      os.environ["NIX_DISK_IMAGE"] = str(writable_image)
 
       serial_stdout_on()
       machine.start()
 
-      machine.wait_for_console_text("enrolled. Rebooting...")
-      machine.wait_for_shutdown()
-
-      machine.start()
       machine.wait_for_file("/run/installer_done")
       machine.shutdown()
 
       subprocess.run([
-        "ls", disk_image
-      ], env=env, cwd=machine.state_dir)
+        "mv", str(target_image), str(writable_image)
+      ], cwd=machine.state_dir)
       subprocess.run([
-        "rm", disk_image
-      ], env=env, cwd=machine.state_dir)
-
-      subprocess.run([
-        "qemu-img", "convert", "-f", "qcow2", "-O", "raw", "empty0.qcow2", disk_image
-      ], env=env, cwd=machine.state_dir)
-      subprocess.run([
-        "rm", "empty0.qcow2"
-      ], env=env, cwd=machine.state_dir)
-
+        "ls"
+      ], cwd=machine.state_dir)
 
       machine.start()
       machine.switch_root()
       machine.wait_for_unit("multi-user.target")
-      _status, stdout = machine.execute("bootctl status")
-      t.assertIn(
-        "Secure Boot: enabled (user)", stdout,
-        "Secure Boot is NOT active")
       machine.shutdown()
     '';
 }

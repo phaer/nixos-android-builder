@@ -10,15 +10,21 @@ let
   cfg = config.diskInstaller;
 in
 {
-  
 
-imports = [
-  "${modulesPath}/image/repart.nix"
-  "${modulesPath}/profiles/qemu-guest.nix"
-];
+  imports = [
+    "${modulesPath}/image/repart.nix"
+    "${modulesPath}/profiles/qemu-guest.nix"
+  ];
 
-options.diskInstaller = {
-    debug = (lib.mkEnableOption "verbose logging and a debug shell") // { default  = true; };
+  options.diskInstaller = {
+    debug = (lib.mkEnableOption "verbose logging and a debug shell") // {
+      default = true;
+    };
+
+    payload = lib.mkOption {
+      description = "file to write to disk";
+      type = lib.types.str;
+    };
   };
 
   config = {
@@ -42,40 +48,7 @@ options.diskInstaller = {
       "nls_iso8859-1"
     ];
 
-    virtualisation.vmVariant = {
-      virtualisation = {
-        diskImage = "${config.system.build.image}/${config.image.filePath}";
-        cores = 8;
-        memorySize = 1024 * 8;
-        directBoot.enable = false;
-        installBootLoader = false;
-        useBootLoader = true;
-        useEFIBoot = true;
-        mountHostNixStore = false;
-        efi.keepVariables = false;
-
-        # NixOS overrides filesystems for VMs by default
-        fileSystems = lib.mkForce { };
-        useDefaultFilesystems = false;
-
-        qemu.drives = lib.mkForce [
-          {
-            deviceExtraOpts = {
-              bootindex = "1";
-              serial = "root";
-            };
-            driveExtraOpts = {
-              cache = "writeback";
-              werror = "report";
-              format = "raw";
-              readonly = "on";
-            };
-            file = "\"$NIX_DISK_IMAGE\"";
-            name = "root";
-          }
-        ];
-      };
-    };
+    virtualisation.vmVariant = ./installer-vm.nix;
 
     boot.kernelParams = lib.optionals cfg.debug [
       "rd.systemd.debug_shell=tty1"
@@ -99,6 +72,10 @@ options.diskInstaller = {
           {
             contents = {
               "${efiUki}".source = "${config.system.build.uki}/nixos.efi";
+              "/install_target".source = pkgs.writeTextFile {
+                name = "install_target";
+                text = "/dev/vdb";
+              };
             };
             repartConfig = {
               Type = "esp";
@@ -107,6 +84,11 @@ options.diskInstaller = {
               SizeMinBytes = "128M";
             };
           };
+        "10-payload".repartConfig = {
+          Type = "linux-generic";
+          Label = "payload";
+          CopyBlocks = cfg.payload;
+        };
       };
     };
 

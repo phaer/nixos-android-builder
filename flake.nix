@@ -24,7 +24,7 @@
 
       ourModules = (lib.attrValues nixosModules) ++ [ ./configuration.nix ];
 
-      modules = [
+      imageModules = [
         (
           { modulesPath, ... }:
           {
@@ -39,18 +39,25 @@
       ]
       ++ ourModules;
 
-      vm = pkgs.nixos {
+      nixos = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
-        imports = modules;
+        imports = imageModules;
       };
+
+      installerModules = [
+        diskInstaller.module
+        {
+          diskInstaller.payload = "${nixos.config.system.build.finalImage}/${nixos.config.image.filePath}";
+        }
+      ];
 
       installer = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
-        imports = [ diskInstaller.module ];
+        imports = installerModules;
       };
 
-      run-vm = vm.config.system.build.vmWithWritableDisk;
-      image = vm.config.system.build.finalImage;
+      run-vm = nixos.config.system.build.vmWithWritableDisk;
+      image = nixos.config.system.build.finalImage;
 
       secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
       diskInstaller = pkgs.callPackage ./packages/disk-installer { };
@@ -113,7 +120,7 @@
               ];
         in
         (pkgs.nixosOptionsDoc {
-          inherit (vm) options;
+          inherit (nixos) options;
           transformOptions =
             opt: if isDefinedInThisRepo opt && !isMocked opt then opt else opt // { visible = false; };
         }).optionsJSON;
@@ -121,7 +128,7 @@
     in
     {
       inherit nixosModules;
-      nixosConfigurations = { inherit vm installer; };
+      nixosConfigurations = { inherit nixos installer; };
 
       formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt-tree;
 
@@ -148,13 +155,41 @@
         integration = pkgs.testers.runNixOSTest {
           imports = [
             ./tests/integration.nix
-            { _module.args = { inherit modules; }; }
+            {
+              _module.args = {
+                modules = imageModules;
+              };
+            }
           ];
         };
         installer = pkgs.testers.runNixOSTest {
           imports = [
             ./tests/installer.nix
-            { _module.args = { inherit modules; }; }
+            {
+              _module.args = {
+                modules = installerModules;
+                payload =
+                  let
+                    nixosWithBackdoor = nixos.extendModules {
+                      modules = [
+                        (
+                          { modulesPath, ... }:
+                          {
+                            imports = [
+                              "${modulesPath}/testing/test-instrumentation.nix"
+                            ];
+                            config.testing = {
+                              backdoor = true;
+                              initrdBackdoor = true;
+                            };
+                          }
+                        )
+                      ];
+                    };
+                  in
+                  "${nixosWithBackdoor.config.system.build.finalImage}/${nixosWithBackdoor.config.image.filePath}";
+              };
+            }
           ];
         };
 
