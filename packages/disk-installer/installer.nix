@@ -166,7 +166,7 @@ in
           onFailure = [ "emergency.target" ];
 
           environment = {
-            install_source = "/dev/disk/by-partlabel/payload";
+            INSTALL_SOURCE = "/dev/disk/by-partlabel/payload";
           };
           script = lib.getExe disk-installer.run;
         };

@@ -90,16 +90,16 @@ if [ ! -t 1 ]; then
     exit 1
 fi
 
-install_source_size="$(lsblk --raw --noheadings --nodeps --output SIZE "$install_source")"
-if [ ! -b "$install_source" ]; then
-  echo "ERROR: installation source \"$install_source\" is not a block device." | tee /run/fatal-error >&5
+
+echo "Using $INSTALL_SOURCE as installation source" >&4
+if [ ! -b "$INSTALL_SOURCE" ]; then
+  echo "ERROR: installation source \"$INSTALL_SOURCE\" is not a block device." | tee /run/fatal-error >&5
   exit 1
 fi
-echo "Using $install_source as installation source" >&4
 
 install_target="$(cat /boot/install_target)"
 if [ "$install_target" = "select" ]; then
-    install_target="$(select_disk "$install_source")"
+    install_target="$(select_disk "$INSTALL_SOURCE")"
 fi
 
 if [ ! -b "$install_target" ]; then
@@ -107,29 +107,29 @@ if [ ! -b "$install_target" ]; then
   exit 1
 fi
 
-intro_msg="About to install from $install_source to $install_target"
+intro_msg="About to install from $INSTALL_SOURCE to $install_target"
 echo  "$intro_msg" >&4
 if ! dialog --colors --pause "$intro_msg" 10 40 3; then
     echo "User cancelled installation." | tee /run/fatal-error >&5
     exit 1
 fi
 
-echo "ensuring that $install_target >= $install_source." >&4
+echo "ensuring that $install_target >= $INSTALL_SOURCE." >&4
 
-install_source_size=$(lsblk -bno SIZE -J "$install_source" | jq -r '.blockdevices[0].size')
+INSTALL_SOURCE_size=$(lsblk -bno SIZE -J "$INSTALL_SOURCE" | jq -r '.blockdevices[0].size')
 install_target_size=$(lsblk -bno SIZE -J "$install_target" | jq -r '.blockdevices[0].size')
 
-if [ "$install_target_size" -lt "$install_source_size" ]; then
-    echo "Error: $install_target ($install_target_size) is smaller than $install_source ($install_source_size)" >&5
+if [ "$install_target_size" -lt "$INSTALL_SOURCE_size" ]; then
+    echo "Error: $install_target ($install_target_size) is smaller than $INSTALL_SOURCE ($INSTALL_SOURCE_size)" >&5
     exit 1
 else
-    echo "OK: $install_target is at least as large as $install_source" >&4
+    echo "OK: $install_target is at least as large as $INSTALL_SOURCE" >&4
 fi
 
-msg_copy="Copying source disk $install_source to target disk $install_target"
+msg_copy="Copying source disk $INSTALL_SOURCE to target disk $install_target"
 echo $msg_copy >&4
-ddrescue -f -v "$install_source" "$install_target" 2>&1 \
-    | ddrescue2gauge "$install_source_size" \
+ddrescue -f -v "$INSTALL_SOURCE" "$install_target" 2>&1 \
+    | ddrescue2gauge "$INSTALL_SOURCE_size" \
     | dialog --colors --title "$msg_copy" --gauge "Starting..." 16 60 10
 
 
