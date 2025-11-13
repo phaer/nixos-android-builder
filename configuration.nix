@@ -5,6 +5,8 @@
   nixosAndroidBuilder = {
     debug = true;
 
+    artifactStorage.enable = true;
+
     build = {
       repoManifestUrl = "https://android.googlesource.com/platform/manifest";
       repoBranch = "android-latest-release";

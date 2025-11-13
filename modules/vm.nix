@@ -10,6 +10,10 @@ let
 
   secureBootScripts = hostPkgs.callPackage ../packages/secure-boot-scripts { };
   disk-installer = hostPkgs.callPackage ../packages/disk-installer { };
+
+  isInstallerTest =
+    (builtins.length cfg.emptyDiskImages)
+    == (if config.nixosAndroidBuilder.artifactStorage.enable then 2 else 1);
 in
 {
   config = {
@@ -37,6 +41,10 @@ in
 
       # Use a raw image, not image for the vm (for easier post-processing with mtools & such).
       diskImage = config.image.fileName;
+
+      emptyDiskImages = lib.optionals config.nixosAndroidBuilder.artifactStorage.enable [
+        (1024 * 10)
+      ];
     };
 
     # Create a set of private keys for VM tests, but cache them in the /nix/store,
@@ -71,7 +79,7 @@ in
               echo >&2 "Signing UKI in ${cfg.diskImage}"
               export keystore="${config.system.build.secureBootKeysForTests}"
               bash ${lib.getExe secureBootScripts.sign-disk-image} "${cfg.diskImage}"
-              ${lib.optionalString ((builtins.length cfg.emptyDiskImages) >= 1) ''
+              ${lib.optionalString isInstallerTest ''
                 bash ${lib.getExe disk-installer.configure} "${cfg.diskImage}" "/dev/vdb"
               ''}
             else

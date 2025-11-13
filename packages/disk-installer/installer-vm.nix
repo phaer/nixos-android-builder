@@ -15,6 +15,13 @@
     fileSystems = lib.mkForce { };
     useDefaultFilesystems = false;
 
-    emptyDiskImages = [ (1024 * 300) ];
+    emptyDiskImages = [
+      (1024 * 300)
+    ]
+    ++
+      lib.optionals config.nixosAndroidBuilder.artifactStorage.enable
+      [
+        (1024 * 10)
+      ];
   };
 }
