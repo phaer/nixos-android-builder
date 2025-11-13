@@ -52,12 +52,16 @@ in
             "systemd-udev-settle.service"
           ];
           before = [
-            "systemd-repart.service"
-          ];
+            "initrd-switch-root.service"
+            ];
           wantedBy = [
-            "systemd-repart.service"
+            "initrd-switch-root.target"
+            "rescue.target"
           ];
-          requiredBy = [ "system-repart.service" ];
+          requiredBy = [
+            "initrd-switch-root.target"
+            "rescue.target"
+          ];
 
           unitConfig = {
             DefaultDependencies = false;
