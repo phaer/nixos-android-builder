@@ -142,7 +142,6 @@ in
           description = "Early user prompt during initrd";
 
           after = [
-            "initrd-root-device.target"
             "boot.mount"
           ];
           wantedBy = [ "initrd.target" ];
