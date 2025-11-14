@@ -7,19 +7,68 @@
 }:
 let
   cfg = config.nixosAndroidBuilder.artifactStorage;
+  copyAndroidOutputs = pkgs.writeShellScriptBin "copy-android-outputs" ''
+    set -e
+
+    SOURCE_DIR='${config.nixosAndroidBuilder.build.sourceDir}'
+    ARTIFACT_DIR="${cfg.artifactDir}"
+
+    mkdir -p $SOURCE_DIR/out/foo/
+    echo "Hello" > $SOURCE_DIR/out/foo/bar
+
+    find_expr=()
+    while IFS= read -r pattern; do
+      [[ -z "$pattern" || "$pattern" =~ ^# ]] && continue
+      find_expr+=(-path "./$pattern" -o)
+    done < /etc/artifacts
+
+    # Remove trailing -o
+    [ ''${#find_expr[@]} -gt 0 ] && unset 'find_expr[-1]'
+
+    (
+      cd "$SOURCE_DIR/out"
+      echo -e "\nCopying output artifacts to $ARTIFACT_DIR\n\n"
+      find . -type f \( "''${find_expr[@]}" \) 2>/dev/null | \
+        rsync -av --files-from=- . "$ARTIFACT_DIR/$(date +%Y-%m-%d-%H:%M:%S)/"
+    )
+  '';
+
 in
 {
   options.nixosAndroidBuilder.artifactStorage = {
-    enable = lib.mkEnableOption "";
+    enable = lib.mkEnableOption "Storing outputs in an unecrypted, persistent disk partition";
     diskLabel = lib.mkOption {
-      default = "artifacts";
+      description = "disk label that identifies the storage partition";
       type = lib.types.str;
+      default = "artifacts";
+    };
+
+    contents = lib.mkOption {
+      description = "list of files (or patterns) to copy from build outputs";
+      type = lib.types.listOf lib.types.str;
+      default = [
+        "*"
+      ];
+    };
+
+    artifactDir = lib.mkOption {
+      description = ''
+        Directory where the persistent artifact storage is mounted.
+      '';
+      type = lib.types.path;
+      default = "/var/lib/artifacts";
+
     };
   };
 
   config = lib.mkIf cfg.enable {
+    systemd.tmpfiles.rules = [
+      "d ${cfg.artifactDir} 0755 user user - -"
+    ];
+    environment.etc."artifacts".text = "${lib.join "\n" cfg.contents}\n";
+    environment.systemPackages = [ copyAndroidOutputs ];
 
-    fileSystems."/var/lib/artifacts" = {
+    fileSystems."${cfg.artifactDir}" = {
       device = "/dev/disk/by-label/${cfg.diskLabel}";
       fsType = "ext4";
     };
@@ -28,11 +77,10 @@ in
       contents."/etc/terminfo".source = "${pkgs.ncurses}/share/terminfo";
       units."dev-disk-by\\x2dlabeli-artifacts.device.d/timeout.conf" = {
         text = ''
-          [Unit]
-        JobTimeoutSec=Infinity
+            [Unit]
+          JobTimeoutSec=Infinity
         '';
       };
-
 
       extraBin = {
         lsblk = "${pkgs.util-linux}/bin/lsblk";
@@ -53,7 +101,7 @@ in
           ];
           before = [
             "initrd-switch-root.service"
-            ];
+          ];
           wantedBy = [
             "initrd-switch-root.target"
             "rescue.target"

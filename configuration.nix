@@ -5,7 +5,12 @@
   nixosAndroidBuilder = {
     debug = true;
 
-    artifactStorage.enable = true;
+    artifactStorage = {
+      enable = true;
+      contents = [
+        "target/product/*"
+      ];
+    };
 
     build = {
       repoManifestUrl = "https://android.googlesource.com/platform/manifest";
