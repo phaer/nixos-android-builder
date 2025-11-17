@@ -17,11 +17,8 @@
 
     emptyDiskImages = [
       (1024 * 300)
-    ]
-    ++
-      lib.optionals config.nixosAndroidBuilder.artifactStorage.enable
-      [
-        (1024 * 10)
-      ];
+      # second image for artifact storage if enabled
+      (1024 * 10)
+    ];
   };
 }
