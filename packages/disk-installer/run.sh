@@ -78,13 +78,6 @@ exec 5> >(systemd-cat -p err)
 
 echo -e "\nDisk Installer\n" >&4
 
-
-
-if [ ! -f /boot/install_target ]; then
-  echo "/boot/install_target not found." >&5
-  exit 0
-fi
-
 if [ ! -t 1 ]; then
     echo "stdout is NOT a tty" | tee /run/fatal-error >&5
     exit 1
@@ -100,7 +93,7 @@ fi
 
 install_target="$(cat /boot/install_target || true)"
 if [ -z "$install_target" ]; then
-    install_target="$(select_disk "$(lsblk -J -po PKNAME,MOUNTPOINT | jq -r '.blockdevices[] | select (.mountpoint=="/boot") | .pkname')")"
+    install_target="$(select_disk "$INSTALL_SOURCE")"
 fi
 
 if [ ! -b "$install_target" ]; then
