@@ -24,14 +24,21 @@ select_disk() {
     fi
 
     selected_disk="$(
-    dialog 3>&1 1>&2 2>&3 \
+    dialog \
+        --output-fd 1 \
         --colors \
         --title "Artifact Storage" \
+        --timeout 5 \
+        --default-item "${menu_options[0]}" \
         --nocancel \
         --menu "Select a disk to store build artifacts in. All existing data on it will be WIPED!" \
         20 60 10 \
         "${menu_options[@]}"
     )"
+    # timeout leads to an empty result
+    if [ -z "$selected_disk" ]; then
+        selected_disk="${menu_options[0]}"
+    fi
     echo "$selected_disk"
 }
 
