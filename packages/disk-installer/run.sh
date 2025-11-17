@@ -97,9 +97,10 @@ if [ ! -b "$INSTALL_SOURCE" ]; then
   exit 1
 fi
 
-install_target="$(cat /boot/install_target)"
-if [ "$install_target" = "select" ]; then
-    install_target="$(select_disk "$INSTALL_SOURCE")"
+
+install_target="$(cat /boot/install_target || true)"
+if [ -z "$install_target" ]; then
+    install_target="$(select_disk "$(lsblk -J -po PKNAME,MOUNTPOINT | jq -r '.blockdevices[] | select (.mountpoint=="/boot") | .pkname')")"
 fi
 
 if [ ! -b "$install_target" ]; then
