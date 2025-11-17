@@ -72,10 +72,6 @@ in
           {
             contents = {
               "${efiUki}".source = "${config.system.build.uki}/nixos.efi";
-              "/install_target".source = pkgs.writeTextFile {
-                name = "install_target";
-                text = "/dev/vdb";
-              };
             };
             repartConfig = {
               Type = "esp";
@@ -148,7 +144,6 @@ in
 
           unitConfig = {
             DefaultDependencies = false;
-            ConditionPathExists = "/boot/install_target";
           };
 
           serviceConfig = {
