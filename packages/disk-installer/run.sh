@@ -61,7 +61,7 @@ select_disk() {
 
     selected_disk="$(
     dialog \
-        --output-fd=1 \
+        --output-fd 1 \
         --colors \
         --title "Disk Selection" \
         --timeout 5 \
@@ -98,7 +98,8 @@ fi
 
 install_target="$(cat /boot/install_target || true)"
 if [ -z "$install_target" ]; then
-    install_target="$(select_disk "$INSTALL_SOURCE")"
+    own_disk="$(lsblk -npo PKNAME /dev/disk/by-label/DISK-INSTAL)"
+    install_target="$(select_disk "$own_disk")"
 fi
 
 if [ ! -b "$install_target" ]; then
