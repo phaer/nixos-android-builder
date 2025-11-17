@@ -1,4 +1,9 @@
-{ lib, config, ... }:
+{
+  lib,
+  config,
+  pkgs,
+  ...
+}:
 {
   virtualisation = {
     diskImage = "${config.system.build.image}/${config.image.filePath}";
@@ -21,4 +26,8 @@
       (1024 * 10)
     ];
   };
+
+  boot.initrd.systemd.initrdBin = [
+    pkgs.gnugrep
+  ];
 }
