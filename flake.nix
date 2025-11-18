@@ -62,69 +62,9 @@
       secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
       diskInstaller = pkgs.callPackage ./packages/disk-installer { };
 
-      build-docs = pkgs.writeShellApplication {
-        name = "build-docs";
-        runtimeInputs = [
-          pkgs.pandoc
-          pkgs.mermaid-filter
-          pkgs.gitMinimal
-          (pkgs.texliveSmall.withPackages (ps: [
-            ps.framed
-            ps.fvextra
-          ]))
-        ];
-        text = ''
-          cd "$(git rev-parse --show-toplevel 2>/dev/null)/docs"
-            pandoc \
-              --pdf-engine=xelatex \
-              --toc \
-              --standalone \
-              --metadata=options_json:${optionDocs}/share/doc/nixos/options.json \
-              --lua-filter=./nixos-options.lua  \
-              --include-in-header=./header.tex \
-              --highlight-style=./pygments.theme \
-              --filter=mermaid-filter \
-              --variable=linkcolor:blue \
-              --variable=geometry:a4paper \
-              --variable=geometry:margin=3cm \
-              --output "./$1.pdf" "./$1.md"
-        '';
+      docs = pkgs.callPackage ./packages/docs {
+        inherit self nixos;
       };
-
-      watch-docs = pkgs.writeShellApplication {
-        name = "watch-docs";
-        runtimeInputs = [
-          pkgs.entr
-          pkgs.gitMinimal
-        ];
-        text = ''
-          find "$(git rev-parse --show-toplevel 2>/dev/null)/docs" -name '*.md' \
-          | entr -s "${build-docs}/bin/build-docs $*"
-        '';
-      };
-
-      optionDocs =
-        let
-          isDefinedInThisRepo =
-            opt: lib.any (decl: lib.hasPrefix (toString self) (toString decl)) (opt.declarations or [ ]);
-          isMocked =
-            opt:
-            opt.loc == [
-              "environment"
-              "ldso"
-            ]
-            ||
-              opt.loc == [
-                "environment"
-                "ldso32"
-              ];
-        in
-        (pkgs.nixosOptionsDoc {
-          inherit (nixos) options;
-          transformOptions =
-            opt: if isDefinedInThisRepo opt && !isMocked opt then opt else opt // { visible = false; };
-        }).optionsJSON;
-
     in
     {
       inherit nixosModules;
@@ -138,8 +78,8 @@
             create-signing-keys
             sign-disk-image
             diskInstaller.configure
-            build-docs
-            watch-docs
+            docs.build-docs
+            docs.watch-docs
           ];
         };
       };
