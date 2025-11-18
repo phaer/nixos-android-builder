@@ -180,7 +180,6 @@
                             ];
                             config.testing = {
                               backdoor = true;
-                              initrdBackdoor = true;
                             };
                           }
                         )

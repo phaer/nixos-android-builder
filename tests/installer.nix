@@ -46,7 +46,6 @@
       ], cwd=machine.state_dir)
 
       machine.start()
-      machine.switch_root()
       machine.wait_for_unit("multi-user.target")
       machine.shutdown()
     '';
