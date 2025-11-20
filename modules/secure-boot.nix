@@ -12,13 +12,14 @@ let
       /sys/firmware/efi/efivars/ \
       \( -name "db-*" -o -name "KEK-*" \) \
       -exec chattr -i {} \;
-    esp_keystore="/boot/EFI/KEYS"
+    esp_keystore="/boot/KEYS"
     # Append the new allowed signatures, but keep Microsofts and other vendors signatures.
     efi-updatevar -a -f "$esp_keystore/db.auth" db
     # Install Key Exchange Key
     efi-updatevar -f "$esp_keystore/KEK.auth" KEK
     # Install Platform Key (Leaving setup mode and enters user mode)
     efi-updatevar -f "$esp_keystore/PK.auth" PK
+    rm -rf $esp_keystore
   '';
 
   ensureSecureBootEnrollment = pkgs.writeShellScript "ensure-secure-boot-enrollment" ''
@@ -92,7 +93,7 @@ in
           "systemd-repart.service"
         ];
         unitConfig = {
-          AssertPathExists = "/boot/EFI/KEYS";
+          AssertPathExists = "/boot/KEYS";
           RequiresMountsFor = [
             "/boot"
           ];
