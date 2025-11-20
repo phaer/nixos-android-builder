@@ -80,14 +80,8 @@ in
         }
       ];
 
-    targets.fatal-error = {
-      description = "Display a fatal error to the user";
-      unitConfig = {
-        DefaultDependencies = "no";
-        AllowIsolate = "yes";
-      };
+    targets.emergency = {
       wants = [ "fatal-error.service" ];
-      before = [ "initrd-root-fs.target" ];
     };
 
     services = {
