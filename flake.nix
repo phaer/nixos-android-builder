@@ -43,6 +43,8 @@
         nixpkgs.hostPlatform = { inherit system; };
         imports = imageModules;
       };
+      run-vm = nixos.config.system.build.vmWithWritableDisk;
+      image = nixos.config.system.build.finalImage;
 
       installerModules = [
         diskInstaller.module
@@ -55,9 +57,7 @@
         nixpkgs.hostPlatform = { inherit system; };
         imports = installerModules;
       };
-
-      run-vm = nixos.config.system.build.vmWithWritableDisk;
-      image = nixos.config.system.build.finalImage;
+      installerImage = installer.config.system.build.image;
 
       secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
       diskInstaller = pkgs.callPackage ./packages/disk-installer { };
@@ -85,7 +85,7 @@
       };
 
       packages.${system} = {
-        inherit run-vm image;
+        inherit run-vm image installerImage;
         inherit (secureBootScripts) create-signing-keys sign-disk-image;
         configure-disk-installer = diskInstaller.configure;
         default = image;
