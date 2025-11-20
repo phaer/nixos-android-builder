@@ -1,25 +1,31 @@
 {
+  lib,
+  writers,
   writeShellApplication,
   jq,
   mtools,
+  util-linux,
+  sbsigntool,
   parted,
 }:
 {
 
   module = import ./installer.nix;
 
-  # Shell script to be run on the local machine in order to
-  # pre-configure the installer for unattended installation.
-  configure = writeShellApplication {
-    name = "configure-disk-installer";
-    runtimeInputs = [
-      jq
-      mtools
-      parted
+  # Python script to be run on the local machine in order to
+  # pre-configure the installer for unattended installation
+  # and sign UKIs
+  configure = writers.writePython3Bin "configure-disk-installer" {
+    makeWrapperArgs = [
+      "--prefix PATH : ${
+        lib.makeBinPath [
+          util-linux
+          mtools
+          sbsigntool
+        ]
+      }"
     ];
-    excludeShellChecks = [ "SC2086" ];
-    text = builtins.readFile ./configure-disk-installer.sh;
-  };
+  } (builtins.readFile ./configure-disk-installer.py);
 
   # Shell script that runs during early-boot from initrd and
   # copies itself to the target disk.

@@ -76,11 +76,12 @@ in
                 "${cfg.diskImage}" \
                 "${toString cfg.diskSize}M"
 
-              echo >&2 "Signing UKI in ${cfg.diskImage}"
-              export keystore="${config.system.build.secureBootKeysForTests}"
-              bash ${lib.getExe secureBootScripts.sign-disk-image} "${cfg.diskImage}"
+              echo >&2 "Preparing ${cfg.diskImage}"
+              ${lib.getExe disk-installer.configure} sign \
+                --keystore "${config.system.build.secureBootKeysForTests}" \
+                --device "${cfg.diskImage}" 
               ${lib.optionalString isInstallerTest ''
-                bash ${lib.getExe disk-installer.configure} "${cfg.diskImage}" "/dev/vdb"
+                ${lib.getExe disk-installer.configure} set-target --target "/dev/vdb" --device "${cfg.diskImage}"
               ''}
             else
               echo "${cfg.diskImage} already exists, skipping creation & signing"
