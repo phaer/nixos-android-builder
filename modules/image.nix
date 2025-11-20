@@ -42,7 +42,7 @@
         };
         "/var/lib" = {
           device = "/dev/mapper/var_lib_crypt";
-          fsType = parts."30-var-lib".repartConfig.Format;
+          fsType = config.systemd.repart.partitions."30-var-lib".Format;
           neededForBoot = true;
         };
         "/boot" = {
@@ -143,7 +143,6 @@
           };
           "30-var-lib".repartConfig = {
             Type = "var";
-            Format = "ext4";
             Label = "var-lib";
             # We want to start out with a very small partition in the image, and add
             # the real minimum size to to systemd.repart.partitions below instead,
@@ -159,6 +158,7 @@
     systemd.repart.partitions."30-var-lib" =
       config.image.repart.partitions."30-var-lib".repartConfig
       // {
+        Format = "ext4";
         Encrypt = "key-file";
         SizeMinBytes = "250G";
         # Tell systemd-repart to re-format and re-encrypt this partition on each boot
