@@ -48,8 +48,6 @@ in
       "nls_iso8859-1"
     ];
 
-    virtualisation.vmVariant = ./installer-vm.nix;
-
     boot.kernelParams = lib.optionals cfg.debug [
       "rd.systemd.debug_shell=tty1"
     ];
