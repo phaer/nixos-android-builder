@@ -98,47 +98,13 @@
         default = image;
       };
 
-      checks.${system} = {
-        integration = pkgs.testers.runNixOSTest {
-          imports = [
-            ./tests/integration.nix
-            {
-              _module.args = {
-                modules = imageModules;
-              };
-            }
-          ];
-        };
-        installer = pkgs.testers.runNixOSTest {
-          imports = [
-            ./tests/installer.nix
-            {
-              _module.args = {
-                modules = installerModules;
-                payload =
-                  let
-                    nixosWithBackdoor = nixos.extendModules {
-                      modules = [
-                        (
-                          { modulesPath, ... }:
-                          {
-                            imports = [
-                              "${modulesPath}/testing/test-instrumentation.nix"
-                            ];
-                            config.testing = {
-                              backdoor = true;
-                            };
-                          }
-                        )
-                      ];
-                    };
-                  in
-                  "${nixosWithBackdoor.config.system.build.finalImage}/${nixosWithBackdoor.config.image.filePath}";
-              };
-            }
-          ];
-        };
-
+      checks.${system} = import ./tests/default.nix {
+        inherit
+          pkgs
+          installerModules
+          imageModules
+          nixos
+          ;
       };
     };
 }

@@ -1,5 +1,5 @@
 {
-  modules,
+  installerModules,
   payload,
   lib,
   ...
@@ -7,10 +7,10 @@
 {
   name = "nixos-android-builder-installer-test";
   nodes.machine = {
+    imports = installerModules;
     config = {
       testing.initrdBackdoor = true;
       diskInstaller.payload = lib.mkForce payload;
-
       nixosAndroidBuilder.configureInstallerForVm = "/dev/vdb";
     };
   };

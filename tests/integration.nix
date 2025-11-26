@@ -1,10 +1,10 @@
-{ modules, lib, ... }:
+{ imageModules, lib, ... }:
 {
   name = "nixos-android-builder-integration-test";
   nodes.machine =
     { ... }:
     {
-      imports = modules;
+      imports = imageModules;
       config = {
         # Decrease resource usage for VM tests a bit as long as we are not actually
         # building android as part of the test suite.

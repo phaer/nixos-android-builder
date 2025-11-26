@@ -2,6 +2,7 @@
   lib,
   config,
   pkgs,
+  modulesPath,
   ...
 }:
 let
@@ -10,6 +11,8 @@ let
   disk-installer = hostPkgs.callPackage ./. { };
 in
 {
+  imports = [ "${modulesPath}/virtualisation/qemu-vm.nix" ];
+
   options.nixosAndroidBuilder.configureInstallerForVm = lib.mkOption {
     type = lib.types.str;
     default = "select";
@@ -17,7 +20,7 @@ in
   };
 
   config = {
-    virtualisation.vmVariant.virtualisation = {
+    virtualisation = {
       cores = 8;
       memorySize = 1024 * 8;
       directBoot.enable = false;
@@ -37,10 +40,6 @@ in
         (1024 * 10)
       ];
     };
-
-    boot.initrd.systemd.initrdBin = [
-      pkgs.gnugrep
-    ];
 
     system.build.prepareInstallerDisk = hostPkgs.writeShellApplication {
       name = "prepare-installer-disk";
