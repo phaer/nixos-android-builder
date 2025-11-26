@@ -48,16 +48,18 @@
 
       installerModules = [
         diskInstaller.module
+        diskInstaller.vm
         {
           diskInstaller.payload = "${nixos.config.system.build.finalImage}/${nixos.config.image.filePath}";
         }
       ];
 
+      installer-vm = installer.config.system.build.vmWithInstallerDisk;
       installer = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
         imports = installerModules;
       };
-      installerImage = installer.config.system.build.image;
+      installer-image = installer.config.system.build.image;
 
       secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
       diskInstaller = pkgs.callPackage ./packages/disk-installer { };
@@ -85,7 +87,12 @@
       };
 
       packages.${system} = {
-        inherit run-vm image installerImage;
+        inherit
+          run-vm
+          image
+          installer-image
+          installer-vm
+          ;
         inherit (secureBootScripts) create-signing-keys sign-disk-image;
         configure-disk-installer = diskInstaller.configure;
         default = image;

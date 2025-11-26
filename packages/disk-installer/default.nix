@@ -11,6 +11,7 @@
 {
 
   module = import ./installer.nix;
+  vm = import ./installer-vm.nix;
 
   # Python script to be run on the local machine in order to
   # pre-configure the installer for unattended installation

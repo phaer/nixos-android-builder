@@ -10,10 +10,6 @@ let
 
   secureBootScripts = hostPkgs.callPackage ../packages/secure-boot-scripts { };
   disk-installer = hostPkgs.callPackage ../packages/disk-installer { };
-
-  isInstallerTest =
-    (builtins.length cfg.emptyDiskImages)
-    == (if config.nixosAndroidBuilder.artifactStorage.enable then 2 else 1);
 in
 {
   config = {
@@ -79,10 +75,7 @@ in
               echo >&2 "Preparing ${cfg.diskImage}"
               ${lib.getExe disk-installer.configure} sign \
                 --keystore "${config.system.build.secureBootKeysForTests}" \
-                --device "${cfg.diskImage}" 
-              ${lib.optionalString isInstallerTest ''
-                ${lib.getExe disk-installer.configure} set-target --target "/dev/vdb" --device "${cfg.diskImage}"
-              ''}
+                --device "${cfg.diskImage}"
             else
               echo "${cfg.diskImage} already exists, skipping creation & signing"
           fi
