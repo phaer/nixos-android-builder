@@ -38,8 +38,22 @@ in
         _module.args = {
           inherit payload;
           inherit installerModules;
+          vmInstallerTarget = "/dev/vdb";
         };
       }
     ];
   };
+  installerInteractive = pkgs.testers.runNixOSTest {
+    imports = [
+      ./installer.nix
+      {
+        _module.args = {
+          inherit payload;
+          inherit installerModules;
+          vmInstallerTarget = "select";
+        };
+      }
+    ];
+  };
+
 }

@@ -2,6 +2,7 @@
   installerModules,
   payload,
   lib,
+  vmInstallerTarget,
   ...
 }:
 {
@@ -10,8 +11,10 @@
     imports = installerModules;
     config = {
       testing.initrdBackdoor = true;
-      diskInstaller.payload = lib.mkForce payload;
-      nixosAndroidBuilder.configureInstallerForVm = "/dev/vdb";
+      diskInstaller = {
+        payload = lib.mkForce payload;
+        inherit vmInstallerTarget;
+      };
     };
   };
 
@@ -42,3 +45,4 @@
       machine.shutdown()
     '';
 }
+

@@ -13,7 +13,7 @@ in
 {
   imports = [ "${modulesPath}/virtualisation/qemu-vm.nix" ];
 
-  options.nixosAndroidBuilder.configureInstallerForVm = lib.mkOption {
+  options.diskInstaller.vmInstallerTarget = lib.mkOption {
     type = lib.types.str;
     default = "select";
     internal = true;
@@ -52,7 +52,7 @@ in
               "${cfg.diskImage}"
 
             echo >&2 "Preparing ${cfg.diskImage}"
-            ${lib.getExe disk-installer.configure} set-target --target "${config.nixosAndroidBuilder.configureInstallerForVm}" --device "${cfg.diskImage}"
+            ${lib.getExe disk-installer.configure} set-target --target "${config.diskInstaller.vmInstallerTarget}" --device "${cfg.diskImage}"
           else
             echo "${cfg.diskImage} already exists, skipping creation & signing"
         fi
