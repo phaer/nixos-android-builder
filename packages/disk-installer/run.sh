@@ -97,7 +97,7 @@ fi
 
 
 install_target="$(cat /boot/install_target || true)"
-if [ -z "$install_target" ]; then
+if [ "$install_target" = "select" ]; then
     own_disk="$(lsblk -npo PKNAME /dev/disk/by-label/DISK-INSTAL)"
     install_target="$(select_disk "$own_disk")"
 fi
