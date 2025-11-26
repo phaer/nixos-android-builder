@@ -84,9 +84,6 @@
       import subprocess
       env = os.environ.copy()
 
-      # Use world-readable, throw-away test keys to sign the writable image
-      # copy used for this test run.
-      env["keystore"] = "${nodes.machine.system.build.secureBootKeysForTests}"
       # Prepare the writable disk image
       subprocess.run([
         "${lib.getExe nodes.machine.system.build.prepareWritableDisk}"
