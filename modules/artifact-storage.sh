@@ -28,7 +28,6 @@ select_disk() {
         --output-fd 1 \
         --colors \
         --title "Artifact Storage" \
-        --timeout 5 \
         --default-item "${menu_options[0]}" \
         --nocancel \
         --menu "Select a disk to store build artifacts in. All existing data on it will be WIPED!" \

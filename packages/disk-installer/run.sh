@@ -64,7 +64,6 @@ select_disk() {
         --output-fd 1 \
         --colors \
         --title "Disk Selection" \
-        --timeout 5 \
         --default-item "${menu_options[0]}" \
         --nocancel \
         --menu "Select a disk to install to. All existing data on it will be WIPED!" \
