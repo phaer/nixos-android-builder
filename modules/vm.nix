@@ -76,6 +76,11 @@ in
               ${lib.getExe disk-installer.configure} sign \
                 --keystore "${config.system.build.secureBootKeysForTests}" \
                 --device "${cfg.diskImage}"
+
+              ${lib.getExe disk-installer.configure} set-storage \
+                --target "/dev/vdb" \
+                --device "${cfg.diskImage}"
+
             else
               echo "${cfg.diskImage} already exists, skipping creation & signing"
           fi

@@ -39,6 +39,7 @@ in
           inherit payload;
           inherit installerModules;
           vmInstallerTarget = "/dev/vdb";
+          vmStorageTarget = "/dev/vdc";
         };
       }
     ];

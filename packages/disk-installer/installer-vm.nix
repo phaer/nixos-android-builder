@@ -19,6 +19,12 @@ in
     internal = true;
   };
 
+  options.diskInstaller.vmStorageTarget = lib.mkOption {
+    type = lib.types.str;
+    default = "select";
+    internal = true;
+  };
+
   config = {
     virtualisation = {
       cores = 8;
@@ -53,6 +59,10 @@ in
 
             echo >&2 "Preparing ${cfg.diskImage}"
             ${lib.getExe disk-installer.configure} set-target --target "${config.diskInstaller.vmInstallerTarget}" --device "${cfg.diskImage}"
+            ${lib.optionalString (config.diskInstaller.vmStorageTarget != "select")
+              ''
+                ${lib.getExe disk-installer.configure} set-storage --target "${config.diskInstaller.vmStorageTarget}" --device "${cfg.diskImage}"
+              ''}
           else
             echo "${cfg.diskImage} already exists, skipping creation & signing"
         fi

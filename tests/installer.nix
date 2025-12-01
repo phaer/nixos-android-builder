@@ -3,6 +3,7 @@
   payload,
   lib,
   vmInstallerTarget,
+  vmStorageTarget,
   ...
 }:
 {
@@ -13,7 +14,7 @@
       testing.initrdBackdoor = true;
       diskInstaller = {
         payload = lib.mkForce payload;
-        inherit vmInstallerTarget;
+        inherit vmInstallerTarget vmStorageTarget;
       };
     };
   };
