@@ -192,6 +192,41 @@ def sign_uki(device, img_spec, key_path, cert_path, label):
         temp_path.unlink(missing_ok=True)
 
 
+def show_install_target(img_spec):
+    print("Installation target:")
+    result = subprocess.run(
+        ["mdir", "-i", img_spec, "::/install_target"],
+        capture_output=True, check=False,
+    )
+    interactive_msg = 'Interactive menu (user will select target)'
+    if result.returncode == 0:
+        target = subprocess.run(
+            ["mtype", "-i", img_spec, "::/install_target"],
+            capture_output=True, text=True
+        ).stdout.strip().replace('\r', '').replace('\n', '')
+        print(f"  {interactive_msg if target == 'select' else f'Automatic installation to: {target}'}")
+    else:
+        print(f"  {interactive_msg}")
+    print()
+
+
+def show_storage_target(img_spec):
+    print("Storage target:")
+    result = subprocess.run(
+        ["mdir", "-i", img_spec, "::/storage_target"],
+        capture_output=True, check=False,
+    )
+    if result.returncode == 0:
+        target = subprocess.run(
+            ["mtype", "-i", img_spec, "::/storage_target"],
+            capture_output=True, text=True
+        ).stdout.strip().replace('\r', '').replace('\n', '')
+        print(f"  Automatic provisioning of storage on: {target}")
+    else:
+        print(f"  Interactive menu (user will select artifact storage)")
+    print()
+
+
 def cmd_status(args):
     """Check status of installer image."""
     device = Path(args.device)
@@ -218,6 +253,7 @@ def cmd_status(args):
         if not verify_mtools_access(esp_img_spec):
             raise InstallerError("Cannot access EFI partition (invalid FAT filesystem)")
 
+        show_storage_target(esp_img_spec)
         extract_and_verify_uki(esp_img_spec, cert_path, "Payload")
     else:
         # Full installer image with nested payload
@@ -235,27 +271,14 @@ def cmd_status(args):
         if not verify_mtools_access(payload_img_spec):
             raise InstallerError("Cannot access nested EFI partition (invalid FAT filesystem)")
 
-        print("Installation target:")
-        result = subprocess.run(
-            ["mdir", "-i", installer_img_spec, "::/install_target"],
-            capture_output=True, check=False,
-        )
-        interactive_msg = 'Interactive menu (user will select target)'
-        if result.returncode == 0:
-            target = subprocess.run(
-                ["mtype", "-i", installer_img_spec, "::/install_target"],
-                capture_output=True, text=True
-            ).stdout.strip().replace('\r', '').replace('\n', '')
-            print(f"  {interactive_msg if target == 'select' else f'Automatic installation to: {target}'}")
-        else:
-            print(f"  {interactive_msg}")
-        print()
+        show_install_target(installer_img_spec)
+        show_storage_target(installer_img_spec)
 
         extract_and_verify_uki(installer_img_spec, cert_path, "Installer")
         extract_and_verify_uki(payload_img_spec, cert_path, "Payload")
 
 
-        
+
 def cmd_sign(args):
     """Sign UKI for Secure Boot."""
     keystore = get_keystore(args)
@@ -301,7 +324,7 @@ def cmd_sign(args):
             if args.auto_enroll:
                 copy_secureboot_keys(f"{device}@@{payload_offset}", keystore)
 
-            
+
 
 def cmd_set_target(args):
     """Configure installation target."""
@@ -338,6 +361,60 @@ def cmd_set_target(args):
         temp_path.unlink(missing_ok=True)
 
 
+def cmd_set_storage(args):
+    """Configure target for artifact storage."""
+    device = Path(args.device)
+    if not device.exists():
+        raise InstallerError(f"Device or image file not found: {device}")
+
+    payload_only = is_payload_only(device)
+
+    if payload_only:
+        # Payload-only image: outer EFI partition is the payload
+        print("Image type: Payload-only (no installer)\n")
+
+        esp_offset = get_partition_offset(device, UUID_EFI_SYSTEM)
+        esp_img_spec = f"{device}@@{esp_offset}"
+
+        if not verify_mtools_access(esp_img_spec):
+            raise InstallerError("Cannot access EFI partition (invalid FAT filesystem)")
+    else:
+        # Full installer image with nested payload
+        print("Image type: Installer with nested payload\n")
+
+        installer_offset = get_partition_offset(device, UUID_EFI_SYSTEM)
+        installer_img_spec = f"{device}@@{installer_offset}"
+
+        if not verify_mtools_access(installer_img_spec):
+            raise InstallerError("Cannot access EFI partition (invalid FAT filesystem)")
+
+        esp_offset = get_payload_esp_offset(device)
+        esp_img_spec = f"{device}@@{esp_offset}"
+
+        if not verify_mtools_access(esp_img_spec):
+            raise InstallerError("Cannot access nested EFI partition (invalid FAT filesystem)")
+
+    with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_target:
+        temp_target.write(args.target)
+        temp_path = Path(temp_target.name)
+
+    try:
+        if args.target == "select":
+            subprocess.run(
+                ["mdel", "-i", esp_img_spec, "::/storage_target"],
+                check=False, capture_output=True)
+            print(f"✓ Configured for interactive menu\nUser will select artifact storage target disk during boot")
+        else:
+            if subprocess.run(
+                ["mcopy", "-n", "-o", "-i", esp_img_spec, str(temp_path), "::/storage_target"],
+                check=False, capture_output=True
+            ).returncode != 0:
+                raise InstallerError("Failed to write storage target")
+            print(f"✓ Configured for automatic provisioning\n  Will provision artifact storage on: {args.target}")
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Manage installer disk images",
@@ -351,6 +428,7 @@ Examples:
     %(prog)s sign --device installer.raw --payload
     %(prog)s sign --device installer.raw --payload --no-auto-enroll
     %(prog)s set-target --device installer.raw --target select
+    %(prog)s set-storage --device installer.raw --target /dev/vdc
         """
     )
 
@@ -369,14 +447,19 @@ Examples:
                            help='Copy keystore files (PK.auth, KEK.auth, db.auth) to ESP for auto-enrollment (default: enabled)')
 
 
-    configure_parser = subparsers.add_parser('set-target', help='Configure installation target')
-    configure_parser.add_argument('--target', required=True, help='Target device (e.g., /dev/sda) or "select" for interactive')
-    configure_parser.add_argument('--device', required=True, help='Block device or disk image file')
+    target_parser = subparsers.add_parser('set-target', help='Configure installation target')
+    target_parser.add_argument('--target', required=True, help='Target device (e.g., /dev/sda) or "select" for interactive')
+    target_parser.add_argument('--device', required=True, help='Block device or disk image file')
+
+    storage_parser = subparsers.add_parser('set-storage', help='Configure target for build artifact storage')
+    storage_parser.add_argument('--target', required=True, help='Target device (e.g., /dev/sda) or "select" for interactive')
+    storage_parser.add_argument('--device', required=True, help='Block device or disk image file')
+
 
     args = parser.parse_args()
 
     try:
-        {'status': cmd_status, 'sign': cmd_sign, 'set-target': cmd_set_target}[args.command](args)
+        {'status': cmd_status, 'sign': cmd_sign, 'set-target': cmd_set_target, 'set-storage': cmd_set_storage}[args.command](args)
     except InstallerError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
