@@ -49,12 +49,16 @@ echo "Preparing artifact storage" >&4
 
 LABELED_DEVICE="/dev/disk/by-label/$DISK_LABEL"
 if [ ! -b "$LABELED_DEVICE" ]; then
-    echo "No existing, $LABELED_DEVICE found. Asking user" >&4
-    selected_disk="$(select_disk)"
-    echo "Formatting: $selected_disk" >&4
-    mkfs.ext4 -L "$DISK_LABEL" "$selected_disk"
+    echo "No existing, $LABELED_DEVICE found." >&4
+
+    artifacts_target="$(cat /boot/storage_target || true)"
+    if [ -z "$artifacts_target" ]; then
+        echo "No configured device for $LABELED_DEVICE found. Asking user" >&4
+        artifacts_target="$(select_disk)"
+    fi
+    echo "Formatting: $artifacts_target" >&4
+    mkfs.ext4 -L "$DISK_LABEL" "$artifacts_target"
 else
     echo "Found $LABELED_DEVICE, nothing to do" >&4
 fi
-
 chvt 1

@@ -92,11 +92,31 @@ in
         chvt = "${pkgs.kbd}/bin/chvt";
       };
 
+      mounts =
+        let
+          esp = config.image.repart.partitions."00-esp".repartConfig;
+        in
+        [
+          {
+            where = "/boot";
+            what = "/dev/disk/by-partlabel/${esp.Label}";
+            type = esp.Format;
+            unitConfig = {
+              DefaultDependencies = false;
+            };
+            requiredBy = [ "initrd-fs.target" ];
+            before = [ "initrd-fs.target" ];
+          }
+        ];
+
+
+
       services = {
         prepare-artifact-storage = {
           description = "Prepare unencrypted, persistent output storage";
 
           after = [
+            "boot.mount"
             "systemd-udev-settle.service"
           ];
           before = [
@@ -104,10 +124,12 @@ in
           ];
           wantedBy = [
             "initrd-switch-root.target"
+            "initrd.target"
             "rescue.target"
           ];
           requiredBy = [
             "initrd-switch-root.target"
+            "initrd.target"
             "rescue.target"
           ];
 
