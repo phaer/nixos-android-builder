@@ -49,6 +49,7 @@
       installerModules = [
         diskInstaller.module
         diskInstaller.vm
+        nixosModules.fatal-error
         {
           diskInstaller.payload = "${nixos.config.system.build.finalImage}/${nixos.config.image.filePath}";
         }

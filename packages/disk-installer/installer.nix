@@ -46,11 +46,28 @@ in
       "vfat"
       "nls_cp437"
       "nls_iso8859-1"
+
+      "uhci_hcd"
+      "ehci_hcd"
+      "xhci_hcd"
+      "xhci_pci"
+
+      "usb_storage"
+      "usbhid"
+
+      "sd_mod"
+      "sr_mod"
+
+      "vfat"
+      "nls_cp437"
+      "nls_iso8859_1"
     ];
 
-    boot.kernelParams = lib.optionals cfg.debug [
-      "rd.systemd.debug_shell=tty1"
-    ];
+    boot.kernelParams = [
+      "console=tty1"
+    ] ++ (lib.optionals cfg.debug [
+      "rd.systemd.debug_shell=tty3"
+    ]);
 
     image.repart = {
 
