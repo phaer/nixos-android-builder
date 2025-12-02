@@ -136,7 +136,7 @@ def copy_secureboot_keys(img_spec, keystore):
 
 
     subprocess.run(
-        ["mmd", "-i", img_spec, "::/KEYS"],
+        ["mmd", "-i", img_spec, "-D", "s", "::/KEYS"],
         check=False, capture_output=True
     )
 
@@ -153,7 +153,7 @@ def copy_secureboot_keys(img_spec, keystore):
         )
         if result.returncode != 0:
             raise InstallerError(f"Failed to copy {filename} to ESP")
-        print(f"✓ Keystore files copied to ESP")
+    print(f"✓ Keystore files copied to ESP")
 
 
 def sign_uki(device, img_spec, key_path, cert_path, label):
