@@ -109,8 +109,6 @@ in
           }
         ];
 
-
-
       services = {
         prepare-artifact-storage = {
           description = "Prepare unencrypted, persistent output storage";
