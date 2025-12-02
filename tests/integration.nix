@@ -1,10 +1,10 @@
-{ modules, lib, ... }:
+{ imageModules, lib, ... }:
 {
   name = "nixos-android-builder-integration-test";
   nodes.machine =
     { ... }:
     {
-      imports = modules;
+      imports = imageModules;
       config = {
         # Decrease resource usage for VM tests a bit as long as we are not actually
         # building android as part of the test suite.
@@ -84,9 +84,6 @@
       import subprocess
       env = os.environ.copy()
 
-      # Use world-readable, throw-away test keys to sign the writable image
-      # copy used for this test run.
-      env["keystore"] = "${nodes.machine.system.build.secureBootKeysForTests}"
       # Prepare the writable disk image
       subprocess.run([
         "${lib.getExe nodes.machine.system.build.prepareWritableDisk}"

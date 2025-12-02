@@ -60,15 +60,19 @@ select_disk() {
     fi
 
     selected_disk="$(
-    dialog 3>&1 1>&2 2>&3 \
+    dialog \
+        --output-fd 1 \
         --colors \
         --title "Disk Selection" \
+        --default-item "${menu_options[0]}" \
         --nocancel \
         --menu "Select a disk to install to. All existing data on it will be WIPED!" \
         20 60 10 \
         "${menu_options[@]}"
     )"
-
+    if [ -z "$selected_disk" ]; then
+        selected_disk="${menu_options[0]}"
+    fi
     echo "$selected_disk"
 }
 
@@ -78,34 +82,23 @@ exec 5> >(systemd-cat -p err)
 
 echo -e "\nDisk Installer\n" >&4
 
-
-
-if [ ! -f /boot/install_target ]; then
-  echo "/boot/install_target not found." >&5
-  exit 0
-fi
-
 if [ ! -t 1 ]; then
     echo "stdout is NOT a tty" | tee /run/fatal-error >&5
     exit 1
 fi
 
-install_source="$(
-  lsblk --json --output NAME,MOUNTPOINT,PKNAME | jq -r '
-    .. | objects | select(.mountpoint=="/boot") |
-    "/dev/\(if .pkname then .pkname else .name end)"
-  '
-)"
-install_source_size="$(lsblk --raw --noheadings --nodeps --output SIZE "$install_source")"
-if [ ! -b "$install_source" ]; then
-  echo "ERROR: installation source \"$install_source\" is not a block device." | tee /run/fatal-error >&5
+
+echo "Using $INSTALL_SOURCE as installation source" >&4
+if [ ! -b "$INSTALL_SOURCE" ]; then
+  echo "ERROR: installation source \"$INSTALL_SOURCE\" is not a block device." | tee /run/fatal-error >&5
   exit 1
 fi
-echo "Using $install_source as installation source" >&4
 
-install_target="$(cat /boot/install_target)"
-if [ "$install_target" = "select" ]; then
-    install_target="$(select_disk "$install_source")"
+
+install_target="$(cat /boot/install_target || true)"
+if [ "$install_target" = "select" ] || [ -z "$install_target" ]; then
+    own_disk="$(lsblk -npo PKNAME /dev/disk/by-label/DISK-INSTAL)"
+    install_target="$(select_disk "$own_disk")"
 fi
 
 if [ ! -b "$install_target" ]; then
@@ -113,43 +106,29 @@ if [ ! -b "$install_target" ]; then
   exit 1
 fi
 
-intro_msg="About to install from $install_source to $install_target"
+intro_msg="About to install from $INSTALL_SOURCE to $install_target"
 echo  "$intro_msg" >&4
 if ! dialog --colors --pause "$intro_msg" 10 40 3; then
     echo "User cancelled installation." | tee /run/fatal-error >&5
     exit 1
 fi
 
-echo "removing /boot/install_target" >&4
-rm /boot/install_target
+echo "ensuring that $install_target >= $INSTALL_SOURCE." >&4
 
-echo "unmounting /boot before copying" >&4
-systemctl stop boot.mount
+INSTALL_SOURCE_size=$(lsblk -bno SIZE -J "$INSTALL_SOURCE" | jq -r '.blockdevices[0].size')
+install_target_size=$(lsblk -bno SIZE -J "$install_target" | jq -r '.blockdevices[0].size')
 
-echo "ensuring that $install_target >= $install_source." >&4
-if ! out=$(lsblk --bytes --json "$install_source" "$install_target" \
-  | jq -e --arg src "${install_source#/dev/}" --arg tgt "${install_target#/dev/}" '
-    .blockdevices
-    | map({(.name): .size})
-    | add
-    | {src: (.[ $src ]/1024/1024/1024 | round),
-       tgt: (.[ $tgt ]/1024/1024/1024 | round)}
-    | if .tgt >= .src then
-        "Target disk is big enough: \($tgt) (\(.tgt) GB) >= \($src) (\(.src) GB)"
-      else
-        error("\($tgt) (\(.tgt) GB) < \($src) (\(.src) GB)")
-      end
-  ' 2>&1); then
-  echo "ERROR: $install_target too small: $out" | tee /run/fatal-error >&5
-  exit 1
+if [ "$install_target_size" -lt "$INSTALL_SOURCE_size" ]; then
+    echo "Error: $install_target ($install_target_size) is smaller than $INSTALL_SOURCE ($INSTALL_SOURCE_size)" >&5
+    exit 1
 else
-  echo "$out" >&4
+    echo "OK: $install_target is at least as large as $INSTALL_SOURCE" >&4
 fi
 
-msg_copy="Copying source disk $install_source to target disk $install_target"
+msg_copy="Copying source disk $INSTALL_SOURCE to target disk $install_target"
 echo $msg_copy >&4
-ddrescue -f -v "$install_source" "$install_target" 2>&1 \
-    | ddrescue2gauge "$install_source_size" \
+ddrescue -f -v "$INSTALL_SOURCE" "$install_target" 2>&1 \
+    | ddrescue2gauge "$(lsblk -no SIZE "$INSTALL_SOURCE")" \
     | dialog --colors --title "$msg_copy" --gauge "Starting..." 16 60 10
 
 

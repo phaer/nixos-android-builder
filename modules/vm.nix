@@ -33,10 +33,14 @@ in
       useDefaultFilesystems = false;
 
       # Start a headless VM with serial console.
-      graphics = false;
+      graphics = true;
 
       # Use a raw image, not image for the vm (for easier post-processing with mtools & such).
       diskImage = config.image.fileName;
+
+      emptyDiskImages = lib.optionals config.nixosAndroidBuilder.artifactStorage.enable [
+        (1024 * 10)
+      ];
     };
 
     # Create a set of private keys for VM tests, but cache them in the /nix/store,
@@ -68,12 +72,15 @@ in
                 "${cfg.diskImage}" \
                 "${toString cfg.diskSize}M"
 
-              echo >&2 "Signing UKI in ${cfg.diskImage}"
-              export keystore="${config.system.build.secureBootKeysForTests}"
-              bash ${lib.getExe secureBootScripts.sign-disk-image} "${cfg.diskImage}"
-              ${lib.optionalString ((builtins.length cfg.emptyDiskImages) >= 1) ''
-                bash ${lib.getExe disk-installer.configure} "${cfg.diskImage}" "/dev/vdb"
-              ''}
+              echo >&2 "Preparing ${cfg.diskImage}"
+              ${lib.getExe disk-installer.configure} sign \
+                --keystore "${config.system.build.secureBootKeysForTests}" \
+                --device "${cfg.diskImage}"
+
+              ${lib.getExe disk-installer.configure} set-storage \
+                --target "/dev/vdb" \
+                --device "${cfg.diskImage}"
+
             else
               echo "${cfg.diskImage} already exists, skipping creation & signing"
           fi

@@ -12,13 +12,14 @@ let
       /sys/firmware/efi/efivars/ \
       \( -name "db-*" -o -name "KEK-*" \) \
       -exec chattr -i {} \;
-    esp_keystore="/boot/EFI/KEYS"
+    esp_keystore="/boot/KEYS"
     # Append the new allowed signatures, but keep Microsofts and other vendors signatures.
     efi-updatevar -a -f "$esp_keystore/db.auth" db
     # Install Key Exchange Key
     efi-updatevar -f "$esp_keystore/KEK.auth" KEK
     # Install Platform Key (Leaving setup mode and enters user mode)
     efi-updatevar -f "$esp_keystore/PK.auth" PK
+    rm -rf $esp_keystore
   '';
 
   ensureSecureBootEnrollment = pkgs.writeShellScript "ensure-secure-boot-enrollment" ''
@@ -40,7 +41,7 @@ let
       msg_error="Secure Boot is neither active nor in setup mode. Please enable it in firmware settings."
       echo "$msg_error" | systemd-cat -p crit
       echo "$msg_error" > /run/fatal-error
-      systemctl isolate fatal-error.target
+      exit 1
     fi
   '';
 
@@ -80,67 +81,26 @@ in
         }
       ];
 
-    targets.fatal-error = {
-      description = "Display a fatal error to the user";
-      unitConfig = {
-        DefaultDependencies = "no";
-        AllowIsolate = "yes";
-      };
-      wants = [ "fatal-error.service" ];
-      before = [ "initrd-root-fs.target" ];
-    };
-
     services = {
       ensure-secure-boot-enrollment = {
         description = "Ensure secure boot is active. If setup mode, enroll. if disabled, show error";
         wantedBy = [ "initrd.target" ];
         before = [
           "systemd-repart.service"
-          "disk-installer.service"
         ];
         unitConfig = {
-          AssertPathExists = "/boot/EFI/KEYS";
+          AssertPathExists = "/boot/KEYS";
           RequiresMountsFor = [
             "/boot"
           ];
           DefaultDependencies = false;
-          OnFailure = "fatal-error.target";
+          OnFailure = "emergency.target";
         };
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
           ExecStart = ensureSecureBootEnrollment;
         };
-      };
-
-      fatal-error = {
-        description = "Display a fatal error to the user";
-        unitConfig = {
-          DefaultDependencies = "no";
-        };
-        serviceConfig = {
-          Type = "oneshot";
-          RemainAfterExit = true;
-          StandardInput = "tty-force";
-          StandardOutput = "tty";
-          StandardError = "tty";
-          TTYPath = "/dev/tty2";
-          TTYReset = true;
-          Restart = "no";
-        };
-        script = ''
-          chvt 2
-          dialog \
-          --clear \
-          --colors \
-          --ok-button " Shutdown " \
-          --title "Error" \
-          --msgbox "$(cat /run/fatal-error || echo "Unknown error, please consult logs (ctrl+alt+f1)")" \
-          10 60
-
-          chvt 1
-          systemctl --no-block poweroff
-        '';
       };
     };
   };

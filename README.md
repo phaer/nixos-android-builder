@@ -69,9 +69,9 @@ Below scripts can be run from the included devshell (`nix develop`) or by using 
 ```shell-session
 # Create SecureBoot keys
 create-signing-keys
-# Build the image, sign the UKI on the images ESP partition and copy everything to the
-# repositoryes top-level directory when done.
-sign-disk-image android_builder.raw "$(nix build --no-link --print-out-paths .#image)/*.raw"
+# Build the image, copy it to the repositories top-level directory and sign the UKI on the images ESP partition.
+install -m 600 result/android-builder_25.11pre-git.raw android-builder.raw
+nix run .#configure-disk-installer -- sign --keystore ./keys  --device android-builder.raw
 ```
 
 `openssl` is used to generate new secure boot keys. The keys are stored into `$PWD/keys` directory.
