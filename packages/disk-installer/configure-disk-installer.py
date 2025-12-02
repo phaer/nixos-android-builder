@@ -315,8 +315,6 @@ def cmd_sign(args):
         if sign_installer:
             installer_offset = get_partition_offset(device, UUID_EFI_SYSTEM)
             sign_uki(device, f"{device}@@{installer_offset}", key_path, cert_path, "Installer")
-            if args.auto_enroll:
-                copy_secureboot_keys(f"{device}@@{installer_offset}", keystore)
 
         if sign_payload:
             payload_offset = get_payload_esp_offset(device)
