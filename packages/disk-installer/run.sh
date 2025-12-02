@@ -128,7 +128,7 @@ fi
 msg_copy="Copying source disk $INSTALL_SOURCE to target disk $install_target"
 echo $msg_copy >&4
 ddrescue -f -v "$INSTALL_SOURCE" "$install_target" 2>&1 \
-    | ddrescue2gauge "$INSTALL_SOURCE_size" \
+    | ddrescue2gauge "$(lsblk -no SIZE "$INSTALL_SOURCE")" \
     | dialog --colors --title "$msg_copy" --gauge "Starting..." 16 60 10
 
 
