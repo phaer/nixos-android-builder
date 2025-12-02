@@ -7,7 +7,7 @@
   ...
 }:
 {
-  name = "nixos-android-builder-installer-test";
+  name = "nixos-android-builder-installer-test-${vmInstallerTarget}";
   nodes.machine = {
     imports = installerModules;
     config = {
@@ -32,8 +32,25 @@
       machine.start()
 
       machine.wait_until_tty_matches(
+        "2", "Select a disk to install to"
+      )
+      machine.screenshot("installer.png")
+      # Press enter to confirm default disk
+      machine.send_key("\n")
+
+      machine.wait_until_tty_matches(
+        "2", "About to install from"
+      )
+      machine.screenshot("installer-confirm.png")
+      machine.wait_until_tty_matches(
+        "2", "Copying source disk"
+      )
+      machine.screenshot("installer-copying.png")
+
+      machine.wait_until_tty_matches(
         "2", "Please remove the installation media"
       )
+      machine.screenshot("installer-done.png")
       machine.send_key("\n")
 
       machine.shutdown()
@@ -46,6 +63,14 @@
       ], cwd=machine.state_dir)
 
       machine.start()
+
+      machine.wait_until_tty_matches(
+        "2", "Select a disk to store build artifacts in"
+      )
+      machine.screenshot("installer-artifacts.png")
+      machine.send_key("down")
+      machine.send_key("\n")
+
       machine.switch_root()
       machine.wait_for_unit("multi-user.target")
       machine.shutdown()

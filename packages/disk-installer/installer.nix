@@ -64,8 +64,12 @@ in
     ];
 
     boot.kernelParams = [
+      "systemd.show_status=true"
+      "systemd.log_level=info"
+      "systemd.log_target=console"
       "console=tty1"
-    ] ++ (lib.optionals cfg.debug [
+    ]
+    ++ (lib.optionals cfg.debug [
       "rd.systemd.debug_shell=tty3"
     ]);
 
@@ -165,6 +169,7 @@ in
             Type = "oneshot";
             RemainAfterExit = true;
             StandardInput = "tty-force";
+            TTYVHangup = true;
             StandardOutput = "tty";
             StandardError = "tty";
             TTYPath = "/dev/tty2";

@@ -15,6 +15,7 @@ let
           ];
           config.testing = {
             backdoor = true;
+            initrdBackdoor = true;
           };
         }
       )
@@ -46,12 +47,13 @@ in
   };
   installerInteractive = pkgs.testers.runNixOSTest {
     imports = [
-      ./installer.nix
+      ./installer-interactive.nix
       {
         _module.args = {
           inherit payload;
           inherit installerModules;
           vmInstallerTarget = "select";
+          vmStorageTarget = "select";
         };
       }
     ];
