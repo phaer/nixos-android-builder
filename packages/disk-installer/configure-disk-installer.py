@@ -296,8 +296,8 @@ def cmd_sign(args):
         raise InstallerError("Missing db.key or db.crt in keystore")
 
     payload_only = is_payload_only(device)
-    sign_installer = args.installer
-    sign_payload = args.payload or not sign_installer
+    sign_installer = (not payload_only) and (args.installer or (not args.payload and not args.installer))
+    sign_payload = args.payload or (not args.payload and not args.installer)
 
     if payload_only:
         # Payload-only image
@@ -439,8 +439,8 @@ Examples:
     sign_parser = subparsers.add_parser('sign', help='Sign UKI for Secure Boot')
     sign_parser.add_argument('--keystore', help='Directory containing db.key and db.crt (overrides KEYSTORE env var)')
     sign_parser.add_argument('--device', required=True, help='Block device or disk image file')
-    sign_parser.add_argument('--installer', action='store_true', help='Sign installer UKI')
-    sign_parser.add_argument('--payload', action='store_true', help='Sign payload UKI (default if no flags specified)')
+    sign_parser.add_argument('--installer', action='store_true', help='Sign only installer UKI')
+    sign_parser.add_argument('--payload', action='store_true', help='Sign only payload UKI')
     sign_parser.add_argument('--auto-enroll', action=argparse.BooleanOptionalAction, default=True,
                            help='Copy keystore files (PK.auth, KEK.auth, db.auth) to ESP for auto-enrollment (default: enabled)')
 
