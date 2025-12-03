@@ -43,6 +43,7 @@
     boot.kernelParams = [
       "systemd.show_status=true"
       "systemd.log_level=info"
+      "rd.systemd.debug_shell=tty3"
     ];
 
     # Add grep to the initrd. Feel free to remove, this just makes
