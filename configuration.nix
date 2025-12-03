@@ -3,7 +3,6 @@
   system.name = "android-builder";
 
   nixosAndroidBuilder = {
-    debug = true;
 
     artifactStorage = {
       enable = true;
