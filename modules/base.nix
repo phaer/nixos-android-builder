@@ -43,8 +43,9 @@
     hardware.enableRedistributableFirmware = true;
     hardware.enableAllHardware = true;
 
-    # Console on tty1 for bare-metal and serial output for VMS.
+    # Console on tty1 for bare-metal
     boot.kernelParams = [
+      "systemd.log_target=console"
       "console=tty1"
     ]
     ++ (lib.optional (
