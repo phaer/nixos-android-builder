@@ -11,6 +11,12 @@
       ];
     };
 
+    unattendedSteps = [
+      "fetch-android"
+      "build-android"
+      "copy-android-outputs"
+    ];
+
     build = {
       repoManifestUrl = "https://android.googlesource.com/platform/manifest";
       repoBranch = "android-latest-release";
