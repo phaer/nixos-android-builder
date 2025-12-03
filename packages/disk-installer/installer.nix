@@ -53,7 +53,10 @@ in
       "xhci_pci"
 
       "usb_storage"
+      "uas"
       "usbhid"
+      "thunderbolt"
+      "nvme"
 
       "sd_mod"
       "sr_mod"
