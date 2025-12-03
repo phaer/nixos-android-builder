@@ -51,6 +51,33 @@
       pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64
     ) "console=ttyAMA0,115200");
 
+    # Ensure kernel modules for various storage backends are enabled in initrd
+    boot.initrd.kernelModules = [
+      "virtio_blk"
+      "virtio_pci"
+      "vfat"
+      "nls_cp437"
+      "nls_iso8859-1"
+
+      "uhci_hcd"
+      "ehci_hcd"
+      "xhci_hcd"
+      "xhci_pci"
+
+      "usb_storage"
+      "uas"
+      "usbhid"
+      "thunderbolt"
+      "nvme"
+
+      "sd_mod"
+      "sr_mod"
+
+      "vfat"
+      "nls_cp437"
+      "nls_iso8859_1"
+    ];
+
     # Define a stateVersion to supress eval warnings. As we don't keep state, it's irrelevant.
     system.stateVersion = "25.05";
   };
