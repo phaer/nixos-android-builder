@@ -68,7 +68,7 @@ Under the hood, the image itself is built by `systemd-repart`, using NixOS modul
 `systemd-repart` is called twice during build-time:
 
 1. While building `system.build.intermediateImage`:
-  A first image is built, it contains the `store` partition, populated with our NixOS closure as well as minimal `var-lib` partition.
+  A first image is built, it contains the `store` partition, populated with our NixOS closure as well as minimal `var-lib-build` partition.
   `boot` and `store-verity` remain empty during this step.
 
 2. While building `system.build.finalImage`:
@@ -77,7 +77,7 @@ Under the hood, the image itself is built by `systemd-repart`, using NixOS modul
 
 3. The image then needs to be signed with a script outside a `nix` build process (to avoid leaking keys into the world-readable `/nix/store`. No `systemd-repart` is involved in this step. Instead we use `mtools` to read the `UKI` from the image, sign it and - together with Secure Boot update bundles, write it back to `boot` inside the image.
 
-4. Finally, `systemd-repart` is called once more during run-time, in early boot at the start of `initrd`: The minimal `var-lib` partition, created in the first step above, is resized and encrypted with a new random key on each boot. That
+4. Finally, `systemd-repart` is called once more during run-time, in early boot at the start of `initrd`: The minimal `var-lib-build` partition, created in the first step above, is resized and encrypted with a new random key on each boot. That
 key is generated just before `systemd-repart` in our custom `generate-disk-key.service`.
 
 ### Disk Layout
@@ -87,12 +87,12 @@ key is generated just before `systemd-repart` in our custom `generate-disk-key.s
 | **00‑esp**          | `boot`         | `vfat`           | `/boot`    |
 | **10‑store‑verity** | `store-verity` | `dm-verity hash` | `n/a`       |
 | **20‑store**        | `store`        | `erofs`          | `/usr`     |
-| **30‑var‑lib**      | `var-lib`      | `ext4`           | `/var/lib` |
+| **30‑var‑lib-build**      | `var-lib-build`      | `ext4`           | `/var/lib/build` |
 
 - **boot** – Holds the signed Unified Kernel Image (`UKI`) as an `EFI` application, as well as Secure Boot update bundles for enrollment. The partition itself is unsigned and mounted read‑only during boot.
 - **store-verity** – Stores the `dm‑verity` hash for the `/usr` partition. The hash is passed as `usrhash` in the kernel command line, which is signed as part of the `UKI`.
 - **store** – Contains the read-only Nix store,  bind‑mounted into `/nix/store` in the running system. The integrity of `/usr` is verified at runtime using `dm‑verity`.
-- **var-lib** – A minimal, ephemeral state partition. See next section below.
+- **var-lib-build** – A minimal, ephemeral state partition. See next section below.
 
 Notably, the root filesystem (`/`) is, along with an optional writable overlay of the Nix store, kept entirely in RAM (`tmpfs`) and therefore not present in the image.
 There's also no boot loader, because the `UKI` acts as an `EFI` application and is directly loaded by the hosts firmware.
@@ -189,12 +189,12 @@ Main components are:
 - **(3)** First run of `systemd-repart` (`system.build.intermediateImage`):
   - Starts from a blank disk image.
   - Store paths from the NixOS closure are copied into the newly `store` partition.
-  - `esp`, `store-verity` and `var-lib` are created but stay empty for the moment.
+  - `esp`, `store-verity` and `var-lib-build` are created but stay empty for the moment.
 - **(4)** With a filled store partition, `dm-verity` hashes can be calculated.
   So we build a new `UKI`, taking kernel & initrd from the NixOS closure and adding the root hash of the `dm-verity` merkle tree to the kernels command line as `usrhash`.
 - **(5)** Second run of `systemd-repart` (`system.build.finalImage`):
   - Starts from the intermediate image from step **(3)**.
-  - The `store` and `var-lib` partitions are copied as-is.
+  - The `store` and `var-lib-build` partitions are copied as-is.
   - `dm-verity` hashes are written to the `store-verity` partition.
   - The unsigned `UKI` from step **(4)** is copied into the `esp` partition.
   - With that being done, the image is built and contains our entire NixOS closure, including the `fhsenv`, in a `dm-verity`-checked store partition, as well as the `UKI` including `usrhash`.

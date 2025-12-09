@@ -40,9 +40,9 @@
             "mode=0755"
           ];
         };
-        "/var/lib" = {
+        "/var/lib/build" = {
           device = "/dev/mapper/var_lib_crypt";
-          fsType = config.systemd.repart.partitions."30-var-lib".Format;
+          fsType = config.systemd.repart.partitions."30-var-lib-build".Format;
           neededForBoot = true;
         };
         "/boot" = {
@@ -141,9 +141,9 @@
               Minimize = "best";
             };
           };
-          "30-var-lib".repartConfig = {
+          "30-var-lib-build".repartConfig = {
             Type = "var";
-            Label = "var-lib";
+            Label = "var-lib-build";
             # We want to start out with a very small partition in the image, and add
             # the real minimum size to to systemd.repart.partitions below instead,
             # in order to resize it during boot.
@@ -155,8 +155,8 @@
 
     ## Run-time configuration of systemd-repart on first boot.
     # Reuse settings of the repart-generated image file on first boot
-    systemd.repart.partitions."30-var-lib" =
-      config.image.repart.partitions."30-var-lib".repartConfig
+    systemd.repart.partitions."30-var-lib-build" =
+      config.image.repart.partitions."30-var-lib-build".repartConfig
       // {
         Format = "ext4";
         Encrypt = "key-file";
@@ -168,7 +168,7 @@
 
     boot.initrd.luks.devices."var_lib_crypt" = {
       keyFile = "/etc/disk.key";
-      device = "/dev/disk/by-partlabel/var-lib";
+      device = "/dev/disk/by-partlabel/var-lib-build";
     };
 
     boot.initrd.systemd =
@@ -216,7 +216,7 @@
           extraArgs = [
             "--key-file=/etc/disk.key"
             # --factory-reset instructs systemd-repart to reset all partitions marked with FactoryReset=true,
-            # only /var/lib in our case. The read-only partitions stay in place.
+            # only /var/lib/build in our case. The read-only partitions stay in place.
             "--factory-reset=true"
           ];
         };
@@ -262,7 +262,7 @@
               Type = "oneshot";
               RemainAfterExit = true;
               ExecStart = ''/bin/ln -sf /dev/disk/by-partlabel/${
-                config.image.repart.partitions."30-var-lib".repartConfig.Label
+                config.image.repart.partitions."30-var-lib-build".repartConfig.Label
               } /run/systemd/volatile-root'';
             };
           };
