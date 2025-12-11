@@ -83,6 +83,7 @@
             diskInstaller.configure
             docs.build-docs
             docs.watch-docs
+            pkgs.pam_u2f
           ];
         };
       };
