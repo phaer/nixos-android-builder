@@ -8,7 +8,7 @@
       config = {
         # Decrease resource usage for VM tests a bit as long as we are not actually
         # building android as part of the test suite.
-        systemd.repart.partitions."30-var-lib".SizeMinBytes = lib.mkVMOverride "10G";
+        systemd.repart.partitions."30-var-lib-build".SizeMinBytes = lib.mkVMOverride "10G";
         virtualisation = lib.mkVMOverride {
           diskSize = 30 * 1024;
           memorySize = 8 * 1024;

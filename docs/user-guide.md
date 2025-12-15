@@ -16,11 +16,11 @@ A more detailed architecture and technical description is available in [docs.pdf
     - ~4GB of memory for nix evaluation
     - ~30GB of disk space for dependencies as well as the built images
 
-  * A **USB mass storage** device, such as an USB stick, to transfer the built image to the target machine. It needs at least 8GB of storage to boot, and at least 260GB if the target machine has no other disk.
+  * A **USB mass storage** device, such as an USB stick, to transfer the built image to the target machine. It needs  about 3GB of storage to boot.
 
   * A **target machine** on which to build Android on. It needs:
     - ~64G of memory
-    - ~250G of disk space
+    - ~250G of free disk space
     - EFI boot with secure boot in setup mode
 
   * A **git checkout** of this repository, containing nix expressions and helper scripts to build the image.
@@ -124,7 +124,7 @@ $ du --human-readable --apparent-size "$(realpath result/*.raw)"
 ```
 
 ``` text
-7.9G    /nix/store/[hash]-android-builder-25.11pre-git/android-builder_25.11pre-git.raw
+2.7G    /nix/store/[hash]-android-builder-25.11pre-git/android-builder_25.11pre-git.raw
 ```
 
 (Your disk image’s size may be slightly different than this example)
@@ -133,84 +133,29 @@ $ du --human-readable --apparent-size "$(realpath result/*.raw)"
 
 With our disk image built, we still need to sign it for secure boot, as it still contains an unsigned `UKI` on its EFI System Partition (`ESP`).
 
-`sign-disk-image` signs that `UKI` with the keys generated earlier and copies secure boot update bundles into the image so that the firmware can enroll them automatically.
+`configure-disk-image sign` signs that `UKI` with the keys generated earlier and copies secure boot update bundles into the image so that the firmware can enroll them automatically.
 
-`sign-disk-image` deliberately runs outside the nix sandbox in order to be able to access our keys in `keys/` without copying them to the world-readable `/nix/store`.
-So the script starts by copying the image out of the nix store to a temporary file, before signing the `UKI`, copying secure boot update bundles, and - finally moving
-the image to your current working directory.
+`configure-disk-image sign` deliberately runs outside the nix sandbox in order to be able to access our keys in `keys/` without copying them to the world-readable `/nix/store`.
+
+So we start by copying the image out of the nix store to our current working directory, before signing the `UKI` and copying secure boot update bundles.
 
 To sign your image, run:
 
 ```bash
-$ nix run .#sign-disk-image ./result/*.raw
+$ install -m 600 result/android-builder_25.11pre-git.raw .
+$ nix run .#configure-disk-image -- sign --keystore ./keys  --device android-builder_25.11pre-git.raw
 ```
 
 ``` text
-Using keystore /home/user/src/android-build-vm/keys.
-Copying result/android-builder_25.11pre-git.raw to /tmp/tmp.2Aie6kmiwfandroid-builder.raw
-Searching ESP partition offset in /tmp/tmp.2Aie6kmiwfandroid-builder.raw
-Copying EFI/BOOT/BOOTX64.EFI from the image to /tmp/tmp.qF9j1K2BOAefi/EFI/BOOT/BOOTX64.EFI
-Signing /tmp/tmp.qF9j1K2BOAefi/EFI/BOOT/BOOTX64.EFI
-Signing Unsigned original image
-Copying /tmp/tmp.qF9j1K2BOAefi/EFI/BOOT/BOOTX64.EFI back to the image, into EFI/BOOT/BOOTX64.EFI
-Copying certificates from /home/user/src/android-build-vm/keys to the image, into EFI/KEYS
-Moving the image from /tmp/tmp.2Aie6kmiwfandroid-builder.raw to /home/user/src/android-build-vm/android-builder_25.11pre-git.raw
-Done. You can now flash the signed image:
-/home/user/src/android-build-vm/android-builder_25.11pre-git.raw
+Extracting payload UKI...
+Signing payload UKI with Secure Boot key...
+Writing signed payload UKI back...
+✓ Payload UKI signed successfully
+Copying keystore files for auto-enrollment...
+✓ Keystore files copied to ESP
 ```
 
-After this step, a `.raw` disk image with the same name `android-builder_25.11pre-git.raw` should show up in the repository’s top-level directory.
-
-Ready to be flashed to a block device in the next step!
-
-## Optional: Configure the disk-installer
-
-Each NixOS Android builder image contains an optional installer mode during early boot, that clones itself to another disk.
-This can be used to flash the image to a USB device on your local machine before booting from that device in installer mode on
-the target machine.
-
-To configure a given image to clone itself to `/dev/sda` on first boot:
-
-```shell-session
-$ nix run .#configure-disk-installer android-builder_25.11pre-git.raw /dev/sda
-Searching ESP partition offset in android-builder_25.11pre-git.raw
-Configuring installer in android-builder_25.11pre-git.raw
-Copying install_target
-Done. Image will be copied to /dev/sda upon boot.
-```
-
-The first argument can be either a disk image, or a block device if the image has already been flashed.
-The second argument can be:
-
-* a device path on the target machine.
-* "select" to start an interactive menu during boot.
-* "none" to skip the installer an just boot the image directly.
-
-If the second argument is not given at all, the current configuration will be shown.
-
-```shell-session
-$ nix run .#configure-disk-installer /dev/sdd select
-Target is a block device, but we are not root. Running sudo
-Searching ESP partition offset in /dev/sdd
-Configuring installer in /dev/sdd
-Copying install_target
-Done. Image will offer an interactive menu for the installer upon boot.
-
-$ nix run .#configure-disk-installer /dev/sdd none
-Target is a block device, but we are not root. Running sudo
-Searching ESP partition offset in /dev/sdd
-Deactivating installer in /dev/sdd
-Done. Image will boot without running the installer
-
-$ nix run .#configure-disk-installer /dev/sdd
-Target is a block device, but we are not root. Running sudo
-[sudo] password for user:
-Searching ESP partition offset in /dev/sdd
-/dev/sdd will not run the installer
-```
-
-Once the installer has been configured, it can be booted as normal but will reset itself after each installation.
-
+After this step, `android-builder_25.11pre-git.raw` in the repository’s top-level directory is ready to be flashed to a block device in the next step!
 
 ## Flash the Image
 
@@ -227,10 +172,6 @@ $ sudo dd \
   if=android-builder_25.11pre-git.raw \
   of=/dev/sdX
 $ sudo sync
-```
-
-``` text
-8470429696 bytes (8.5 GB, 7.9 GiB) copied, 14.9754 s, 566 MB/s
 ```
 
 Replace `/dev/sdX` with the path to your removable device (e.g. `/dev/disk/by-id/...`).
@@ -408,15 +349,18 @@ SOONG_ONLY=false
 All build outputs, logs and images can be found in `/var/lib/build/source/out` once the build has finished.
 Images in particular are in `out/target/product`, logs in `error.log` and `verbose.log.gz`.
 
-Since the outputs are still stored on the ephemeral `/var/lib` partition at the moment, they will effectively be deleted when the target machine shuts down for any reason.
+Since the outputs are still stored on the ephemeral `/var/lib/build` partition at the moment, they will effectively be deleted when the target machine shuts down for any reason.
+To keep them available between boots, users may set `nixosAndroidBuilder.artifactStorage.enable = true` in which case they will be prompted for a second disk during boot. That second disk can be used to store built outputs persistently, e.g. by uysing the included `copy-android-outputs` script.
+
+
 Copying them to a remote or local persistent storage medium is left to the user at this time.
 
 ## Reset to Initial State
 
 To start a fresh build, simply reboot.
 
-Shutting down the machine, even sudden power loss, will flush the disk encryption key from RAM and render all previous build artifacts inaccessible.
-Upon reboot, the `/var/lib` partition will be re-formatted and re-encrypted.
+Shutting down the machine, even sudden power loss, will flush the disk encryption key from RAM and render all previous build artifacts - except those explicitly copied to `/var/lib/artifacts` - inaccessible.
+Upon reboot, the `/var/lib/build` partition will be re-formatted and re-encrypted.
 
 To reboot, use your machine’s physical power buttons or run the following in a shell:
 
@@ -439,6 +383,72 @@ $ nix flake update
 After updating, (re-)builds of the image will use the latest packages from the tracked `nixpkgs` branch - currently the rolling-release branch `nixos-unstable`.
 
 To catch possible regression bugs early, we do recommend to run at least the `integration` test as described in [Automated Tests](#automated-tests) below.
+
+# Disk Installer {#disk-installer}
+
+NixOS Android builder image includes an optional disk installer image that can be used to flash the image to a USB device on your local machine before booting from that device on the target machine.
+
+The installer is a disk image that contains a minimal `ESP` partition plus a second partition, `payload` that contains the actual NixOS Android builder image. Upon boot, the `payload` will be flashed to a local disk. Either pre-configured or selected interactively by the user.
+
+To build an installer image & copy it to your current working directory, run:
+
+``` shell-session
+$ nix build -L .#installer-image
+$ install -m 600 result/disk-installer.raw .
+```
+
+To sign both the installer & its included payload for Secure Boot, run:
+
+``` shell-session
+$ nix run .#configure-disk-image -- sign --keystore ./keys  --device disk-installer.raw
+Extracting installer UKI...
+Signing installer UKI with Secure Boot key...
+Writing signed installer UKI back...
+✓ Installer UKI signed successfully
+Extracting payload UKI...
+Signing payload UKI with Secure Boot key...
+Writing signed payload UKI back...
+✓ Payload UKI signed successfully
+Copying keystore files for auto-enrollment...
+✓ Keystore files copied to ESP
+```
+
+To configure an installer to install the payload to `/dev/sda` on first boot:
+
+```shell-session
+$  nix run .#configure-disk-image -- set-target --target /dev/vda --device disk-installer.raw
+✓ Configured installer image for automatic installation
+  Will install to: /dev/vda
+```
+
+`device` can be either a disk image, or a block device if the image has already been flashed.
+`target` can either be `select` to let the user select a disk interactively, or a device path on the target machine to install to that device without user input.
+
+```shell-session
+$ nix run .#configure-disk-image -- set-target --target select --device disk-installer.raw
+✓ Configured installer image for interactive installation
+  User will select target disk during boot
+```
+
+There's also a `status` sub-command to check the current configuration and Secure Boot status of a given device or image:
+
+``` shell-session
+nix run .#configure-disk-image -- status --keystore ./keys --device disk-installer.raw
+Image type: Installer with nested payload
+
+Installation target:
+  Interactive menu (user will select target)
+
+Storage target:
+  Interactive menu (user will select artifact storage)
+
+Installer Secure Boot status:
+  ✓ Signed and verified
+
+Payload Secure Boot status:
+  ✓ Signed and verified
+```
+
 
 # Automated Tests {#automated-tests}
 
@@ -515,6 +525,24 @@ kill vlan (pid 7)
 ```
 
 Note that the test are only run again if inputs did change since the last run.
+
+There's additional VM tests in the repository cover the the disk installer, see:
+
+``` shell-session
+$ nix build -L .#checks.x86_64-linux.installer .#checks.x86_64-linux.installerInteractive
+
+```
+
+# Usage in a Virtual Machine {#virtual-machine}
+
+It is possible to test the whole setup in a [qemu](http://qemu.org/) virtual machine using Nix (currently only tested from `x86_64-linux`):
+
+```shell-session
+nix run .#run-vm
+```
+
+This will create a writable copy of the read-only disk image, e.g. `android-builder_25.11pre-git.raw` in the local directory and sign ith with a pair of test keys,
+before starting a head-less VM with a console in the current terminal. Use `Ctrl-A x` or `systemctl poweroff` to stop the VM.
 
 # Customization {#customization}
 
