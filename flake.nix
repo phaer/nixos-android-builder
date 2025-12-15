@@ -95,7 +95,7 @@
           installer-vm
           ;
         inherit (secureBootScripts) create-signing-keys sign-disk-image;
-        configure-disk-installer = diskInstaller.configure;
+        configure-disk-image = diskInstaller.configure;
         default = image;
       };
 

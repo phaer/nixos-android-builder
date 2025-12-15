@@ -16,7 +16,7 @@
   # Python script to be run on the local machine in order to
   # pre-configure the installer for unattended installation
   # and sign UKIs
-  configure = writers.writePython3Bin "configure-disk-installer" {
+  configure = writers.writePython3Bin "configure-disk-image" {
     makeWrapperArgs = [
       "--prefix PATH : ${
         lib.makeBinPath [
@@ -26,7 +26,7 @@
         ]
       }"
     ];
-  } (builtins.readFile ./configure-disk-installer.py);
+  } (builtins.readFile ./configure-disk-image.py);
 
   # Shell script that runs during early-boot from initrd and
   # copies itself to the target disk.
