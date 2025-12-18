@@ -21,7 +21,7 @@
           "kvm"
           "wheel"
         ];
-        home = "/var/lib/build";
+        home = "/home/user";
         createHome = true;
       };
       groups.user = { };
