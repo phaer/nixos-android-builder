@@ -3,7 +3,6 @@
   system.name = "android-builder";
 
   nixosAndroidBuilder = {
-    debug = true;
 
     artifactStorage = {
       enable = true;
@@ -11,6 +10,16 @@
         "target/product/*"
       ];
     };
+
+    # To get a public key, attach your yubikey and run the following command on the host:
+    # pamu2fcfg -N --pin-verification -i "pam://nixos-android-builder" -o "pam://nixos-android-builder" -u "user"
+    yubikeys = [
+    ];
+    unattendedSteps = [
+      "fetch-android"
+      "build-android"
+      "copy-android-outputs"
+    ];
 
     build = {
       repoManifestUrl = "https://android.googlesource.com/platform/manifest";

@@ -83,6 +83,10 @@
         };
       };
 
+    systemd.tmpfiles.rules = [
+      "z /var/lib/build 0700 user user - -"
+    ];
+
     ## Build-time configuration of systemd-repart during image build
     image = {
       repart = {
@@ -94,6 +98,8 @@
           "-zlz4"
           "-Efragments,ztailpacking"
         ];
+
+        mkfsOptions.ext4 = [ "-Eroot_owner=1000:1000" ];
 
         # OVMF does not work with the default repart sector size of 4096
         sectorSize = 512;

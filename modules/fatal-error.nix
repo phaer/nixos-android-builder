@@ -42,6 +42,13 @@ let
         TTYReset = true;
         Restart = "no";
       };
+
+      path = [
+        pkgs.dialog
+        pkgs.kbd
+        pkgs.systemd
+      ];
+
       script = ''
         chvt 2
 
@@ -63,6 +70,18 @@ let
   };
 in
 {
-  boot.initrd.systemd = { inherit targets services; };
-  systemd = { inherit targets services; };
+  boot.initrd.systemd = {
+    inherit targets services;
+    extraBin = {
+      dialog = "${pkgs.dialog}/bin/dialog";
+      chvt = "${pkgs.kbd}/bin/chvt";
+    };
+  };
+  systemd = {
+    inherit targets services;
+  };
+  environment.systemPackages = [
+    pkgs.dialog
+    pkgs.kbd
+  ];
 }

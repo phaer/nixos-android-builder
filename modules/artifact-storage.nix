@@ -13,9 +13,6 @@ let
     SOURCE_DIR='${config.nixosAndroidBuilder.build.sourceDir}'
     ARTIFACT_DIR="${cfg.artifactDir}"
 
-    mkdir -p $SOURCE_DIR/out/foo/
-    echo "Hello" > $SOURCE_DIR/out/foo/bar
-
     find_expr=()
     while IFS= read -r pattern; do
       [[ -z "$pattern" || "$pattern" =~ ^# ]] && continue
