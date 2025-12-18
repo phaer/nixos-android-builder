@@ -25,9 +25,16 @@
       };
     };
 
-    security.pam.services.login = {
-      u2fAuth = true;
-      unixAuth = false; # Disable password authentication
+    security.pam.services = {
+      su = {
+        u2fAuth = true;
+        unixAuth = false; # Disable password authentication
+      };
+
+      login = {
+        u2fAuth = true;
+        unixAuth = false; # Disable password authentication
+      };
     };
 
     # allow no passwords set.
