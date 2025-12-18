@@ -39,6 +39,11 @@ let
     systemctl poweroff
   '';
 
+  test-output = pkgs.writeShellScriptBin "test-output" ''
+    set -euo pipefail
+    mkdir -p /var/lib/build/source/out/target/product/
+    echo "Hello World" > /var/lib/build/source/out/target/product/greeting
+  '';
 in
 {
   options.nixosAndroidBuilder.unattendedSteps = lib.mkOption {
@@ -70,6 +75,7 @@ in
       disable-usb-guard
       lock-var-lib-build
       start-shell
+      test-output
     ];
 
     # disable gettty on tty1 and 2 (logins on tty)
