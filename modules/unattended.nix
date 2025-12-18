@@ -14,21 +14,20 @@ let
 
   lock-var-lib-build = pkgs.writeShellScriptBin "lock-var-lib-build" ''
     set -euo pipefail
-    cd /
+
     umount -v /var/lib/build
     luksDevice="$(cryptsetup status var_lib_crypt | awk '/device:/ {print $2}')"
     cryptsetup close var_lib_crypt
     cryptsetup luksKillSlot --batch-mode $luksDevice 0
-    luksKeyslots="$(doas cryptsetup luksDump $luksDevice --dump-json-metadata | jq '.keyslots | length')"
+
+    # Verify that the disk encryption key has been removed
+    luksKeyslots="$(cryptsetup luksDump $luksDevice --dump-json-metadata | jq '.keyslots | length')"
     if [ $luksKeyslots = "0" ]; then
       echo "disk encryption key deleted"
     else
       echo "not all keys were deleted, there's still $luksKeyslots keys in use" | tee /run/fatal-error
       exit 1
     fi
-
-    install -d -m 700 -o user -g user /var/lib/build
-    cd /var/lib/build
   '';
 
   start-shell = pkgs.writeShellScriptBin "start-shell" ''
