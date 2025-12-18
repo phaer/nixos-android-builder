@@ -46,6 +46,7 @@ let
       path = [
         pkgs.dialog
         pkgs.kbd
+        pkgs.systemd
       ];
 
       script = ''
