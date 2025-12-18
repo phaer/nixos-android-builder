@@ -2,7 +2,7 @@
   description = "A ephemeral NixOS VMs to build Android Open Source Project";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-25.11";
   };
 
   outputs =
