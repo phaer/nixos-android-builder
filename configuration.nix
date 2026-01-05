@@ -15,11 +15,15 @@
     # pamu2fcfg -N --pin-verification -i "pam://nixos-android-builder" -o "pam://nixos-android-builder" -u "user"
     yubikeys = [
     ];
-    unattendedSteps = [
-      "fetch-android"
-      "build-android"
-      "copy-android-outputs"
-    ];
+
+    unattended = {
+      enable = true;
+      steps = [
+        "fetch-android"
+        "build-android"
+        "copy-android-outputs"
+      ];
+    };
 
     build = {
       repoManifestUrl = "https://android.googlesource.com/platform/manifest";

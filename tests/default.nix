@@ -5,6 +5,7 @@
   nixos,
 }:
 let
+  inherit (pkgs) lib;
   nixosWithBackdoor = nixos.extendModules {
     modules = [
       (
@@ -13,9 +14,12 @@ let
           imports = [
             "${modulesPath}/testing/test-instrumentation.nix"
           ];
-          config.testing = {
-            backdoor = true;
-            initrdBackdoor = true;
+          config = {
+            testing = {
+              backdoor = true;
+              initrdBackdoor = true;
+            };
+            nixosAndroidBuilder.unattended.enable = lib.mkForce false;
           };
         }
       )
@@ -28,7 +32,9 @@ in
     imports = [
       ./integration.nix
       {
-        _module.args = { inherit imageModules; };
+        _module.args = {
+          inherit imageModules;
+        };
       }
     ];
   };
