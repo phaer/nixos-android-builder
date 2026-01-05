@@ -42,7 +42,7 @@ in
         (1024 * 10)
       ];
 
-      qemu.options = [
+      qemu.options = lib.mkIf (!config.virtualisation ? "test") [
         "-usb"
         "-device"
         "usb-host,vendorid=0x1050,productid=0x0407"
