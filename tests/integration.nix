@@ -6,6 +6,7 @@
     {
       imports = imageModules;
       config = {
+        nixosAndroidBuilder.unattended.enable = lib.mkForce false;
         # Decrease resource usage for VM tests a bit as long as we are not actually
         # building android as part of the test suite.
         systemd.repart.partitions."30-var-lib-build".SizeMinBytes = lib.mkVMOverride "10G";

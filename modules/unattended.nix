@@ -41,17 +41,21 @@ let
 
 in
 {
-  options.nixosAndroidBuilder.unattendedSteps = lib.mkOption {
-    description = "list of shell commands to run unattended ";
-    default = [
-      "fetch-android"
-      "build-android"
-      "copy-android-outputs"
-    ];
-    type = lib.types.listOf lib.types.str;
+  options.nixosAndroidBuilder.unattended = {
+    enable = lib.mkEnableOption "unattended mode";
+
+    steps = lib.mkOption {
+      description = "list of shell commands to run unattended ";
+      default = [
+        "fetch-android"
+        "build-android"
+        "copy-android-outputs"
+      ];
+      type = lib.types.listOf lib.types.str;
+    };
   };
 
-  config = {
+  config = lib.mkIf config.nixosAndroidBuilder.unattended.enable {
     security.loginDefs.settings.LOGIN_TIMEOUT = 0;
     security.sudo.enable = false;
     security.doas = {
@@ -113,7 +117,7 @@ in
       environment = {
         PATH = lib.mkForce "/run/wrappers/bin:/run/current-system/sw/bin:/bin";
         HOME = user.home;
-        STEPS = lib.concatStringsSep "," config.nixosAndroidBuilder.unattendedSteps;
+        STEPS = lib.concatStringsSep "," config.nixosAndroidBuilder.unattended.steps;
       };
 
       script = builtins.readFile ./unattended.sh;
