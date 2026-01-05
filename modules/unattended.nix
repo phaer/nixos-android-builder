@@ -77,9 +77,8 @@ in
     ];
 
     # disable gettty on tty1 and 2 (logins on tty)
-    systemd.services."autovt@".enable = false;
-    systemd.services."getty@tty1".enable = false;
-    systemd.services."getty@tty2".enable = false;
+    systemd.services."autovt@tty1".enable = false;
+    systemd.services."autovt@tty2".enable = false;
 
     # filter usb devices
     services.usbguard = {
