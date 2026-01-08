@@ -44,6 +44,7 @@
     hardware.enableAllHardware = true;
 
     # Console on tty1 for bare-metal
+    boot.consoleLogLevel = 0;
     boot.kernelParams = [
       "systemd.log_target=console"
       "console=tty1"
