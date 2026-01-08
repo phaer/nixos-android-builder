@@ -36,6 +36,7 @@ let
   start-shell = pkgs.writeShellScriptBin "start-shell" ''
     set -euo pipefail
     tput sgr0
+    tput ed
     echo "NOTE: The system will turn off after exiting this shell"
     echo "Build outputs are in /var/lib/artifacts"
     login user
