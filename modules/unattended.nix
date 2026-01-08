@@ -10,6 +10,9 @@ let
   disable-usb-guard = pkgs.writeShellScriptBin "disable-usb-guard" ''
     set -euo pipefail
     systemctl stop usbguard
+    for device in /sys/bus/usb/devices/*/authorized; do
+      echo 1 > "$device" 2>/dev/null
+    done
   '';
 
   lock-var-lib-build = pkgs.writeShellScriptBin "lock-var-lib-build" ''
