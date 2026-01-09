@@ -53,7 +53,12 @@ in
       default = [
         "fetch-android"
         "build-android"
+        "android-sbom"
+        "android-measure-source"
         "copy-android-outputs"
+        "root:lock-var-lib-build"
+        "root:disable-usb-guard"
+        "root:start-shell"
       ];
       type = lib.types.listOf lib.types.str;
     };

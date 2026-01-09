@@ -17,14 +17,7 @@
     yubikeys = [
     ];
 
-    unattended = {
-      enable = true;
-      steps = [
-        "fetch-android"
-        "build-android"
-        "copy-android-outputs"
-      ];
-    };
+    unattended.enable = true;
 
     build = {
       repoManifestUrl = "https://android.googlesource.com/platform/manifest";
