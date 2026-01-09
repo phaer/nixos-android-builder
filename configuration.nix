@@ -8,6 +8,7 @@
       enable = true;
       contents = [
         "target/product/*"
+        "source_measurement.txt"
       ];
     };
 
