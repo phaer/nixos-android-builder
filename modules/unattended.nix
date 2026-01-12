@@ -13,6 +13,9 @@ let
     for device in /sys/bus/usb/devices/*/authorized; do
       echo 1 > "$device" 2>/dev/null
     done
+    for host in /sys/bus/usb/devices/usb*/authorized_default; do
+      echo 1 > "$host"
+    done
   '';
 
   lock-var-lib-build = pkgs.writeShellScriptBin "lock-var-lib-build" ''
