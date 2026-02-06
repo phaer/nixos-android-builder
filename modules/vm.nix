@@ -41,6 +41,12 @@ in
       emptyDiskImages = lib.optionals config.nixosAndroidBuilder.artifactStorage.enable [
         (1024 * 10)
       ];
+
+      qemu.options = lib.mkIf (!config.virtualisation ? "test") [
+        "-usb"
+        "-device"
+        "usb-host,vendorid=0x1050,productid=0x0407"
+      ];
     };
 
     # Create a set of private keys for VM tests, but cache them in the /nix/store,

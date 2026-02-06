@@ -196,7 +196,8 @@
           cat <<EOF
         Usage: $0 [options] [-- ...m args...]
 
-        Output a hash over a list of root hashes from all git repositories in the checkout.
+        Output a hash over a list of root hashes from all git repositories in the checkout,
+        print them to stdout and write them to \$SOURCE_DIR/out/source_measurement.txt
 
         Options:
           --source-dir=DIR      Source directory (default: ${cfg.sourceDir})
@@ -215,13 +216,14 @@
         done
 
         cd $SOURCE_DIR
+        mkdir -p out/
 
         repo forall -c '
           git ls-files | while read file
           do
             echo "$(sha256sum "$file")"
           done
-        ' | sort | sha256sum
+        ' | sort | sha256sum | tee out/source_measurement.txt
       '';
 
     in

@@ -26,7 +26,7 @@
         ]
       }"
     ];
-  } (builtins.readFile ./configure-disk-image.py);
+  } ./configure-disk-image.py;
 
   # Shell script that runs during early-boot from initrd and
   # copies itself to the target disk.
