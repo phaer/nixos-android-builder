@@ -13,8 +13,11 @@
     };
 
     # To get a public key, attach your yubikey and run the following command on the host:
-    # pamu2fcfg -N --pin-verification -i "pam://nixos-android-builder" -o "pam://nixos-android-builder" -u "user"
-    yubikeys = [
+    # pamu2fcfg --pin-verification -i "pam://nixos-android-builder" -o "pam://nixos-android-builder" -u "user"
+    yubikeys.groupA = [
+    ];
+
+    yubikeys.groupB = [
     ];
 
     unattended.enable = true;
