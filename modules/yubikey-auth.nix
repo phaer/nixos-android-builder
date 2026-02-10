@@ -29,6 +29,26 @@
     environment.etc.u2f_mappings_groupA.text = lib.concatStringsSep "\n" config.nixosAndroidBuilder.yubikeys.groupA;
     environment.etc.u2f_mappings_groupB.text = lib.concatStringsSep "\n" config.nixosAndroidBuilder.yubikeys.groupB;
 
+    environment.systemPackages = [
+      (pkgs.writeShellScriptBin "start-shell-if-yubikey-found" ''
+        set -euo pipefail
+        ELAPSED=0
+        echo "Insert a Yubikey in the next 30 seconds to start interactive shell"
+        while [ $ELAPSED -lt 30 ]; do
+          if lsusb | grep -qi 'yubikey'; then
+            tput sgr0
+            tput ed
+            exec login user
+            tput setaf 0
+            tput setab 7
+            tput ed
+          fi
+          sleep 1
+          ELAPSED=$((ELAPSED + 1))
+        done
+      '')
+    ];
+
     security.pam.u2f = {
       enable = true;
     };
@@ -49,8 +69,8 @@
     '';
 
     security.pam.services.su = {
-        u2fAuth = true;
-        unixAuth = false; # Disable password authentication
+      u2fAuth = true;
+      unixAuth = false; # Disable password authentication
     };
 
     # allow no passwords set.
