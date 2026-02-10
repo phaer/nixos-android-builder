@@ -83,6 +83,7 @@ in
 
     environment.systemPackages = [
       pkgs.jq
+      pkgs.usbutils
       disable-usb-guard
       lock-var-lib-build
       start-shell
