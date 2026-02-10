@@ -19,6 +19,7 @@ in
       cores = 32;
 
       useSecureBoot = true;
+      tpm.enable = true;
 
       # Don't use direct boot for the VM to verify that the bootloader is working.
       directBoot.enable = false;
@@ -26,6 +27,7 @@ in
       useBootLoader = true;
       useEFIBoot = true;
       mountHostNixStore = false;
+      efi.OVMF = hostPkgs.OVMFFull;
       efi.keepVariables = false;
 
       # NixOS overrides filesystems for VMs by default
