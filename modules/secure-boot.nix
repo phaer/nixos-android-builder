@@ -49,6 +49,7 @@ in
 {
   environment.systemPackages = [
     pkgs.efitools
+    pkgs.tpm2-tools
     enroll-secure-boot
   ];
 

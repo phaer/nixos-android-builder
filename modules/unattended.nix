@@ -36,7 +36,7 @@ let
     fi
   '';
 
-  start-shell = pkgs.writeShellScriptBin "start-shell" ''
+  start-shell-and-shutdown = pkgs.writeShellScriptBin "start-shell-and-shutdown" ''
     set -euo pipefail
     tput sgr0
     tput ed
@@ -45,7 +45,6 @@ let
     login user
     systemctl poweroff
   '';
-
 in
 {
   options.nixosAndroidBuilder.unattended = {
@@ -54,6 +53,7 @@ in
     steps = lib.mkOption {
       description = "list of shell commands to run unattended ";
       default = [
+        "root:start-shell-if-yubikey-found"
         "fetch-android"
         "build-android"
         "android-sbom"
@@ -61,7 +61,7 @@ in
         "copy-android-outputs"
         "root:lock-var-lib-build"
         "root:disable-usb-guard"
-        "root:start-shell"
+        "root:start-shell-and-shutdown"
       ];
       type = lib.types.listOf lib.types.str;
     };
@@ -83,9 +83,10 @@ in
 
     environment.systemPackages = [
       pkgs.jq
+      pkgs.usbutils
       disable-usb-guard
       lock-var-lib-build
-      start-shell
+      start-shell-and-shutdown
     ];
 
     # disable gettty on tty1 and 2 (logins on tty)
