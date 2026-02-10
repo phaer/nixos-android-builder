@@ -59,7 +59,9 @@
 
       # Authentication management.
       auth required ${pkgs.pam_u2f}/lib/security/pam_u2f.so authfile=/etc/u2f_mappings_groupA interactive [prompt=Insert Yubikey for Group A, then press Enter before touching that Yubikey.] origin=pam://nixos-android-builder appid=pam://nixos-android-builder
-      auth required ${pkgs.pam_u2f}/lib/security/pam_u2f.so authfile=/etc/u2f_mappings_groupB interactive [prompt=Insert Yubikey for Group B, then press Enter before touching that Yubikey.] origin=pam://nixos-android-builder appid=pam://nixos-android-builder
+      ${lib.optionalString (config.nixosAndroidBuilder.yubikeys.groupB != [ ])
+        "auth required ${pkgs.pam_u2f}/lib/security/pam_u2f.so authfile=/etc/u2f_mappings_groupB interactive [prompt=Insert Yubikey for Group B, then press Enter before touching that Yubikey.] origin=pam://nixos-android-builder appid=pam://nixos-android-builder"
+      }
 
       # Session management.
       session required ${pkgs.pam}/lib/security/pam_env.so conffile=/etc/pam/environment readenv=0
