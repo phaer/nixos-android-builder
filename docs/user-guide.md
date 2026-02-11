@@ -544,6 +544,103 @@ nix run .#run-vm
 This will create a writable copy of the read-only disk image, e.g. `android-builder_25.11pre-git.raw` in the local directory and sign ith with a pair of test keys,
 before starting a head-less VM with a console in the current terminal. Use `Ctrl-A x` or `systemctl poweroff` to stop the VM.
 
+# Troubleshooting {#troubleshooting}
+
+## Secure Boot Issues
+
+**Problem: "Secure Boot is disabled" error on boot**
+
+The system requires Secure Boot to be active. Enter your firmware setup (usually F2, F12, or Del during POST) and:
+
+1. Navigate to Security → Secure Boot
+2. Enable Secure Boot
+3. Save and reboot
+
+**Problem: "Secure Boot setup mode" – keys won't enroll**
+
+Ensure the firmware is in Setup Mode, not User Mode with existing keys:
+
+1. Enter firmware setup
+2. Navigate to Security → Secure Boot → Key Management
+3. Select "Clear All Secure Boot Keys" or "Reset to Setup Mode"
+4. Save and reboot
+
+**Problem: Boot fails after key enrollment**
+
+The image may have been signed with different keys than those enrolled. Re-sign the image with the correct keystore:
+
+```shell-session
+$ nix run .#configure-disk-image -- status --keystore ./keys --device <image>
+```
+
+Verify the signature status shows "Signed and verified."
+
+## Boot Issues
+
+**Problem: "dm-verity: Hash verification failed"**
+
+The store partition has been corrupted or tampered with. The image must be rebuilt and reflashed.
+
+
+**Problem: System boots but drops to emergency shell**
+
+Check the journal for errors:
+
+```shell-session
+$ journalctl -e
+```
+
+Common causes:
+
+- Disk too small (needs 250GB minimum)
+- Hardware compatibility issues
+
+## Android Build Issues
+
+**Problem: `fetch-android` fails with network errors**
+
+Ensure the target machine has network access to `android.googlesource.com`. For air-gapped environments, configure a local mirror:
+
+```shell-session
+$ fetch-android --repo-manifest-url=https://your-internal-mirror/platform/manifest
+```
+
+**Problem: `build-android` fails with "command not found"**
+
+The FHS environment may not be properly initialized. Verify the bind mounts:
+
+```shell-session
+$ mount | grep -E '/bin|/lib'
+$ ls -la /bin/bash /lib/ld-linux-x86-64.so.2
+```
+
+**Problem: Build outputs disappeared after reboot**
+
+This is expected behavior – the `/var/lib/build` partition is ephemeral by design. To persist outputs, enable artifact storage: set `nixosAndroidBuilder.artifactStorage.enable = true` in `configuration.nix`.
+
+
+## VM Testing Issues
+
+**Problem: `nix run .#run-vm` fails with "KVM not available"**
+
+Hardware virtualization must be enabled. Check and enable in firmware:
+
+```shell-session
+$ lsmod | grep kvm  # Should show kvm_intel or kvm_amd
+```
+
+If missing, enable VT-x/AMD-V in BIOS/UEFI settings.
+
+**Problem: Can't exit the VM**
+
+Use `Ctrl-A x` to terminate QEMU, or from within the VM:
+
+```shell-session
+$ systemctl poweroff
+```
+
+\pagebreak
+
 # Customization {#customization}
 
 The following NixOS Options are available to customize features & behaviour of NixOS Android Builder at build-time.
