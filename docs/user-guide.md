@@ -44,7 +44,7 @@ for this purpose.
 
 Let’s start by running the following command in a local git checkout of this repository:
 
-```bash
+```shell-session
 $ nix run .#create-signing-keys
 ```
 
@@ -97,7 +97,7 @@ Depending on your internet uplink and the speed of your local machine, the first
 or built.
 `nix shell nixpkgs#nom` starts a shell with it, where you can just replace `nix build` with `nom build` below.
 
-```bash
+```shell-session
 $ nix build --print-build-logs .#image
 ```
 
@@ -119,7 +119,7 @@ but not yet signed for secure boot. We are going to fix that in the next step!
 
 We can see the full path as well as the size of the generated disk image by running i.e.:
 
-```bash
+```shell-session
 $ du --human-readable --apparent-size "$(realpath result/*.raw)"
 ```
 
@@ -141,7 +141,7 @@ So we start by copying the image out of the nix store to our current working dir
 
 To sign your image, run:
 
-```bash
+```shell-session
 $ install -m 600 result/android-builder_25.11pre-git.raw .
 $ nix run .#configure-disk-image -- sign --keystore ./keys  --device android-builder_25.11pre-git.raw
 ```
@@ -166,7 +166,7 @@ device, `android-builder_25.11pre-git.raw` as our image name in this example. Wh
 the job, we simply use `dd` here and ensure that the kernel’s page cache is flushed by waiting for `sync` to finish before detaching the block
 device from the local machine:
 
-```bash
+```shell-session
 $ sudo dd \
   bs=1M status=progress \
   if=android-builder_25.11pre-git.raw \
@@ -194,7 +194,7 @@ After booting, you will be dropped into a NixOS environment with an interactive 
 The `fetch-android` script clones the latest AOSP repository into the builder’s workspace and checks out the default branch.
 Run it from the shell:
 
-```bash
+```shell-session
 $ fetch-android
 ```
 
@@ -248,7 +248,7 @@ Lower-level tools such as `repo`, `git`, `gpg`, etc. are available in the shell 
 Once the source is available, build your target product with `build-android`.
 It will automatically source the build environment and call the appropriate Android make command.
 
-```bash
+```shell-session
 $ build-android
 ```
 
@@ -297,7 +297,7 @@ Options:
 
 Lower-level tools such as `lunch`, `m`, `ninja`, etc. are available in the shell after loading Androids `envsetup.sh`:
 
-```bash
+```shell-session
 $ cd /var/lib/build/source
 $ source build/envsetup.sh
 ```
@@ -312,7 +312,7 @@ Please refer to [upstream documentation](https://source.android.com/docs/setup/b
 
 The resulting `SBOM` can be found in `/var/lib/build/source/out/soong/sbom`.
 
-```bash
+```shell-session
 $ sbom-android
 ```
 
@@ -350,7 +350,7 @@ All build outputs, logs and images can be found in `/var/lib/build/source/out` o
 Images in particular are in `out/target/product`, logs in `error.log` and `verbose.log.gz`.
 
 Since the outputs are still stored on the ephemeral `/var/lib/build` partition at the moment, they will effectively be deleted when the target machine shuts down for any reason.
-To keep them available between boots, users may set `nixosAndroidBuilder.artifactStorage.enable = true` in which case they will be prompted for a second disk during boot. That second disk can be used to store built outputs persistently, e.g. by uysing the included `copy-android-outputs` script.
+To keep them available between boots, users may set `nixosAndroidBuilder.artifactStorage.enable = true` in which case they will be prompted for a second disk during boot. That second disk can be used to store built outputs persistently, e.g. by using the included `copy-android-outputs` script.
 
 
 Copying them to a remote or local persistent storage medium is left to the user at this time.
@@ -364,7 +364,7 @@ Upon reboot, the `/var/lib/build` partition will be re-formatted and re-encrypte
 
 To reboot, use your machine’s physical power buttons or run the following in a shell:
 
-```bash
+```shell-session
 $ systemctl reboot
 ```
 
@@ -376,7 +376,7 @@ All dependencies besides Android sources are coming from `nixpkgs`. So just upda
 
 To update all flake’s inputs, run:
 
-```bash
+```shell-session
 $ nix flake update
 ```
 
@@ -456,7 +456,7 @@ The repository ships a NixOS VM test that boots a built image and checks the bui
 
 To run the tests in a virtual machine on your local machine:
 
-```bash
+```shell-session
 $ nix build -L .#checks.x86_64-linux.integration
 ```
 

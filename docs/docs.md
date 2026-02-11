@@ -29,13 +29,13 @@ We created a modular proof‑of‑concept based on NixOS that fulfills most of t
 
 # Used Technologies
 
-- **[`NixOS`](https://nixos.org)** - the Linux distribution chosen for its declarative module system and flexible boot process.
-- **[`nixpkgs`](https://github.com/nixos/nixpkgs)** - the software repository that enables reproducible builds of up‑to‑date open‑source packages.
-- **[`qemu`](https://qemu.org)** - used to run virtual machines during interactive, as well as automated testing. Both help to decrease testing & verification cycles during development & customization.
-- **[`systemd`](https://systemd.io)** - orchestrates both upstream and custom components while managing credentials and persistent state.
-- **[`systemd-repart`](https://www.freedesktop.org/software/systemd/man/latest/systemd-repart.html)** - prepares signable read‑only disk images for the builder and resizes and re‑encrypts the state partition at each boot.
-- **[Linux Unified Key Setup (`LUKS`)](https://gitlab.com/cryptsetup/cryptsetup/blob/master/README.md)** - encrypts the state partition with an ephemerally generated key on each boot.
-- Various **build requirements** for Android, such as Python 3 and OpenJDK. The complete list is in the `packages` section of `android-build-env.nix`.
+* **[`NixOS`](https://nixos.org)** - the Linux distribution chosen for its declarative module system and flexible boot process.
+* **[`nixpkgs`](https://github.com/nixos/nixpkgs)** - the software repository that enables reproducible builds of up‑to‑date open‑source packages.
+* **[`qemu`](https://qemu.org)** - used to run virtual machines during interactive, as well as automated testing. Both help to decrease testing & verification cycles during development & customization.
+* **[`systemd`](https://systemd.io)** - orchestrates both upstream and custom components while managing credentials and persistent state.
+* **[`systemd-repart`](https://www.freedesktop.org/software/systemd/man/latest/systemd-repart.html)** - prepares signable read‑only disk images for the builder and resizes and re‑encrypts the state partition at each boot.
+* **[Linux Unified Key Setup (`LUKS`)](https://gitlab.com/cryptsetup/cryptsetup/blob/master/README.md)** - encrypts the state partition with an ephemerally generated key on each boot.
+* Various **build requirements** for Android, such as Python 3 and OpenJDK. The complete list is in the `packages` section of `android-build-env.nix`.
 
 A complete **Software Bill of Materials (SBOM)** for the builder's NixOS closure can be generated from the repository root by running, e.g.:
 
@@ -125,7 +125,7 @@ Alternative approaches, such as `pkgs.buildFHSEnv`, `nix-ld` or `envfs`, were ev
 
 The `android-build-env.nix` NixOS module uses the `fhsenv.nix` module described in the section above, to add all tools required by for an AOSP build. By using this module, developers can compile Android in a clean, reproducible environment that mimics a standard Linux installation.
 
-It also adds 3 scripts, added for convinience:
+It also adds 3 scripts, added for convenience:
 
 - `fetch-android` checks out the configured `repo` repository & branch, upstream AOSP's `android-latest-release` by default.
 - `build-android` loads the shell setup, sets the configured `lunch` target and builds a given `m` target.
@@ -206,7 +206,7 @@ Usage is documented in [user-guide.pdf](user-guide.pdf). `configure-disk-image` 
 
 - **(6)** The `UKI` is copied to a temporary file, signed, and copied back into the `esp` again.
 - **(7)** Secure Boot update bundles (`*.auth` files) are copied to the `esp` to ensure that `ensure-secure-boot-enrollment.service` can find them during boot.
-- **(8)** We finally have a signed image, reado to flash & boot on a target machine.
+- **(8)** We finally have a signed image, ready to flash & boot on a target machine.
 
 
 \pagebreak
@@ -275,7 +275,7 @@ flowchart TB
    encrypt it with the ephemeral key from **(2)**.
 5. We proceed to mount required file systems:
    * A read-only `/usr` partition, containing our `/nix/store` and all software in the image, checked by `dm-verity`.
-   * Bind-mounts for `/bin` and `/lib` to simulate a conventional, FHS-based Linux for the build.
+   * Bind-mounts for `/bin` and `/lib` to simulate a conventional, `FHS`-based Linux for the build.
    * An ephemeral `/` file system (`tmpfs`)
    * `/var/lib/build` from the encrypted partition created in **(3)**.
 6. With all mounts in place, we are ready to finish the boot process by switching into Stage 2 of NixOS.
