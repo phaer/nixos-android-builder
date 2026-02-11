@@ -287,3 +287,45 @@ flowchart TB
    E.g. `/var/lib/build/source/out/target/product/vsoc_x86_64_only`. Those are currently not persisted on the builder, so manual copying is required if build outputs should be kept.
 
 \pagebreak
+
+# Glossary {#glossary}
+
+**AOSP** – Android Open Source Project. The publicly available source code for Android maintained by Google.
+
+**dm-verity** – A Linux kernel feature that provides transparent integrity checking of block devices using a Merkle tree.
+
+**EFI/UEFI** – Unified Extensible Firmware Interface. The modern firmware interface between the operating system and hardware, replacing legacy BIOS.
+
+**ESP** – EFI System Partition. A FAT-formatted partition that contains files needed to boot.
+
+**FHS** – Filesystem Hierarchy Standard. A standard defining the directory structure and contents of traditional Linux systems (e.g., `/bin`, `/lib`, `/usr`).
+
+**Flake** – A Nix feature providing a standardized way to define reproducible Nix projects with locked dependencies.
+
+**initrd** – Initial RAM Disk. A temporary root filesystem loaded into memory during boot, used to prepare the real root filesystem.
+
+**LUKS** – Linux Unified Key Setup. The standard system for Linux disk encryption.
+
+**Nix** – A purely functional package manager and build system that enables reproducible, declarative builds.
+
+**NixOS** – A Linux distribution built on Nix, where the entire system configuration is declared in Nix expressions.
+
+**nixpkgs** – The main repository of Nix packages, containing build instructions for tens of thousands of software packages.
+
+**PK/KEK/DB** – Platform Key, Key Exchange Key, and Signature Database. Keys used by UEFI Secure Boot to verify boot components.
+
+**repo** – Google's tool for managing Git repositories, used extensively in Android development.
+
+**SBOM** – Software Bill of Materials. A formal inventory of all components and dependencies in a piece of software.
+
+**Secure Boot** – A UEFI feature that ensures only cryptographically signed software can be booted.
+
+**Setup Mode** – A Secure Boot state where custom keys can be enrolled. The firmware accepts new keys without signature verification.
+
+**SLSA** – Supply-chain Levels for Software Artifacts. A security framework for ensuring the integrity of software artifacts throughout the supply chain.
+
+**TPM** – Trusted Platform Module. A dedicated security chip that provides hardware-based cryptographic functions and key storage.
+
+**UKI** – Unified Kernel Image. A single EFI executable containing the Linux kernel, initrd, and boot parameters, simplifying Secure Boot signing.
+
+
