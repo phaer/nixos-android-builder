@@ -5,6 +5,7 @@
   ...
 }:
 let
+  cfg = config.nixosAndroidBuilder.unattended;
   user = config.users.users.user;
 
   disable-usb-guard = pkgs.writeShellScriptBin "disable-usb-guard" ''
@@ -54,6 +55,7 @@ in
       description = "list of shell commands to run unattended ";
       default = [
         "root:start-shell-if-yubikey-found"
+        "select-branch"
         "fetch-android"
         "build-android"
         "android-sbom"
@@ -67,7 +69,7 @@ in
     };
   };
 
-  config = lib.mkIf config.nixosAndroidBuilder.unattended.enable {
+  config = lib.mkIf cfg.enable {
     security.loginDefs.settings.LOGIN_TIMEOUT = 0;
     security.sudo.enable = false;
     security.doas = {
@@ -129,7 +131,8 @@ in
       environment = {
         PATH = lib.mkForce "/run/wrappers/bin:/run/current-system/sw/bin:/bin";
         HOME = user.home;
-        STEPS = lib.concatStringsSep "," config.nixosAndroidBuilder.unattended.steps;
+        STEPS = lib.concatStringsSep "," cfg.steps;
+        TERM = "linux";
       };
 
       script = builtins.readFile ./unattended.sh;

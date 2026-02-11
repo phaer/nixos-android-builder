@@ -86,9 +86,14 @@
 
         USER_EMAIL='${cfg.userEmail}'
         USER_NAME='${cfg.userName}'
-        REPO_BRANCH='${cfg.repoBranch}'
         REPO_MANIFEST_URL='${cfg.repoManifestUrl}'
         SOURCE_DIR='${cfg.sourceDir}'
+
+        if [ -f /tmp/selected-branch ]; then
+          REPO_BRANCH="$(cat /tmp/selected-branch)"
+        else
+          REPO_BRANCH='${cfg.repoBranch}'
+        fi
 
         usage() {
           cat <<EOF
@@ -97,7 +102,7 @@
         Options:
           --user-email=EMAIL        Git user.email (default: ${cfg.userEmail})
           --user-name=NAME          Git user.name (default: ${cfg.userName})
-          --repo-branch=BRANCH      Repo branch to init (default: ${cfg.repoBranch})
+          --repo-branch=BRANCH      Repo branch to init (default: ${cfg.repoBranch}, or /tmp/selected-branch if present)
           --repo-manifest-url=URL   Repo manifest URL (default: ${cfg.repoManifestUrl})
           --source-dir=DIR          Source directory (default: ${cfg.sourceDir})
           -h, --help                Show this help message
