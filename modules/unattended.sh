@@ -48,6 +48,9 @@ for i in "${!steps[@]}"; do
         cmd="doas $cmd"
     fi
     script -q -c "$cmd" /dev/null 2>&1 | tee >(systemd-cat -t "step-$current")
+
+    tput setaf 0
+    tput setab 7
 done
 
 tput csr 0 "$lines"
