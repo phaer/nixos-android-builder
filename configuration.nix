@@ -19,6 +19,9 @@
 
     yubikeys.groupB = [
     ];
+    branches = [
+      "android-latest-release"
+    ];
 
     unattended.enable = true;
 

@@ -67,9 +67,12 @@ in
       First entry will be the default if no other one is selected.
     '';
     type = lib.types.listOf lib.types.str;
-    default = [ ];
+    default = [
+      "android-latest-release"
+    ];
     example = [
       "android-latest-release"
+      "android-15.0.0_r1"
     ];
   };
 
