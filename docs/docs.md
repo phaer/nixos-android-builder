@@ -156,9 +156,8 @@ $ nix run .#run-vm -- -usb -device usb-host,vendorid=0x1050,productid=0x0407
 
 ## Unattended Mode {#unattended}
 
-The `unattended.nix` module enables fully automated build pipelines via
-`nixosAndroidBuilder.unattended.enable`.
-When enabled, a `nixos-android-builder` systemd service runs on `tty2` after boot and executes a configurable list of steps sequentially.
+The `unattended.nix` module enables fully automated build pipelines via  
+`nixosAndroidBuilder.unattended.enable`. When enabled, a `nixos-android-builder` systemd service runs on `tty2` after boot and executes a configurable list of steps sequentially.
 
 Steps are defined in `nixosAndroidBuilder.unattended.steps` as a list of command names. Steps prefixed with `root:` are executed with super-user privileges. The default step sequence is:
 
@@ -184,6 +183,23 @@ Additional helper scripts provided by the module:
 
 - `lock-var-lib-build` – Unmounts `/var/lib/build`, closes the LUKS device, and destroys the encryption key slot, rendering build data permanently inaccessible even before power-off.
 - `start-shell-and-shutdown` – Opens an interactive login shell and powers off the system when the user exits.
+
+## Fatal Error Handling {#fatal-error}
+
+The `fatal-error.nix` module provides user-friendly error reporting for critical failures. It overrides systemd's default emergency target behavior with a `dialog`-based message box on `tty2`.
+
+When a service writes an error message to `/run/fatal-error` and fails, the `fatal-error.service` displays that message in a dialog box with a "Shutdown" button. If no error file is present, a generic message directs the user to check logs on `tty1`.
+
+## Debug Mode {#debug}
+
+The `debug.nix` module, activated by `nixosAndroidBuilder.debug`, adds conveniences for interactive development and troubleshooting. It is not intended for production use. When enabled, it:
+
+- Grants unauthenticated access to the emergency shell (both in initrd and the main system).
+- Adds extra packages: `vim`, `htop`, `tmux`, and `git`.
+- Enables `nix` with flake support inside the running system.
+- Sets an empty password for the `user` account and enables auto-login.
+- Enables password-less `sudo` for `wheel` group members.
+- Adds verbose boot logging and a debug shell on tty3.
 
 \pagebreak
 # Sequence Chart
@@ -339,7 +355,8 @@ flowchart TB
       * `android-measure-source` produces a hash over all files in the source checkout.
       * `copy-android-outputs` copies build outputs to `/var/lib/artifacts` (requires artifact storage to be enabled).
 8. Finally, build outputs can be found in-tree, depending on the targets built.
-   E.g. `/var/lib/build/source/out/target/product/vsoc_x86_64_only`. If `nixosAndroidBuilder.artifactStorage.enable` is set, outputs can be persisted to a second disk via `copy-android-outputs`.
+   E.g. `/var/lib/build/source/out/target/product/vsoc_x86_64_only`.  
+   If `nixosAndroidBuilder.artifactStorage.enable` is set, outputs can be persisted to a second disk via `copy-android-outputs`.
 
 \pagebreak
 
