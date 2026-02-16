@@ -222,6 +222,11 @@ repo sync has finished successfully.
 
 The downloaded source ends up in `/var/lib/build/source` by default.
 The repository and branch, the git identity as well the as the source directory can be customized, both at run-time and at build-time.
+
+If multiple branches are configured via `nixosAndroidBuilder.build.branches`, a `select-branch` script is available that presents a dialog menu on boot (with a 30-second timeout).
+The selected branch is saved to `/tmp/selected-branch` and automatically picked up by `fetch-android`.
+If only one branch is configured, it is selected automatically without prompting.
+
 See below for [build-time customization](#customization), or `fetch-android --help` for available run-time flags:
 
 ``` bash

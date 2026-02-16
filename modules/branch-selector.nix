@@ -5,7 +5,7 @@
   ...
 }:
 let
-  cfg = config.nixosAndroidBuilder;
+  cfg = config.nixosAndroidBuilder.build;
 
   select-branch = pkgs.writeShellScriptBin "select-branch" ''
     set -euo pipefail
@@ -59,7 +59,7 @@ let
   '';
 in
 {
-  options.nixosAndroidBuilder.branches = lib.mkOption {
+  options.nixosAndroidBuilder.build.branches = lib.mkOption {
     description = ''
       List of valid branches that can be selected for building.
       If only one branch is specified, it will be selected automatically.

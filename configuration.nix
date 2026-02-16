@@ -19,15 +19,14 @@
 
     yubikeys.groupB = [
     ];
-    branches = [
-      "android-latest-release"
-    ];
 
     unattended.enable = true;
 
     build = {
+      branches = [
+        "android-latest-release"
+      ];
       repoManifestUrl = "https://android.googlesource.com/platform/manifest";
-      repoBranch = "android-latest-release";
       lunchTarget = "aosp_cf_x86_64_only_phone-aosp_current-eng";
       userName = "CI User";
       userEmail = "ci@example.com";

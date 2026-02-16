@@ -127,7 +127,7 @@ The `android-build-env.nix` NixOS module uses the `fhsenv.nix` module described 
 
 It also adds 3 scripts, added for convenience:
 
-- `fetch-android` checks out the configured `repo` repository & branch, upstream AOSP's `android-latest-release` by default.
+- `fetch-android` checks out the configured `repo` repository & branch, upstream AOSP's `android-latest-release` by default. If multiple branches are configured via `nixosAndroidBuilder.build.branches`, `fetch-android` will use the branch selected by the `select-branch` script (see below).
 - `build-android` loads the shell setup, sets the configured `lunch` target and builds a given `m` target.
 - `sbom-android` is a thin wrapper around `build-android` to run upstream's Software Bill Of Materials facilities.
 
@@ -279,12 +279,15 @@ flowchart TB
    * An ephemeral `/` file system (`tmpfs`)
    * `/var/lib/build` from the encrypted partition created in **(3)**.
 6. With all mounts in place, we are ready to finish the boot process by switching into Stage 2 of NixOS.
-7. With the system fully booted, we can start the build in various ways. The current implementation still
-   includes an inteactive shell and 2 demo scripts which can be used as a starting point:
-      * `fetch-android` uses Androids `repo` utility to clone the latest `AOSP` release from `android.googlesource.com` to `/var/lib/build/source`.
-   * `build-android` sources required environment variables before building a minimal `x86_64` `AOSP` image.
+7. With the system fully booted, we can start the build in various ways. In unattended mode (`nixosAndroidBuilder.unattended.enable`), a configurable sequence of steps is executed automatically. In interactive mode, the following scripts are available:
+      * `select-branch` presents a dialog to choose from configured branches (auto-selects if only one is configured).
+      * `fetch-android` uses Androids `repo` utility to clone the selected branch from the configured manifest URL to `/var/lib/build/source`.
+      * `build-android` sources required environment variables before building the configured `lunch` target.
+      * `android-sbom` generates a Software Bill of Materials using upstream AOSP facilities.
+      * `android-measure-source` produces a hash over all files in the source checkout.
+      * `copy-android-outputs` copies build outputs to `/var/lib/artifacts` (requires artifact storage to be enabled).
 8. Finally, build outputs can be found in-tree, depending on the targets built.
-   E.g. `/var/lib/build/source/out/target/product/vsoc_x86_64_only`. Those are currently not persisted on the builder, so manual copying is required if build outputs should be kept.
+   E.g. `/var/lib/build/source/out/target/product/vsoc_x86_64_only`. If `nixosAndroidBuilder.artifactStorage.enable` is set, outputs can be persisted to a second disk via `copy-android-outputs`.
 
 \pagebreak
 

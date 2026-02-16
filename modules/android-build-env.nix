@@ -15,14 +15,6 @@
       type = lib.types.str;
       default = "https://android.googlesource.com/platform/manifest";
     };
-    repoBranch = lib.mkOption {
-      description = ''
-        Name of the branch that should be fetched.
-        Can be overriden at run-time by passing `--repo-branch` to `fetch-android`.
-      '';
-      type = lib.types.str;
-      default = "android-latest-release";
-    };
     lunchTarget = lib.mkOption {
       description = ''
         Name of lunch target to build.
@@ -62,6 +54,7 @@
     let
 
       cfg = config.nixosAndroidBuilder.build;
+      defaultBranch = builtins.head cfg.branches;
 
       # pkgs.writeShellScriptBin with bashInteractive instead of pkgsruntimeShell, so that we
       # don't get errors about the missing "complete" builtin.
@@ -92,7 +85,7 @@
         if [ -f /tmp/selected-branch ]; then
           REPO_BRANCH="$(cat /tmp/selected-branch)"
         else
-          REPO_BRANCH='${cfg.repoBranch}'
+          REPO_BRANCH='${defaultBranch}'
         fi
 
         usage() {
@@ -102,7 +95,7 @@
         Options:
           --user-email=EMAIL        Git user.email (default: ${cfg.userEmail})
           --user-name=NAME          Git user.name (default: ${cfg.userName})
-          --repo-branch=BRANCH      Repo branch to init (default: ${cfg.repoBranch}, or /tmp/selected-branch if present)
+          --repo-branch=BRANCH      Repo branch to init (default: ${defaultBranch}, or /tmp/selected-branch if present)
           --repo-manifest-url=URL   Repo manifest URL (default: ${cfg.repoManifestUrl})
           --source-dir=DIR          Source directory (default: ${cfg.sourceDir})
           -h, --help                Show this help message
