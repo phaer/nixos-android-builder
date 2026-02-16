@@ -41,6 +41,7 @@ let
       ${pkgs.dialog}/bin/dialog \
         --output-fd 1 \
         --colors \
+        --no-cancel \
         --title "Branch Selection" \
         --default-item "''${branches[0]}" \
         --timeout 30 \
