@@ -154,6 +154,37 @@ To test YubiKey authentication in a VM, pass through the USB device:
 $ nix run .#run-vm -- -usb -device usb-host,vendorid=0x1050,productid=0x0407
 ```
 
+## Unattended Mode {#unattended}
+
+The `unattended.nix` module enables fully automated build pipelines via
+`nixosAndroidBuilder.unattended.enable`.
+When enabled, a `nixos-android-builder` systemd service runs on `tty2` after boot and executes a configurable list of steps sequentially.
+
+Steps are defined in `nixosAndroidBuilder.unattended.steps` as a list of command names. Steps prefixed with `root:` are executed with super-user privileges. The default step sequence is:
+
+```nix
+[
+  "root:start-shell-if-yubikey-found"
+  "select-branch"
+  "fetch-android"
+  "build-android"
+  "android-sbom"
+  "android-measure-source"
+  "copy-android-outputs"
+  "root:lock-var-lib-build"
+  "root:disable-usb-guard"
+  "root:start-shell-and-shutdown"
+]
+```
+
+The module also enables **USBGuard**, which blocks USB mass storage devices to prevent unauthorized data exfiltration during builds.
+The `disable-usb-guard` step stops USBGuard and re-authorizes all USB devices, typically run near the end of the pipeline to allow copying artifacts to USB storage.
+
+Additional helper scripts provided by the module:
+
+- `lock-var-lib-build` – Unmounts `/var/lib/build`, closes the LUKS device, and destroys the encryption key slot, rendering build data permanently inaccessible even before power-off.
+- `start-shell-and-shutdown` – Opens an interactive login shell and powers off the system when the user exits.
+
 \pagebreak
 # Sequence Chart
 
