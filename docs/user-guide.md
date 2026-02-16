@@ -313,12 +313,12 @@ Please refer to [upstream documentation](https://source.android.com/docs/setup/b
 
 ## SBOM Generation
 
-`sbom-android` is a lightweight wrapper around `build-android` to generate Software Bills Of Materials (`SBOMs`) using [upstreams SBOM facilities](https://source.android.com/docs/setup/create/create-sbom).
+`android-sbom` is a lightweight wrapper around `build-android` to generate Software Bills Of Materials (`SBOMs`) using [upstreams SBOM facilities](https://source.android.com/docs/setup/create/create-sbom).
 
 The resulting `SBOM` can be found in `/var/lib/build/source/out/soong/sbom`.
 
 ```shell-session
-$ sbom-android
+$ android-sbom
 ```
 
 ``` text
@@ -355,10 +355,15 @@ All build outputs, logs and images can be found in `/var/lib/build/source/out` o
 Images in particular are in `out/target/product`, logs in `error.log` and `verbose.log.gz`.
 
 Since the outputs are still stored on the ephemeral `/var/lib/build` partition at the moment, they will effectively be deleted when the target machine shuts down for any reason.
-To keep them available between boots, users may set `nixosAndroidBuilder.artifactStorage.enable = true` in which case they will be prompted for a second disk during boot. That second disk can be used to store built outputs persistently, e.g. by using the included `copy-android-outputs` script.
+To keep them available between boots, users may set `nixosAndroidBuilder.artifactStorage.enable = true` in `configuration.nix`. During boot, the user will be prompted to select a second disk for persistent artifact storage (mounted at `/var/lib/artifacts`). The target disk can also be pre-configured with `configure-disk-image set-storage`:
 
+```shell-session
+$ nix run .#configure-disk-image -- set-storage --target /dev/sdb --device android-builder_25.11pre-git.raw
+```
 
-Copying them to a remote or local persistent storage medium is left to the user at this time.
+Once artifact storage is enabled, the `copy-android-outputs` script copies build outputs matching the patterns configured in `nixosAndroidBuilder.artifactStorage.contents` from `/var/lib/build/source/out` to `/var/lib/artifacts`, organized by timestamp.
+
+Copying them to a remote persistent storage medium is left to the user at this time.
 
 ## Reset to Initial State
 
@@ -417,6 +422,14 @@ Writing signed payload UKI back...
 Copying keystore files for auto-enrollment...
 ✓ Keystore files copied to ESP
 ```
+
+The `sign` sub-command accepts additional flags to control what gets signed:
+
+- `--installer` signs only the installer UKI (not the payload).
+- `--payload` signs only the payload UKI (not the installer).
+- `--no-auto-enroll` skips copying keystore files (`PK.auth`, `KEK.auth`, `db.auth`) to the ESP for Secure Boot auto-enrollment.
+
+If neither `--installer` nor `--payload` is given, both are signed (when applicable).
 
 To configure an installer to install the payload to `/dev/sda` on first boot:
 
@@ -546,8 +559,18 @@ It is possible to test the whole setup in a [qemu](http://qemu.org/) virtual mac
 nix run .#run-vm
 ```
 
-This will create a writable copy of the read-only disk image, e.g. `android-builder_25.11pre-git.raw` in the local directory and sign ith with a pair of test keys,
-before starting a head-less VM with a console in the current terminal. Use `Ctrl-A x` or `systemctl poweroff` to stop the VM.
+This will:
+
+1. Create a writable copy of the read-only disk image (e.g. `android-builder_25.11pre-git.raw`) in the current directory.
+2. Sign the UKI with a pair of auto-generated test keys (stored in the nix store, so they persist across runs).
+3. Pre-configure artifact storage to use `/dev/vdb` (a second virtual disk is created automatically when `nixosAndroidBuilder.artifactStorage.enable` is set).
+4. Start a QEMU VM with Secure Boot, a TPM, and a graphical window.
+
+If the writable disk image already exists from a previous run, steps 1–3 are skipped and the existing image is reused. Delete the `.raw` file to force a fresh image.
+
+Use `systemctl poweroff` from within the VM, or close the QEMU window, to stop it.
+
+There is also an `installer-vm` package (`nix run .#installer-vm`) for testing the disk installer workflow in a VM.
 
 # Troubleshooting {#troubleshooting}
 

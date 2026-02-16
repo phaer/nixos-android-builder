@@ -18,11 +18,9 @@ We created a modular proof‑of‑concept based on NixOS that fulfills most of t
 ## Limitations and Further Work
 
 * **aarch64 support** could be added if needed. Only `x86_64` with `UEFI` is implemented at the moment.
-* **unattended mode** is not yet fully-tested. The current implementation includes an interactive shell and debug tools.
 * **artifact uploads**: build artifacts are currently not automatically uploaded anywhere, but stay on the build machine.
   Integration of a Trusted Platform Module (TPM) could be useful here, to ease authentication to private repositories as well as destinations for artifact upload.
 * **measured boot**: while we use Secure Boot with a platform custom key, we do not measure involved components via a TPM yet. Doing so would improve existing Secure Boot measures as well as help with implementing attestation capabilities later on.
-* **credential handling** we do not currently implement any measures to handle secrets other than what NixOS ships out of the box.
 * **higher-level configuration**: Adapting the build environment to the needs of custom AOSP distributions might need extra work. Depending on the nature of those
   customizations, a good understanding of `nix` might be needed. We will ease those as far as possible, as we learn more about users customization needs.
 
@@ -125,11 +123,12 @@ Alternative approaches, such as `pkgs.buildFHSEnv`, `nix-ld` or `envfs`, were ev
 
 The `android-build-env.nix` NixOS module uses the `fhsenv.nix` module described in the section above, to add all tools required by for an AOSP build. By using this module, developers can compile Android in a clean, reproducible environment that mimics a standard Linux installation.
 
-It also adds 3 scripts, added for convenience:
+It also adds 4 scripts, added for convenience:
 
 - `fetch-android` checks out the configured `repo` repository & branch, upstream AOSP's `android-latest-release` by default. If multiple branches are configured via `nixosAndroidBuilder.build.branches`, `fetch-android` will use the branch selected by the `select-branch` script (see below).
 - `build-android` loads the shell setup, sets the configured `lunch` target and builds a given `m` target.
-- `sbom-android` is a thin wrapper around `build-android` to run upstream's Software Bill Of Materials facilities.
+- `android-sbom` is a thin wrapper around `build-android` to run upstream's Software Bill Of Materials facilities.
+- `android-measure-source` hashes all files across all git repositories in the checkout to produce a source measurement in `out/source_measurement.txt`.
 
 Please refer to the options reference in [user-guide.pdf](user-guide.pdf).
 
