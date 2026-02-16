@@ -132,6 +132,28 @@ It also adds 4 scripts, added for convenience:
 
 Please refer to the options reference in [user-guide.pdf](user-guide.pdf).
 
+## YubiKey Authentication {#yubikey-auth}
+
+The `yubikey-auth.nix` module enforces hardware-token-based authentication using YubiKeys via `pam_u2f`.
+Two groups of keys can be configured:
+
+- `nixosAndroidBuilder.yubikeys.groupA` – The first set of U2F public keys.
+- `nixosAndroidBuilder.yubikeys.groupB` – An optional second set. If configured, both groups are required for login, enforcing dual-approval (e.g. two different people must each touch their YubiKey).
+
+Public keys are generated with `pamu2fcfg` and stored in the NixOS configuration:
+
+```shell-session
+$ pamu2fcfg -N -i "pam://nixos-android-builder" -o "pam://nixos-android-builder" -u "user"
+```
+
+Password-based authentication is disabled entirely — `login` and `su` require U2F only. The module also provides a `start-shell-if-yubikey-found` script that polls for a YubiKey for 30 seconds and, if one is detected, opens an interactive login shell. This is typically used as the first step in an unattended build pipeline (see below) to allow operators to interrupt automated execution.
+
+To test YubiKey authentication in a VM, pass through the USB device:
+
+```shell-session
+$ nix run .#run-vm -- -usb -device usb-host,vendorid=0x1050,productid=0x0407
+```
+
 \pagebreak
 # Sequence Chart
 
