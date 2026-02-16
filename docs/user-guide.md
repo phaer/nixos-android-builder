@@ -82,7 +82,7 @@ drwxr-xr-x 10 user users   20 Sep 19 13:22 ..
 ```
 
 The files listed at the end of the output are the generated keys, certificates, etc in `keys`.
-Our signing script, `sign-disk-images` will pick them up a few steps further down.
+Our signing script, `configure-disk-image sign` will pick them up a few steps further down.
 
 But first...
 

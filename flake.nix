@@ -79,7 +79,6 @@
         default = pkgs.mkShell {
           packages = with secureBootScripts; [
             create-signing-keys
-            sign-disk-image
             diskInstaller.configure
             docs.build-docs
             docs.watch-docs
@@ -95,7 +94,7 @@
           installer-image
           installer-vm
           ;
-        inherit (secureBootScripts) create-signing-keys sign-disk-image;
+        inherit (secureBootScripts) create-signing-keys;
         configure-disk-image = diskInstaller.configure;
         default = image;
       };
