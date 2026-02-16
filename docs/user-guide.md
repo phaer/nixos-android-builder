@@ -239,7 +239,7 @@ Usage: /run/current-system/sw/bin/fetch-android [options] [-- ...repo sync args.
 Options:
   --user-email=EMAIL        Git user.email (default: ci@example.com)
   --user-name=NAME          Git user.name (default: CI User)
-  --repo-branch=BRANCH      Repo branch to init (default: android-latest-release)
+  --repo-branch=BRANCH      Repo branch to init (default: android-latest-release, or /tmp/selected-branch if present)
   --repo-manifest-url=URL   Repo manifest URL (default: https://android.googlesource.com/platform/manifest)
   --source-dir=DIR          Source directory (default: /var/lib/build/source)
   -h, --help                Show this help message
