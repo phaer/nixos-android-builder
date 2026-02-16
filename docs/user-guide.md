@@ -661,11 +661,13 @@ If missing, enable VT-x/AMD-V in BIOS/UEFI settings.
 
 **Problem: Can't exit the VM**
 
-Use `Ctrl-A x` to terminate QEMU, or from within the VM:
+From within the VM:
 
 ```shell-session
 $ systemctl poweroff
 ```
+
+Alternatively, close the QEMU window.
 
 \pagebreak
 
