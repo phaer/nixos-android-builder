@@ -38,7 +38,7 @@ We created a modular proof‑of‑concept based on NixOS that fulfills most of t
 A complete **Software Bill of Materials (SBOM)** for the builder's NixOS closure can be generated from the repository root by running, e.g.:
 
 ``` shellsession
-nix run github:tiiuae/sbomnix#sbomnix -- .#nixosConfigurations.vm.toplevel
+nix run github:tiiuae/sbomnix#sbomnix -- .#nixosConfigurations.nixos.toplevel
 ```
 
 
