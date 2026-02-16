@@ -390,7 +390,7 @@ To update all flake’s inputs, run:
 $ nix flake update
 ```
 
-After updating, (re-)builds of the image will use the latest packages from the tracked `nixpkgs` branch - currently the rolling-release branch `nixos-unstable`.
+After updating, (re-)builds of the image will use the latest packages from the tracked `nixpkgs` branch - currently `nixos-25.11`.
 
 To catch possible regression bugs early, we do recommend to run at least the `integration` test as described in [Automated Tests](#automated-tests) below.
 
