@@ -99,15 +99,10 @@ in
     services.usbguard = {
       enable = true;
       rules = ''
-        # Allow HID devices
-        allow with-interface equals { 03:*:* }
-        # Allow USB hubs (needed for internal hubs)
-        allow with-interface equals { 09:*:* }
-        # Allow YubiKeys (by vendor ID)
-        allow id 1050:*
-
-        # Default block everything else
-        block
+        # Block all mass storage devices (class 08)
+        block with-interface equals { 08:*:* }
+        # Allow everything else
+        allow
       '';
     };
 
