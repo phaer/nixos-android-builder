@@ -33,9 +33,6 @@
     # Allow password-less sudo for wheel users
     security.sudo.wheelNeedsPassword = false;
 
-    # Auto-login user
-    services.getty.autologinUser = "user";
-
     # Enable unauthenticated shell if early boot fails
     boot.initrd.systemd.emergencyAccess = true;
 
