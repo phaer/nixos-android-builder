@@ -68,6 +68,9 @@
       docs = pkgs.callPackage ./packages/docs {
         inherit self nixos;
       };
+
+      keylime-agent = pkgs.callPackage ./packages/keylime-agent { };
+
     in
     {
       inherit nixosModules;
@@ -93,6 +96,7 @@
           image
           installer-image
           installer-vm
+          keylime-agent
           ;
         inherit (secureBootScripts) create-signing-keys;
         configure-disk-image = diskInstaller.configure;
