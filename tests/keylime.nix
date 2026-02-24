@@ -168,10 +168,43 @@ in
 
   testScript =
     { nodes, ... }:
+    let
+      # Pre-calculate the PCR11 value that the agent will have after a full boot.
+      # systemd-stub measures each UKI PE section into PCR 11, then the stage-2
+      # pcrphase services extend it with boot phase strings (sysinit, ready).
+      # We extract sections from the built UKI with objcopy because the .cmdline
+      # embeds a usrhash that is only known after the image is built, so we
+      # cannot reconstruct it from NixOS module attributes alone.
+      pcr11 = pkgs.runCommand "pcr11" {
+        nativeBuildInputs = [
+          pkgs.binutils
+          pkgs.jq
+        ];
+        systemdMeasure = "${pkgs.systemd}/lib/systemd/systemd-measure";
+        uki = "${nodes.agent.system.build.uki}/${nodes.agent.system.build.uki.name}";
+      } ''
+        cp "$uki" uki.efi
+        chmod 644 uki.efi
+        for section in .linux .osrel .cmdline .initrd .uname .sbat; do
+          name="''${section#.}"
+          objcopy --dump-section "''${section}=''${name}" uki.efi 2>/dev/null || true
+        done
+        $systemdMeasure calculate \
+          --linux=linux \
+          $(test -f osrel   && echo --osrel=osrel)   \
+          $(test -f cmdline && echo --cmdline=cmdline) \
+          $(test -f initrd  && echo --initrd=initrd)  \
+          $(test -f uname   && echo --uname=uname)    \
+          $(test -f sbat    && echo --sbat=sbat)      \
+          --phase=sysinit:ready \
+          --bank=sha256 --json=short \
+        | jq -jr '.sha256[0].hash' > $out
+      '';
+      pcr11hash = builtins.readFile pcr11;
+      tpmPolicy = builtins.toJSON { "11" = [ pcr11hash ]; };
+    in
     ''
-    import subprocess
-    import os
-    import json
+    import subprocess, os
 
       # Prepare the agent's signed writable disk image (like the integration test)
       subprocess.run([
@@ -266,15 +299,7 @@ in
           timeout=30,
         )
 
-    with subtest("Read PCR11 from agent TPM and build attestation policy"):
-      # PCR11 is extended by systemd-stub with the UKI's PE sections at boot.
-      # Read the actual value from the TPM so we can attest it.
-      pcr11 = agent.succeed("tpm2_pcrread sha256:11 -Q -o /dev/stdout | xxd -p -c 32").strip()
-      agent.log(f"PCR11 = {pcr11}")
-      assert len(pcr11) == 64, f"unexpected PCR11 length: {len(pcr11)}"
-      tpm_policy = json.dumps({"11": [pcr11]})
-      agent.log(f"tpm_policy = {tpm_policy}")
-
+    tpm_policy = '${tpmPolicy}'
     with subtest("Agent can be added for attestation with PCR11 policy"):
       server.succeed(
         "keylime_tenant -c add -t 192.168.1.1 -u ${agentUuid}"

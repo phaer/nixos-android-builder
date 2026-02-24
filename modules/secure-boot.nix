@@ -53,6 +53,14 @@ in
     enroll-secure-boot
   ];
 
+  # Enable PCR phase measurements (systemd-pcrextend extends PCR 11 with boot
+  # phase strings so that the final value is only reachable after a full,
+  # successful boot of this exact UKI).
+  systemd.additionalUpstreamSystemUnits = [
+    "systemd-pcrphase-sysinit.service"
+    "systemd-pcrphase.service"
+  ];
+
   boot.initrd.supportedFilesystems.vfat = true;
   boot.initrd.systemd = {
     initrdBin = [
