@@ -3,6 +3,10 @@
   installerModules,
   imageModules,
   nixos,
+  keylimeModule,
+  keylimeAgentModule,
+  keylimePackage,
+  keylimeAgentPackage,
 }:
 let
   inherit (pkgs) lib;
@@ -60,6 +64,23 @@ in
           inherit installerModules;
           vmInstallerTarget = "select";
           vmStorageTarget = "select";
+        };
+      }
+    ];
+  };
+
+  keylime = pkgs.testers.runNixOSTest {
+    imports = [
+      ./keylime.nix
+      {
+        _module.args = {
+          inherit
+            imageModules
+            keylimeModule
+            keylimeAgentModule
+            keylimePackage
+            keylimeAgentPackage
+            ;
         };
       }
     ];
