@@ -69,6 +69,7 @@
         inherit self nixos;
       };
 
+      keylime = pkgs.callPackage ./packages/keylime { };
       keylime-agent = pkgs.callPackage ./packages/keylime-agent { };
 
     in
@@ -96,6 +97,7 @@
           image
           installer-image
           installer-vm
+          keylime
           keylime-agent
           ;
         inherit (secureBootScripts) create-signing-keys;
