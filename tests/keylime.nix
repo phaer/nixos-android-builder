@@ -201,10 +201,9 @@ in
         | jq -jr '.sha256[0].hash' > $out
       '';
       pcr11hash = builtins.readFile pcr11;
-      tpmPolicy = builtins.toJSON { "11" = [ pcr11hash ]; };
     in
     ''
-    import subprocess, os
+    import subprocess, os, json
 
       # Prepare the agent's signed writable disk image (like the integration test)
       subprocess.run([
@@ -299,8 +298,19 @@ in
           timeout=30,
         )
 
-    tpm_policy = '${tpmPolicy}'
-    with subtest("Agent can be added for attestation with PCR11 policy"):
+    with subtest("Read PCR7 from agent TPM (Secure Boot policy)"):
+      # PCR7 is extended by UEFI firmware with the Secure Boot policy: PK, KEK,
+      # db, dbx variables and the certificates used to verify loaded images.
+      # It cannot be pre-calculated at build time so we read it from the TPM.
+      pcr7 = agent.succeed("tpm2_pcrread sha256:7 -Q -o /dev/stdout | od -An -tx1 | tr -d ' \n'").strip()
+      agent.log(f"PCR7 = {pcr7}")
+      assert len(pcr7) == 64, f"unexpected PCR7 length: {len(pcr7)}"
+      assert pcr7 != "0" * 64, "PCR7 is all zeros — Secure Boot not active?"
+
+    with subtest("Agent can be added for attestation with PCR policy"):
+      # PCR7:  Secure Boot policy (read from TPM at runtime)
+      # PCR11: UKI measurement + pcrphase (pre-calculated at build time)
+      tpm_policy = json.dumps({"7": [pcr7], "11": ["${pcr11hash}"]})
       server.succeed(
         "keylime_tenant -c add -t 192.168.1.1 -u ${agentUuid}"
           " -r 127.0.0.1 -rp 8891 -v 127.0.0.1 -vp 8881"
