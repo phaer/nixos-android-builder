@@ -127,6 +127,20 @@ in
       '';
     };
 
+    registrar = {
+      caCertFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = ''
+          Path to the CA certificate used to verify the registrar's TLS
+          connection.  When set, the file is copied into the image at
+          `/etc/keylime/registrar-ca.pem` and the agent is automatically
+          configured to use it for verify registrar and verify connections.
+        '';
+        example = lib.literalExpression "./keylime-ca.pem";
+      };
+    };
+
     settings = lib.mkOption {
       type = settingsType;
       default = { };
@@ -162,11 +176,29 @@ in
       "d /var/lib/keylime 0750 keylime keylime -"
     ];
 
-    environment.etc."keylime/agent.conf" = {
-      text = agentConf;
-      user = "keylime";
-      group = "keylime";
-      mode = "0440";
+    # When a registrar CA cert is provided, enable TLS toward the registrar
+    # and use the same CA for verifier mTLS, unless the user overrides them.
+    services.keylime-agent.settings = lib.mkIf (cfg.registrar.caCertFile != null) {
+      registrar_tls_enabled = lib.mkDefault true;
+      registrar_tls_ca_cert = lib.mkDefault "/etc/keylime/registrar-ca.pem";
+      trusted_client_ca = lib.mkDefault "/etc/keylime/registrar-ca.pem";
+    };
+
+    environment.etc = {
+      "keylime/agent.conf" = {
+        text = agentConf;
+        user = "keylime";
+        group = "keylime";
+        mode = "0440";
+      };
+    }
+    // lib.optionalAttrs (cfg.registrar.caCertFile != null) {
+      "keylime/registrar-ca.pem" = {
+        source = cfg.registrar.caCertFile;
+        user = "keylime";
+        group = "keylime";
+        mode = "0444";
+      };
     };
 
     systemd.mounts = [
