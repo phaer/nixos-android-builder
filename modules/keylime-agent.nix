@@ -173,10 +173,6 @@ in
     users.groups.keylime = { };
     users.groups.tss = { };
 
-    systemd.tmpfiles.rules = [
-      "d /var/lib/keylime 0750 keylime keylime -"
-    ];
-
     # When a registrar CA cert is provided, enable TLS toward the registrar
     # and use the same CA for verifier mTLS, unless the user overrides them.
     services.keylime-agent.settings = lib.mkIf (cfg.registrar.caCertFile != null) {
@@ -226,11 +222,13 @@ in
       unitConfig.ConditionPathExists = "/dev/tpm0";
       environment = {
         RUST_LOG = cfg.logLevel;
+        KEYLIME_AGENT_CONFIG = "/etc/keylime/agent.conf";
       };
       serviceConfig = {
+        ExecStartPre = "!${pkgs.coreutils}/bin/install -d -m 0750 -o keylime -g keylime /var/lib/keylime";
         ExecStart = "${cfg.package}/bin/keylime_agent";
         Restart = "on-failure";
-        RestartSec = "5s";
+        RestartSec = "10s";
         StateDirectory = "keylime";
         StateDirectoryMode = "0750";
       };

@@ -12,7 +12,82 @@
 
 let
   cfg = config.services.keylime;
+  tlsCfg = cfg.tls;
   keylimePkg = cfg.package;
+
+  tlsDir = "/var/lib/keylime/tls";
+  caCert = "${tlsDir}/ca-cert.pem";
+  caKey = "${tlsDir}/ca-key.pem";
+  serverCert = "${tlsDir}/server-cert.pem";
+  serverKey = "${tlsDir}/server-key.pem";
+  clientCert = "${tlsDir}/client-cert.pem";
+  clientKey = "${tlsDir}/client-key.pem";
+
+  # Shell script that generates a full mTLS PKI if the CA cert does not yet
+  # exist.  Idempotent: re-running after certs are already present is a no-op.
+  generateCertsScript = pkgs.writeShellScript "keylime-generate-certs" ''
+    set -euo pipefail
+
+    if [ -f "${caCert}" ]; then
+      echo "keylime-tls: certificates already exist, skipping generation"
+      exit 0
+    fi
+
+    echo "keylime-tls: generating mTLS PKI in ${tlsDir} …"
+    mkdir -p "${tlsDir}"
+
+    HOSTNAME="$(${pkgs.inetutils}/bin/hostname -f 2>/dev/null || ${pkgs.inetutils}/bin/hostname)"
+    SANS="DNS:$HOSTNAME,DNS:localhost,IP:127.0.0.1"
+    ${lib.concatMapStringsSep "\n" (s: ''SANS="$SANS,${s}"'') tlsCfg.subjectAlternativeNames}
+
+    # --- CA ---
+    ${pkgs.openssl}/bin/openssl req -x509 -newkey rsa:2048 -nodes \
+      -keyout "${caKey}" \
+      -out "${caCert}" \
+      -days ${toString tlsCfg.certLifetime} \
+      -subj '/CN=Keylime CA' \
+      -addext 'basicConstraints=critical,CA:TRUE' \
+      -addext 'keyUsage=critical,keyCertSign,cRLSign'
+
+    # --- server cert ---
+    ${pkgs.openssl}/bin/openssl req -newkey rsa:2048 -nodes \
+      -keyout "${serverKey}" \
+      -out "${tlsDir}/server.csr" \
+      -subj '/CN=keylime-server'
+
+    ${pkgs.openssl}/bin/openssl x509 -req \
+      -in "${tlsDir}/server.csr" \
+      -CA "${caCert}" \
+      -CAkey "${caKey}" \
+      -CAcreateserial \
+      -out "${serverCert}" \
+      -days ${toString tlsCfg.certLifetime} -sha256 \
+      -extfile <(printf "subjectAltName=$SANS")
+
+    # --- client cert (verifier → registrar mTLS) ---
+    ${pkgs.openssl}/bin/openssl req -newkey rsa:2048 -nodes \
+      -keyout "${clientKey}" \
+      -out "${tlsDir}/client.csr" \
+      -subj '/CN=keylime-client'
+
+    ${pkgs.openssl}/bin/openssl x509 -req \
+      -in "${tlsDir}/client.csr" \
+      -CA "${caCert}" \
+      -CAkey "${caKey}" \
+      -CAcreateserial \
+      -out "${clientCert}" \
+      -days ${toString tlsCfg.certLifetime} -sha256
+
+    # --- clean up CSRs ---
+    rm -f "${tlsDir}"/*.csr "${tlsDir}"/*.srl
+
+    # --- permissions ---
+    chown -R keylime:keylime "${tlsDir}"
+    chmod 0750 "${tlsDir}"
+    chmod 0640 "${tlsDir}"/*.pem
+
+    echo "keylime-tls: PKI generation complete"
+  '';
 
   mkValueString =
     v:
@@ -100,7 +175,7 @@ let
 
   registrarDefaults = {
     version = "2.5";
-    ip = "127.0.0.1";
+    ip = "0.0.0.0";
     port = 8890;
     tls_port = 8891;
     tls_dir = "default";
@@ -133,7 +208,7 @@ let
   verifierDefaults = {
     version = "2.5";
     uuid = "default";
-    ip = "127.0.0.1";
+    ip = "0.0.0.0";
     port = 8881;
     registrar_ip = "127.0.0.1";
     registrar_port = 8891;
@@ -242,6 +317,42 @@ in
       description = "Log level for keylime services.";
     };
 
+    tls = {
+      autoGenerate = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Automatically generate a self-signed CA and mTLS certificates
+          in `/var/lib/keylime/tls/` on first activation.  Existing
+          certificates are never overwritten.
+
+          When enabled the registrar and verifier settings are
+          automatically pointed at the generated files unless
+          overridden explicitly.
+        '';
+      };
+
+      certLifetime = lib.mkOption {
+        type = lib.types.int;
+        default = 365;
+        description = "Validity period in days for generated certificates.";
+      };
+
+      subjectAlternativeNames = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        example = [
+          "DNS:keylime.example.com"
+          "IP:10.0.0.1"
+        ];
+        description = ''
+          Additional Subject Alternative Names for the server certificate.
+          The hostname, `localhost`, and `127.0.0.1` are always included.
+          Each entry must use the `TYPE:value` format (e.g. `DNS:…` or `IP:…`).
+        '';
+      };
+    };
+
     registrar = {
       enable = lib.mkEnableOption "Keylime registrar service";
       settings = lib.mkOption {
@@ -280,7 +391,27 @@ in
 
     systemd.tmpfiles.rules = [
       "d /var/lib/keylime 0750 keylime keylime -"
+      "d ${tlsDir} 0750 keylime keylime -"
     ];
+
+    # When autoGenerate is on, point registrar & verifier at the generated
+    # files.  User-supplied settings (higher priority) override these.
+    services.keylime.registrar.settings = lib.mkIf (tlsCfg.autoGenerate && cfg.registrar.enable) {
+      tls_dir = lib.mkDefault tlsDir;
+      server_key = lib.mkDefault serverKey;
+      server_cert = lib.mkDefault serverCert;
+      trusted_client_ca = lib.mkDefault [ caCert ];
+    };
+
+    services.keylime.verifier.settings = lib.mkIf (tlsCfg.autoGenerate && cfg.verifier.enable) {
+      tls_dir = lib.mkDefault tlsDir;
+      server_key = lib.mkDefault serverKey;
+      server_cert = lib.mkDefault serverCert;
+      trusted_client_ca = lib.mkDefault [ caCert ];
+      client_key = lib.mkDefault clientKey;
+      client_cert = lib.mkDefault clientCert;
+      trusted_server_ca = lib.mkDefault [ caCert ];
+    };
 
     environment.etc =
       keylimeEtc "keylime/ca.conf" caConf
@@ -289,11 +420,26 @@ in
       // lib.optionalAttrs cfg.verifier.enable (keylimeEtc "keylime/verifier.conf" verifierConf);
 
     systemd.services =
-      lib.optionalAttrs cfg.registrar.enable {
+      lib.optionalAttrs tlsCfg.autoGenerate {
+        keylime-tls = {
+          description = "Generate Keylime mTLS certificates";
+          wantedBy = [ "system-manager.target" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            ExecStart = generateCertsScript;
+          };
+        };
+      }
+      // lib.optionalAttrs cfg.registrar.enable {
         keylime-registrar = {
           description = "Keylime Registrar";
-          after = [ "network-online.target" ];
+          after = [
+            "network-online.target"
+          ]
+          ++ lib.optional tlsCfg.autoGenerate "keylime-tls.service";
           wants = [ "network-online.target" ];
+          requires = lib.optional tlsCfg.autoGenerate "keylime-tls.service";
           wantedBy = [ "system-manager.target" ];
           serviceConfig = commonServiceConfig // {
             ExecStart = "${keylimePkg}/bin/keylime_registrar";
@@ -306,8 +452,10 @@ in
           after = [
             "network-online.target"
           ]
-          ++ lib.optional cfg.registrar.enable "keylime-registrar.service";
+          ++ lib.optional cfg.registrar.enable "keylime-registrar.service"
+          ++ lib.optional tlsCfg.autoGenerate "keylime-tls.service";
           wants = [ "network-online.target" ];
+          requires = lib.optional tlsCfg.autoGenerate "keylime-tls.service";
           wantedBy = [ "system-manager.target" ];
           serviceConfig = commonServiceConfig // {
             ExecStart = "${keylimePkg}/bin/keylime_verifier";
