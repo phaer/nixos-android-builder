@@ -3,10 +3,19 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-25.11";
+    system-manager = {
+      url = "github:numtide/system-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
-    { self, nixpkgs, ... }:
+    {
+      self,
+      nixpkgs,
+      system-manager,
+      ...
+    }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
@@ -106,6 +115,21 @@
         inherit (pcrPolicy) calculate-pcr11 read-firmware-pcrs;
         configure-disk-image = diskInstaller.configure;
         default = image;
+      };
+
+      systemConfigs.default = system-manager.lib.makeSystemConfig {
+        modules = [
+          ./system-manager/tpm2.nix
+          ./system-manager/keylime.nix
+          {
+            nixpkgs.hostPlatform = system;
+            services.keylime = {
+              enable = true;
+              registrar.enable = true;
+              verifier.enable = true;
+            };
+          }
+        ];
       };
 
       checks.${system} = import ./tests/default.nix {
