@@ -71,6 +71,7 @@
 
       keylime = pkgs.callPackage ./packages/keylime { };
       keylime-agent = pkgs.callPackage ./packages/keylime-agent { };
+      pcrPolicy = pkgs.callPackage ./packages/pcr-policy { };
 
     in
     {
@@ -101,6 +102,7 @@
           keylime-agent
           ;
         inherit (secureBootScripts) create-signing-keys;
+        inherit (pcrPolicy) calculate-pcr11 read-firmware-pcrs;
         configure-disk-image = diskInstaller.configure;
         default = image;
       };
@@ -111,6 +113,7 @@
           installerModules
           imageModules
           nixos
+          pcrPolicy
           ;
         keylimeModule = nixosModules.keylime;
         keylimeAgentModule = nixosModules.keylime-agent;
