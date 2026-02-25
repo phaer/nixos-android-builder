@@ -3,6 +3,7 @@
   keylimeAgentModule,
   keylimeAgentPackage,
   keylimePackage,
+  pcrPolicy,
   imageModules,
   lib,
   pkgs,
@@ -136,6 +137,7 @@ in
       environment.systemPackages = [
         pkgs.openssl
         pkgs.tpm2-tools
+        pcrPolicy.read-firmware-pcrs
       ];
 
       systemd.tmpfiles.rules = [
@@ -169,159 +171,133 @@ in
   testScript =
     { nodes, ... }:
     let
-      # Pre-calculate the PCR11 value that the agent will have after a full boot.
-      # systemd-stub measures each UKI PE section into PCR 11, then the stage-2
-      # pcrphase services extend it with boot phase strings (sysinit, ready).
-      # We extract sections from the built UKI with objcopy because the .cmdline
-      # embeds a usrhash that is only known after the image is built, so we
-      # cannot reconstruct it from NixOS module attributes alone.
-      pcr11 = pkgs.runCommand "pcr11" {
-        nativeBuildInputs = [
-          pkgs.binutils
-          pkgs.jq
-        ];
-        systemdMeasure = "${pkgs.systemd}/lib/systemd/systemd-measure";
-        uki = "${nodes.agent.system.build.uki}/${nodes.agent.system.build.uki.name}";
-      } ''
-        cp "$uki" uki.efi
-        chmod 644 uki.efi
-        for section in .linux .osrel .cmdline .initrd .uname .sbat; do
-          name="''${section#.}"
-          objcopy --dump-section "''${section}=''${name}" uki.efi 2>/dev/null || true
-        done
-        $systemdMeasure calculate \
-          --linux=linux \
-          $(test -f osrel   && echo --osrel=osrel)   \
-          $(test -f cmdline && echo --cmdline=cmdline) \
-          $(test -f initrd  && echo --initrd=initrd)  \
-          $(test -f uname   && echo --uname=uname)    \
-          $(test -f sbat    && echo --sbat=sbat)      \
-          --phase=sysinit:ready \
-          --bank=sha256 --json=short \
-        | jq -jr '.sha256[0].hash' > $out
+      uki = "${nodes.agent.system.build.uki}/${nodes.agent.system.build.uki.name}";
+      pcr11 = pkgs.runCommand "pcr11" { } ''
+        ${lib.getExe pcrPolicy.calculate-pcr11} ${uki} > $out
       '';
       pcr11hash = builtins.readFile pcr11;
     in
     ''
-    import subprocess, os, json
+      import subprocess, os, json
 
-      # Prepare the agent's signed writable disk image (like the integration test)
-      subprocess.run([
-        "${lib.getExe nodes.agent.system.build.prepareWritableDisk}"
-      ], env=os.environ.copy(), cwd=agent.state_dir, check=True)
+        # Prepare the agent's signed writable disk image (like the integration test)
+        subprocess.run([
+          "${lib.getExe nodes.agent.system.build.prepareWritableDisk}"
+        ], env=os.environ.copy(), cwd=agent.state_dir, check=True)
 
-      serial_stdout_on()
-      server.start()
-      agent.start(allow_reboot=True)
+        serial_stdout_on()
+        server.start()
+        agent.start(allow_reboot=True)
 
-      server.wait_for_unit("multi-user.target")
-      # Agent reboots once to enroll Secure Boot keys; wait for the second boot
-      agent.wait_for_unit("multi-user.target")
+        server.wait_for_unit("multi-user.target")
+        # Agent reboots once to enroll Secure Boot keys; wait for the second boot
+        agent.wait_for_unit("multi-user.target")
 
-      with subtest("Generate mTLS PKI on server and distribute CA cert to agent"):
-        server.succeed("mkdir -p ${tlsDir}")
+        with subtest("Generate mTLS PKI on server and distribute CA cert to agent"):
+          server.succeed("mkdir -p ${tlsDir}")
 
+          server.succeed(
+            "openssl req -x509 -newkey rsa:2048 -nodes"
+            " -keyout ${caKey}"
+            " -out ${caCert}"
+            " -days 365"
+            " -subj '/CN=Keylime CA'"
+            " -addext 'basicConstraints=critical,CA:TRUE'"
+            " -addext 'keyUsage=critical,keyCertSign,cRLSign'"
+          )
+
+          server.succeed(
+            "openssl req -newkey rsa:2048 -nodes"
+            " -keyout ${serverKey}"
+            " -out /tmp/server.csr"
+            " -subj '/CN=server'"
+          )
+          server.succeed(
+            "openssl x509 -req"
+            " -in /tmp/server.csr"
+            " -CA ${caCert}"
+            " -CAkey ${caKey}"
+            " -CAcreateserial"
+            " -out ${serverCert}"
+            " -days 365 -sha256"
+            " -extfile <(printf 'subjectAltName=DNS:server,DNS:localhost,IP:127.0.0.1')"
+          )
+
+          server.succeed(
+            "openssl req -newkey rsa:2048 -nodes"
+            " -keyout ${clientKey}"
+            " -out /tmp/client.csr"
+            " -subj '/CN=client'"
+          )
+          server.succeed(
+            "openssl x509 -req"
+            " -in /tmp/client.csr"
+            " -CA ${caCert}"
+            " -CAkey ${caKey}"
+            " -CAcreateserial"
+            " -out ${clientCert}"
+            " -days 365 -sha256"
+          )
+
+          server.succeed("chown -R keylime:keylime ${tlsDir}")
+          server.succeed("chmod 0640 ${tlsDir}/*")
+
+          ca_cert = server.succeed("cat ${caCert}")
+          agent.succeed(f"cat > ${caCert} << 'EOF'\n{ca_cert}EOF")
+          agent.succeed("chown -R keylime:keylime ${tlsDir}")
+          agent.succeed("chmod 0640 ${tlsDir}/*")
+
+          server.succeed("openssl verify -CAfile ${caCert} ${serverCert}")
+          server.succeed("openssl verify -CAfile ${caCert} ${clientCert}")
+
+        with subtest("Registrar starts and is listening with TLS"):
+          server.succeed("systemctl start keylime-registrar.service")
+          server.wait_for_unit("keylime-registrar.service")
+          server.wait_for_open_port(8890)
+          server.wait_for_open_port(8891)
+
+        with subtest("Verifier starts and is listening with mTLS"):
+          server.succeed("systemctl start keylime-verifier.service")
+          server.wait_for_unit("keylime-verifier.service")
+          server.wait_for_open_port(8881)
+
+        with subtest("Agent starts and registers with mTLS"):
+          agent.succeed("systemctl start keylime-agent.service")
+          agent.wait_for_unit("keylime-agent.service")
+          agent.wait_for_open_port(9002)
+
+        with subtest("Agent is registered in the registrar"):
+          server.wait_until_succeeds(
+            "keylime_tenant -c regstatus -u ${agentUuid} -r 127.0.0.1 -rp 8891 > /tmp/regstatus.out 2>&1"
+            " && grep -q '\"${agentUuid}\"' /tmp/regstatus.out",
+            timeout=30,
+          )
+
+      with subtest("Read firmware PCRs from agent TPM"):
+        # read-firmware-pcrs reads PCRs 0-3, 7 from the TPM.  We also grab
+        # PCR 11 so the output is a complete policy we can merge with the
+        # build-time PCR 11 value.
+        firmware_policy = json.loads(agent.succeed("read-firmware-pcrs --pcr11"))
+        for pcr in ("0", "1", "2", "3", "7"):
+          agent.log(f"PCR{pcr} = {firmware_policy[pcr][0]}")
+        pcr7 = firmware_policy["7"][0]
+        assert len(pcr7) == 64, f"unexpected PCR7 length: {len(pcr7)}"
+        assert pcr7 != "0" * 64, "PCR7 is all zeros — Secure Boot not active?"
+
+      with subtest("Agent can be added for attestation with PCR policy"):
+        # Combine firmware PCRs (read at runtime) with the build-time PCR 11.
+        tpm_policy = json.dumps({"7": [pcr7], "11": ["${pcr11hash}"]})
         server.succeed(
-          "openssl req -x509 -newkey rsa:2048 -nodes"
-          " -keyout ${caKey}"
-          " -out ${caCert}"
-          " -days 365"
-          " -subj '/CN=Keylime CA'"
-          " -addext 'basicConstraints=critical,CA:TRUE'"
-          " -addext 'keyUsage=critical,keyCertSign,cRLSign'"
-        )
+          "keylime_tenant -c add -t 192.168.1.1 -u ${agentUuid}"
+            " -r 127.0.0.1 -rp 8891 -v 127.0.0.1 -vp 8881"
+            f" --tpm_policy '{tpm_policy}'"
+          )
 
-        server.succeed(
-          "openssl req -newkey rsa:2048 -nodes"
-          " -keyout ${serverKey}"
-          " -out /tmp/server.csr"
-          " -subj '/CN=server'"
-        )
-        server.succeed(
-          "openssl x509 -req"
-          " -in /tmp/server.csr"
-          " -CA ${caCert}"
-          " -CAkey ${caKey}"
-          " -CAcreateserial"
-          " -out ${serverCert}"
-          " -days 365 -sha256"
-          " -extfile <(printf 'subjectAltName=DNS:server,DNS:localhost,IP:127.0.0.1')"
-        )
-
-        server.succeed(
-          "openssl req -newkey rsa:2048 -nodes"
-          " -keyout ${clientKey}"
-          " -out /tmp/client.csr"
-          " -subj '/CN=client'"
-        )
-        server.succeed(
-          "openssl x509 -req"
-          " -in /tmp/client.csr"
-          " -CA ${caCert}"
-          " -CAkey ${caKey}"
-          " -CAcreateserial"
-          " -out ${clientCert}"
-          " -days 365 -sha256"
-        )
-
-        server.succeed("chown -R keylime:keylime ${tlsDir}")
-        server.succeed("chmod 0640 ${tlsDir}/*")
-
-        ca_cert = server.succeed("cat ${caCert}")
-        agent.succeed(f"cat > ${caCert} << 'EOF'\n{ca_cert}EOF")
-        agent.succeed("chown -R keylime:keylime ${tlsDir}")
-        agent.succeed("chmod 0640 ${tlsDir}/*")
-
-        server.succeed("openssl verify -CAfile ${caCert} ${serverCert}")
-        server.succeed("openssl verify -CAfile ${caCert} ${clientCert}")
-
-      with subtest("Registrar starts and is listening with TLS"):
-        server.succeed("systemctl start keylime-registrar.service")
-        server.wait_for_unit("keylime-registrar.service")
-        server.wait_for_open_port(8890)
-        server.wait_for_open_port(8891)
-
-      with subtest("Verifier starts and is listening with mTLS"):
-        server.succeed("systemctl start keylime-verifier.service")
-        server.wait_for_unit("keylime-verifier.service")
-        server.wait_for_open_port(8881)
-
-      with subtest("Agent starts and registers with mTLS"):
-        agent.succeed("systemctl start keylime-agent.service")
-        agent.wait_for_unit("keylime-agent.service")
-        agent.wait_for_open_port(9002)
-
-      with subtest("Agent is registered in the registrar"):
-        server.wait_until_succeeds(
-          "keylime_tenant -c regstatus -u ${agentUuid} -r 127.0.0.1 -rp 8891 > /tmp/regstatus.out 2>&1"
-          " && grep -q '\"${agentUuid}\"' /tmp/regstatus.out",
-          timeout=30,
-        )
-
-    with subtest("Read PCR7 from agent TPM (Secure Boot policy)"):
-      # PCR7 is extended by UEFI firmware with the Secure Boot policy: PK, KEK,
-      # db, dbx variables and the certificates used to verify loaded images.
-      # It cannot be pre-calculated at build time so we read it from the TPM.
-      pcr7 = agent.succeed("tpm2_pcrread sha256:7 -Q -o /dev/stdout | od -An -tx1 | tr -d ' \n'").strip()
-      agent.log(f"PCR7 = {pcr7}")
-      assert len(pcr7) == 64, f"unexpected PCR7 length: {len(pcr7)}"
-      assert pcr7 != "0" * 64, "PCR7 is all zeros — Secure Boot not active?"
-
-    with subtest("Agent can be added for attestation with PCR policy"):
-      # PCR7:  Secure Boot policy (read from TPM at runtime)
-      # PCR11: UKI measurement + pcrphase (pre-calculated at build time)
-      tpm_policy = json.dumps({"7": [pcr7], "11": ["${pcr11hash}"]})
-      server.succeed(
-        "keylime_tenant -c add -t 192.168.1.1 -u ${agentUuid}"
-          " -r 127.0.0.1 -rp 8891 -v 127.0.0.1 -vp 8881"
-          f" --tpm_policy '{tpm_policy}'"
-        )
-
-      with subtest("Verifier attests the agent (reaches Get Quote state)"):
-        server.wait_until_succeeds(
-          "keylime_tenant -c cvstatus -u ${agentUuid} -v 127.0.0.1 -vp 8881 > /tmp/cvstatus.out 2>&1"
-          " && grep -qE '\"operational_state\": \"(Get Quote|Provide V)\"' /tmp/cvstatus.out",
-          timeout=60,
-        )
+        with subtest("Verifier attests the agent (reaches Get Quote state)"):
+          server.wait_until_succeeds(
+            "keylime_tenant -c cvstatus -u ${agentUuid} -v 127.0.0.1 -vp 8881 > /tmp/cvstatus.out 2>&1"
+            " && grep -qE '\"operational_state\": \"(Get Quote|Provide V)\"' /tmp/cvstatus.out",
+            timeout=60,
+          )
     '';
 }

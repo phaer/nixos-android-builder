@@ -7,6 +7,7 @@
   keylimeAgentModule,
   keylimePackage,
   keylimeAgentPackage,
+  pcrPolicy,
 }:
 let
   inherit (pkgs) lib;
@@ -80,6 +81,7 @@ in
             keylimeAgentModule
             keylimePackage
             keylimeAgentPackage
+            pcrPolicy
             ;
         };
       }

@@ -51,6 +51,7 @@ in
     pkgs.efitools
     pkgs.tpm2-tools
     enroll-secure-boot
+    (pkgs.callPackage ../packages/pcr-policy { }).read-firmware-pcrs
   ];
 
   # Enable PCR phase measurements (systemd-pcrextend extends PCR 11 with boot
