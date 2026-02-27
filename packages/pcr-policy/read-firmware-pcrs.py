@@ -18,7 +18,7 @@ from pathlib import Path
 
 FIRMWARE_PCRS = [0, 1, 2, 3, 7]
 TPM_SYSFS = Path("/sys/class/tpm/tpm0/pcr-sha256")
-EXPECTED_PCR11 = Path("/etc/pcr-policy/expected-pcr11")
+EXPECTED_PCR11 = Path("/boot/expected-pcr11")
 
 
 def read_pcr(pcr: int) -> str:
