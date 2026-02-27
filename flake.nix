@@ -113,7 +113,6 @@
           installerModules
           imageModules
           nixos
-          pcrPolicy
           ;
         keylimeModule = nixosModules.keylime;
         keylimeAgentModule = nixosModules.keylime-agent;
