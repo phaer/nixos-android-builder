@@ -70,20 +70,12 @@ in
   #
   # It can't be baked into the store partition or ESP at image build
   # time because that would create a circular dependency
-  # (store → UKI → expectedPcr11 → store). Instead it is:
-  #   1. Written to the ESP by configure-disk-image (post-build)
-  #   2. Symlinked to /etc/pcr-policy/expected-pcr11 at boot
+  # (store → UKI → expectedPcr11 → store). Instead it is written to
+  # the ESP by configure-disk-image set-pcr11 (post-build).
   #
-  # This lets read-firmware-pcrs --verify-pcr11 compare the
-  # running TPM state against the build-time expectation.
+  # read-firmware-pcrs --verify-pcr11 reads it from /boot/expected-pcr11
+  # at runtime to compare against the running TPM state.
   system.build.expectedPcr11 = expectedPcr11;
-
-  # Symlink the ESP file to /etc so read-firmware-pcrs finds it
-  # at a well-known path regardless of where /boot is mounted.
-  systemd.tmpfiles.rules = [
-    "d /etc/pcr-policy 0755 root root -"
-    "L+ /etc/pcr-policy/expected-pcr11 - - - - /boot/expected-pcr11"
-  ];
 
   # Enable PCR phase measurements (systemd-pcrextend extends PCR 11 with boot
   # phase strings so that the final value is only reachable after a full,
