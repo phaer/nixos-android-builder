@@ -359,6 +359,44 @@ def cmd_set_target(args):
         temp_path.unlink(missing_ok=True)
 
 
+def cmd_set_pcr11(args):
+    """Write expected PCR 11 hash to the ESP."""
+    device = Path(args.device)
+    if not device.exists():
+        raise InstallerError(
+            f"Device or image file not found: {device}")
+
+    expected_pcr11 = Path(args.expected_pcr11)
+    if not expected_pcr11.is_file():
+        raise InstallerError(
+            f"Expected PCR 11 file not found:"
+            f" {expected_pcr11}")
+
+    payload_only = is_payload_only(device)
+    if payload_only:
+        esp_offset = get_partition_offset(
+            device, UUID_EFI_SYSTEM)
+    else:
+        esp_offset = get_payload_esp_offset(device)
+
+    esp_img_spec = f"{device}@@{esp_offset}"
+    if not verify_mtools_access(esp_img_spec):
+        raise InstallerError(
+            "Cannot access EFI partition")
+
+    if subprocess.run(
+        ["mcopy", "-n", "-o", "-i", esp_img_spec,
+         str(expected_pcr11), "::/expected-pcr11"],
+        check=False, capture_output=True
+    ).returncode != 0:
+        raise InstallerError(
+            "Failed to write expected-pcr11 to ESP")
+
+    pcr11_hash = expected_pcr11.read_text().strip()
+    print(f"✓ Expected PCR 11 written to ESP:"
+          f" {pcr11_hash}")
+
+
 def cmd_set_storage(args):
     """Configure target for artifact storage."""
     device = Path(args.device)
@@ -453,11 +491,15 @@ Examples:
     storage_parser.add_argument('--target', required=True, help='Target device (e.g., /dev/sda) or "select" for interactive')
     storage_parser.add_argument('--device', required=True, help='Block device or disk image file')
 
+    pcr11_parser = subparsers.add_parser('set-pcr11', help='Write expected PCR 11 hash to ESP')
+    pcr11_parser.add_argument('--expected-pcr11', required=True, help='File containing expected PCR 11 hash')
+    pcr11_parser.add_argument('--device', required=True, help='Block device or disk image file')
+
 
     args = parser.parse_args()
 
     try:
-        {'status': cmd_status, 'sign': cmd_sign, 'set-target': cmd_set_target, 'set-storage': cmd_set_storage}[args.command](args)
+        {'status': cmd_status, 'sign': cmd_sign, 'set-target': cmd_set_target, 'set-storage': cmd_set_storage, 'set-pcr11': cmd_set_pcr11}[args.command](args)
     except InstallerError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
