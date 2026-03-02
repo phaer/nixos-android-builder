@@ -75,68 +75,15 @@
         };
 
       fetchAndroid = writeShellScriptBin "fetch-android" ''
-          set -e
+        set -e
 
-        USER_EMAIL='${cfg.userEmail}'
-        USER_NAME='${cfg.userName}'
-        REPO_MANIFEST_URL='${cfg.repoManifestUrl}'
         SOURCE_DIR='${cfg.sourceDir}'
+        SOURCE_TAR="/var/lib/artifacts/aosp_source.tar"
 
-        if [ -f /tmp/selected-branch ]; then
-          REPO_BRANCH="$(cat /tmp/selected-branch)"
-        else
-          REPO_BRANCH='${defaultBranch}'
-        fi
-
-        usage() {
-          cat <<EOF
-        Usage: $0 [options] [-- ...repo sync args...]
-
-        Options:
-          --user-email=EMAIL        Git user.email (default: ${cfg.userEmail})
-          --user-name=NAME          Git user.name (default: ${cfg.userName})
-          --repo-branch=BRANCH      Repo branch to init (default: ${defaultBranch}, or /tmp/selected-branch if present)
-          --repo-manifest-url=URL   Repo manifest URL (default: ${cfg.repoManifestUrl})
-          --source-dir=DIR          Source directory (default: ${cfg.sourceDir})
-          -h, --help                Show this help message
-        EOF
-          exit 0
-        }
-
-        while [[ $# -gt 0 ]]; do
-          case "$1" in
-            -h|--help) usage ;;
-            --user-email=*) USER_EMAIL="''${1#*=}" ;;
-            --user-name=*) USER_NAME="''${1#*=}" ;;
-            --repo-branch=*) REPO_BRANCH="''${1#*=}" ;;
-            --repo-manifest-url=*) REPO_MANIFEST_URL="''${1#*=}" ;;
-            --source-dir=*) SOURCE_DIR="''${1#*=}" ;;
-            --) shift; break ;;
-            *) break ;;
-          esac
-          shift
-        done
-
-        echo "Fetching android:"
-        echo "  repo.branch      = $REPO_BRANCH"
-        echo "  repo.manifestUrl = $REPO_MANIFEST_URL"
-        echo
-
+        echo "Extracting $SOURCE_TAR..."
         mkdir -p "$SOURCE_DIR"
-        cd "$SOURCE_DIR"
-
-        git config --global color.ui true
-        git config --global user.email "$USER_EMAIL"
-        git config --global user.name "$USER_NAME"
-
-        repo init \
-          --partial-clone \
-          --no-use-superproject \
-          -b "$REPO_BRANCH" \
-          -u "$REPO_MANIFEST_URL"
-
-        repo sync -c "$@" || true
-        repo sync -c "$@"
+        tar xf "$SOURCE_TAR" -C "$SOURCE_DIR"
+        echo "Done."
       '';
 
       buildAndroid = writeShellScriptBin "build-android" ''
