@@ -202,6 +202,15 @@ The `debug.nix` module, activated by `nixosAndroidBuilder.debug`, adds convenien
 - Enables password-less `sudo` for `wheel` group members.
 - Adds verbose boot logging and a debug shell on tty3.
 
+## Credential Storage {#credential-storage}
+
+The `credential-storage.nix` module provides TPM-backed persistent storage for secrets on the target machine. It uses `systemd-creds` to encrypt credentials with the machine's TPM, bound to PCR 7 (Secure Boot policy), and stores them on the artifact storage disk.
+
+A `credential-store` utility for credentials management is included. See the [user guide](user-guide.pdf) for usage.
+
+Encrypted credentials are kept in `/var/lib/artifacts/credentials/`, which is bind-mounted to `/run/credstore.encrypted/`. This is one of the standard directories that systemd searches when a service uses `LoadCredentialEncrypted=`, so stored credentials can be consumed by systemd services without additional configuration.
+
+
 \pagebreak
 # Sequence Chart
 
