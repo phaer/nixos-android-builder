@@ -65,4 +65,8 @@ in
     ];
   };
 
+  credentialStorage = pkgs.testers.runNixOSTest {
+    imports = [ ./credential-storage.nix ];
+  };
+
 }

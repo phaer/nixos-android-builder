@@ -365,6 +365,42 @@ Once artifact storage is enabled, the `copy-android-outputs` script copies build
 
 Copying them to a remote persistent storage medium is left to the user at this time.
 
+## Credential Storage {#credential-storage}
+
+The builder includes a TPM-backed credential store for persisting secrets — such as those needed to authenticate to private source repositories or clodu storage to stora build artifacts in — across reboots. Credentials are encrypted with the machine's TPM and can only be decrypted on the same hardware with the same Secure Boot policy.
+
+The `credential-store` command manages credentials on the target machine:
+
+```shell-session
+$ echo 'my-secret-token' | credential-store add api-token
+$ credential-store list
+api-token
+$ credential-store show api-token
+my-secret-token
+$ credential-store remove api-token
+```
+
+Credentials can also be added from a file:
+
+```shell-session
+$ credential-store add api-token ~/token.txt
+```
+
+Credential names must start with a letter or digit and may only contain letters, digits, dots, hyphens, and underscores.
+
+Stored credentials are encrypted with the machine's TPM, bound to PCR 7 (Secure Boot policy). They are persisted on the artifact storage disk at `/var/lib/artifacts/credentials/` and bind-mounted to `/run/credstore.encrypted/`, which is automatically searched by systemd when services use `LoadCredentialEncrypted=`.
+
+The encryption parameters can be customized via `nixosAndroidBuilder.credentialStorage.encryptionFlags` — for example, to also bind to PCR 11 (the specific UKI):
+
+```nix
+nixosAndroidBuilder.credentialStorage.encryptionFlags = [
+  "--with-key=tpm2"
+  "--tpm2-pcrs=7+11"
+];
+```
+
+Note that binding to PCR 11 means all stored credentials are invalidated whenever the builder image is updated.
+
 ## Reset to Initial State
 
 To start a fresh build, simply reboot.

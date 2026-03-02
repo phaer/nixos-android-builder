@@ -21,6 +21,7 @@ We created a modular proof‑of‑concept based on NixOS that fulfills most of t
 * **artifact uploads**: build artifacts are currently not automatically uploaded anywhere, but stay on the build machine.
   Integration of a Trusted Platform Module (TPM) could be useful here, to ease authentication to private repositories as well as destinations for artifact upload.
 * **measured boot**: while we use Secure Boot with a platform custom key, we do not measure involved components via a TPM yet. Doing so would improve existing Secure Boot measures as well as help with implementing attestation capabilities later on.
+* **credential storage**: TPM-encrypted credentials (via `systemd-creds`) are currently bound to PCR 7 (Secure Boot policy) only, not PCR 11 (UKI). Since the Secure Boot signing keys are created specifically for this project, only images signed with our key can produce a matching PCR 7 — so the practical risk is low. Binding to PCR 11 as well would prevent a *different* image signed with the same key from decrypting credentials, at the cost of invalidating all stored credentials on every image update. A `systemd-measure sign` based approach could provide PCR 11 binding without this drawback.
 * **higher-level configuration**: Adapting the build environment to the needs of custom AOSP distributions might need extra work. Depending on the nature of those
   customizations, a good understanding of `nix` might be needed. We will ease those as far as possible, as we learn more about users customization needs.
 
@@ -200,6 +201,15 @@ The `debug.nix` module, activated by `nixosAndroidBuilder.debug`, adds convenien
 - Sets an empty password for the `user` account and enables auto-login.
 - Enables password-less `sudo` for `wheel` group members.
 - Adds verbose boot logging and a debug shell on tty3.
+
+## Credential Storage {#credential-storage}
+
+The `credential-storage.nix` module provides TPM-backed persistent storage for secrets on the target machine. It uses `systemd-creds` to encrypt credentials with the machine's TPM, bound to PCR 7 (Secure Boot policy), and stores them on the artifact storage disk.
+
+A `credential-store` utility for credentials management is included. See the [user guide](user-guide.pdf) for usage.
+
+Encrypted credentials are kept in `/var/lib/artifacts/credentials/`, which is bind-mounted to `/run/credstore.encrypted/`. This is one of the standard directories that systemd searches when a service uses `LoadCredentialEncrypted=`, so stored credentials can be consumed by systemd services without additional configuration.
+
 
 \pagebreak
 # Sequence Chart
