@@ -69,13 +69,16 @@ in
       "PATH" = "$PATH:/bin";
     };
 
-    # Bind mount /bin, /lib and /lib64 to our FHS paths during runtime
+    # Bind mount /bin, /lib and /lib64 to our FHS paths during runtime.
+    # The source paths live in /nix/store which is an overlay mount, so
+    # we add an explicit dependency to ensure the store is available.
     fileSystems =
       let
         mkBindMount = p: {
           device = p;
           options = [ "bind" ];
           fsType = "none";
+          depends = [ "/nix/store" ];
         };
       in
       {
