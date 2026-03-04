@@ -77,9 +77,9 @@ def main() -> None:
         if not EXPECTED_PCR11.exists():
             print(
                 "Error: --verify-pcr11 requires"
-                f" {EXPECTED_PCR11} to exist."
-                " Was the image built with PCR 11"
-                " policy support?",
+                f" {EXPECTED_PCR11} to exist.\n"
+                "Run: configure-disk-image set-pcr11"
+                " --device <image>",
                 file=sys.stderr,
             )
             sys.exit(1)

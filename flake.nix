@@ -1,5 +1,5 @@
 {
-  description = "A ephemeral NixOS VMs to build Android Open Source Project";
+  description = "An ephemeral NixOS system to build Android Open Source Project";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-25.11";
@@ -85,6 +85,7 @@
           packages = with secureBootScripts; [
             create-signing-keys
             diskInstaller.configure
+            pcrPolicy.calculate-pcr11
             docs.build-docs
             docs.watch-docs
             pkgs.pam_u2f

@@ -227,6 +227,20 @@ def show_storage_target(img_spec):
     print()
 
 
+def show_pcr11_status(img_spec):
+    result = subprocess.run(
+        ["mtype", "-i", img_spec, "::/expected-pcr11"],
+        capture_output=True, text=True, check=False,
+    )
+    print("PCR 11 (UKI measurement):")
+    if result.returncode == 0:
+        pcr11_hash = result.stdout.strip().replace('\r', '').replace('\n', '')
+        print(f"  ✓ Expected hash: {pcr11_hash}")
+    else:
+        print(f"  ✗ Not configured (run: configure-disk-image set-pcr11 --device <image>)")
+    print()
+
+
 def cmd_status(args):
     """Check status of installer image."""
     device = Path(args.device)
@@ -254,6 +268,7 @@ def cmd_status(args):
             raise InstallerError("Cannot access EFI partition (invalid FAT filesystem)")
 
         show_storage_target(esp_img_spec)
+        show_pcr11_status(esp_img_spec)
         extract_and_verify_uki(esp_img_spec, cert_path, "Payload")
     else:
         # Full installer image with nested payload
@@ -273,6 +288,7 @@ def cmd_status(args):
 
         show_install_target(installer_img_spec)
         show_storage_target(installer_img_spec)
+        show_pcr11_status(payload_img_spec)
 
         extract_and_verify_uki(installer_img_spec, cert_path, "Installer")
         extract_and_verify_uki(payload_img_spec, cert_path, "Payload")
@@ -360,17 +376,11 @@ def cmd_set_target(args):
 
 
 def cmd_set_pcr11(args):
-    """Write expected PCR 11 hash to the ESP."""
+    """Compute expected PCR 11 from the UKI inside the image and write it to the ESP."""
     device = Path(args.device)
     if not device.exists():
         raise InstallerError(
             f"Device or image file not found: {device}")
-
-    expected_pcr11 = Path(args.expected_pcr11)
-    if not expected_pcr11.is_file():
-        raise InstallerError(
-            f"Expected PCR 11 file not found:"
-            f" {expected_pcr11}")
 
     payload_only = is_payload_only(device)
     if payload_only:
@@ -384,15 +394,55 @@ def cmd_set_pcr11(args):
         raise InstallerError(
             "Cannot access EFI partition")
 
-    if subprocess.run(
-        ["mcopy", "-n", "-o", "-i", esp_img_spec,
-         str(expected_pcr11), "::/expected-pcr11"],
-        check=False, capture_output=True
-    ).returncode != 0:
-        raise InstallerError(
-            "Failed to write expected-pcr11 to ESP")
+    if args.expected_pcr11:
+        # Use a pre-computed hash file if provided
+        expected_pcr11 = Path(args.expected_pcr11)
+        if not expected_pcr11.is_file():
+            raise InstallerError(
+                f"Expected PCR 11 file not found:"
+                f" {expected_pcr11}")
+        pcr11_hash = expected_pcr11.read_text().strip()
+    else:
+        # Extract the UKI from the image and compute PCR 11
+        with tempfile.NamedTemporaryFile(suffix=".efi", delete=False) as temp_efi:
+            temp_uki = Path(temp_efi.name)
+        try:
+            print("Extracting UKI from image...")
+            if subprocess.run(
+                ["mcopy", "-n", "-i", esp_img_spec,
+                 "::/EFI/BOOT/BOOTX64.EFI", str(temp_uki)],
+                check=False, capture_output=True
+            ).returncode != 0:
+                raise InstallerError(
+                    "Failed to extract UKI from image")
 
-    pcr11_hash = expected_pcr11.read_text().strip()
+            print("Computing expected PCR 11...")
+            result = subprocess.run(
+                ["calculate-pcr11", str(temp_uki)],
+                capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                raise InstallerError(
+                    f"Failed to compute PCR 11: {result.stderr.strip()}")
+            pcr11_hash = result.stdout.strip()
+        finally:
+            temp_uki.unlink(missing_ok=True)
+
+    with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_hash:
+        temp_hash.write(pcr11_hash)
+        temp_hash_path = Path(temp_hash.name)
+
+    try:
+        if subprocess.run(
+            ["mcopy", "-n", "-o", "-i", esp_img_spec,
+             str(temp_hash_path), "::/expected-pcr11"],
+            check=False, capture_output=True
+        ).returncode != 0:
+            raise InstallerError(
+                "Failed to write expected-pcr11 to ESP")
+    finally:
+        temp_hash_path.unlink(missing_ok=True)
+
     print(f"✓ Expected PCR 11 written to ESP:"
           f" {pcr11_hash}")
 
@@ -491,10 +541,9 @@ Examples:
     storage_parser.add_argument('--target', required=True, help='Target device (e.g., /dev/sda) or "select" for interactive')
     storage_parser.add_argument('--device', required=True, help='Block device or disk image file')
 
-    pcr11_parser = subparsers.add_parser('set-pcr11', help='Write expected PCR 11 hash to ESP')
-    pcr11_parser.add_argument('--expected-pcr11', required=True, help='File containing expected PCR 11 hash')
+    pcr11_parser = subparsers.add_parser('set-pcr11', help='Compute expected PCR 11 from UKI in image and write to ESP')
+    pcr11_parser.add_argument('--expected-pcr11', help='File containing pre-computed PCR 11 hash (default: compute from UKI in image)')
     pcr11_parser.add_argument('--device', required=True, help='Block device or disk image file')
-
 
     args = parser.parse_args()
 
