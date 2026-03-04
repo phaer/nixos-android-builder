@@ -32,7 +32,7 @@ let
   agentDefaults = {
     version = "2.4";
     api_versions = "default";
-    uuid = "d432fbb3-d2f1-4a97-9ef7-75bd81c00000";
+    uuid = "hash_ek";
     ip = "127.0.0.1";
     port = 9002;
     contact_ip = "127.0.0.1";

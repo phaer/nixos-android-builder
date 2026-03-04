@@ -9,8 +9,6 @@
   ...
 }:
 let
-  agentUuid = "d432fbb3-d2f1-4a97-9ef7-75bd81c00000";
-
   # TLS certificate paths (populated by test script before services start)
   tlsDir = "/var/lib/keylime/tls";
   caCert = "${tlsDir}/ca-cert.pem";
@@ -146,7 +144,7 @@ in
       services.keylime-agent = {
         enable = true;
         settings = {
-          uuid = agentUuid;
+          uuid = "hash_ek";
           ip = "0.0.0.0";
           port = 9002;
           contact_ip = "192.168.1.1";
@@ -253,17 +251,18 @@ in
         server.wait_for_unit("keylime-verifier.service")
         server.wait_for_open_port(8881)
 
-      with subtest("Agent starts and registers with mTLS"):
+      with subtest("Agent starts and registers with mTLS (EK-derived UUID)"):
         agent.succeed("systemctl start keylime-agent.service")
         agent.wait_for_unit("keylime-agent.service")
         agent.wait_for_open_port(9002)
 
-      with subtest("Agent is registered in the registrar"):
-        server.wait_until_succeeds(
-          "keylime_tenant -c regstatus -u ${agentUuid} -r 127.0.0.1 -rp 8891 > /tmp/regstatus.out 2>&1"
-          " && grep -q '\"${agentUuid}\"' /tmp/regstatus.out",
-          timeout=30,
-        )
+        # Discover the EK-derived UUID from the agent's log
+        agent_uuid = agent.succeed(
+          "journalctl -u keylime-agent -o cat"
+          " | grep -oP 'Agent UUID: \\K[0-9a-f]+'"
+        ).strip()
+        assert len(agent_uuid) > 0, "Could not find agent UUID in journal"
+        agent.log(f"Agent EK-derived UUID: {agent_uuid}")
 
       with subtest("Read and verify PCRs from agent TPM"):
         # read-firmware-pcrs reads PCRs 0-3, 7 from the TPM.
@@ -281,14 +280,14 @@ in
         # Use the verified policy from read-firmware-pcrs directly.
         policy = json.dumps({"7": tpm_policy["7"], "11": tpm_policy["11"]})
         server.succeed(
-          "keylime_tenant -c add -t 192.168.1.1 -u ${agentUuid}"
+          f"keylime_tenant -c add -t 192.168.1.1 -u {agent_uuid}"
           " -r 127.0.0.1 -rp 8891 -v 127.0.0.1 -vp 8881"
           f" --tpm_policy '{policy}'"
         )
 
       with subtest("Verifier attests the agent (reaches Get Quote state)"):
         server.wait_until_succeeds(
-          "keylime_tenant -c cvstatus -u ${agentUuid} -v 127.0.0.1 -vp 8881 > /tmp/cvstatus.out 2>&1"
+          f"keylime_tenant -c cvstatus -u {agent_uuid} -v 127.0.0.1 -vp 8881 > /tmp/cvstatus.out 2>&1"
           " && grep -qE '\"operational_state\": \"(Get Quote|Provide V)\"' /tmp/cvstatus.out",
           timeout=60,
         )

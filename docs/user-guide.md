@@ -24,7 +24,7 @@ A more detailed architecture and technical description is available in [docs.pdf
     - EFI boot with secure boot in setup mode
 
   * A **git checkout** of this repository, containing nix expressions and helper scripts to build the image.
-    Commands in this document assume to be run from the repository’s top-level directory, unless explicitly stated otherwise.
+    Commands in this document assume to be run from the repository's top-level directory, unless explicitly stated otherwise.
 
 \pagebreak
 
@@ -33,7 +33,7 @@ A more detailed architecture and technical description is available in [docs.pdf
 ## Create Secure Boot Keys
 
 We ship a small helper script, `create-signing-keys`, in our repo that generates a key pair to sign our Unified Kernel Image (`UKI`) with for secure boot.
-The script is intended to be run from the repository’s top-level directory and will write keys, certificates, etc. to a `keys/` directory relative to you current working directory.
+The script is intended to be run from the repository's top-level directory and will write keys, certificates, etc. to a `keys/` directory relative to you current working directory.
 
 Those keys are required for Secure Boot signing and enrollment of target machines.
 They need to be stored **secure** and **safely**, and **must not** be committed to the repository plain text.
@@ -42,7 +42,7 @@ How to handle that is currently left to the user to decide.
 Various 3rd-party tools such as [SOPS](https://github.com/getsops/sops/) can be used
 for this purpose.
 
-Let’s start by running the following command in a local git checkout of this repository:
+Let's start by running the following command in a local git checkout of this repository:
 
 ```shell-session
 $ nix run .#create-signing-keys
@@ -88,12 +88,12 @@ But first...
 
 ## Build an Image
 
-Let’s build a ready-to-boot disk image from the nix expressions in this repository.
+Let's build a ready-to-boot disk image from the nix expressions in this repository.
 
 The following command will automatically download dependencies from the binary cache at [cache.nixos.org](https://cache.nixos.org) and build those not already cached.
 Depending on your internet uplink and the speed of your local machine, the first run may take a long time, but subsequent runs will be much faster due to local caching of artifacts.
 
-*Note*: A 3rd-party tool such as [nix-output-monitor](https://github.com/maralorn/nix-output-monitor) can help to gain a better overview of what’s currently being downloaded
+*Note*: A 3rd-party tool such as [nix-output-monitor](https://github.com/maralorn/nix-output-monitor) can help to gain a better overview of what's currently being downloaded
 or built.
 `nix shell nixpkgs#nom` starts a shell with it, where you can just replace `nix build` with `nom build` below.
 
@@ -114,7 +114,7 @@ android-builder> removed 'android-builder_25.11pre-git.raw'
 
 When `nix` finishes building the image, it creates a symlink - `result` - that points to a `/nix/store` path containing a raw disk image.
 
-That image already contains a full partition table and our NixOS closure including all tools to build Android. It’s almost ready to boot,
+That image already contains a full partition table and our NixOS closure including all tools to build Android. It's almost ready to boot,
 but not yet signed for secure boot. We are going to fix that in the next step!
 
 We can see the full path as well as the size of the generated disk image by running i.e.:
@@ -127,7 +127,7 @@ $ du --human-readable --apparent-size "$(realpath result/*.raw)"
 2.7G    /nix/store/[hash]-android-builder-25.11pre-git/android-builder_25.11pre-git.raw
 ```
 
-(Your disk image’s size may be slightly different than this example)
+(Your disk image's size may be slightly different than this example)
 
 ## Sign the Image
 
@@ -155,7 +155,21 @@ Copying keystore files for auto-enrollment...
 ✓ Keystore files copied to ESP
 ```
 
-After this step, `android-builder_25.11pre-git.raw` in the repository’s top-level directory is ready to be flashed to a block device in the next step!
+To write the expected PCR 11 hash (UKI measurement) to the image, run:
+
+```shell-session
+$ nix run .#configure-disk-image -- set-pcr11 --device android-builder_25.11pre-git.raw
+```
+
+``` text
+Extracting UKI from image...
+Computing expected PCR 11...
+✓ Expected PCR 11 written to ESP: 00e9c94ef58cd0c569e2872b451fee0e30b322dffb38cf79415c9f478807dddf
+```
+
+This step must be run **after** signing, since signing changes the UKI and therefore its PCR 11 value. If omitted, runtime PCR 11 verification (`read-firmware-pcrs --verify-pcr11`) will not be available.
+
+After this step, `android-builder_25.11pre-git.raw` in the repository's top-level directory is ready to be flashed to a block device in the next step!
 
 ## Flash the Image
 
@@ -163,7 +177,7 @@ With our image both built and signed, we are now ready to flash it to a block de
 
 Attach the block device to your local machine and make sure you find its *device path*, e.g. via `lsblk`. We will use `/dev/sdX` as the block
 device, `android-builder_25.11pre-git.raw` as our image name in this example. While any tool to write a disk image to a block device could do
-the job, we simply use `dd` here and ensure that the kernel’s page cache is flushed by waiting for `sync` to finish before detaching the block
+the job, we simply use `dd` here and ensure that the kernel's page cache is flushed by waiting for `sync` to finish before detaching the block
 device from the local machine:
 
 ```shell-session
@@ -191,7 +205,7 @@ So you do **not** need to put secure boot in setup mode again if i.e. an earlier
 After booting, you will be dropped into a NixOS environment with an interactive shell that contains the Android build tools by default.
 
 ## Fetch Android
-The `fetch-android` script clones the latest AOSP repository into the builder’s workspace and checks out the default branch.
+The `fetch-android` script clones the latest AOSP repository into the builder's workspace and checks out the default branch.
 Run it from the shell:
 
 ```shell-session
@@ -367,7 +381,7 @@ Copying them to a remote persistent storage medium is left to the user at this t
 
 ## Credential Storage {#credential-storage}
 
-The builder includes a TPM-backed credential store for persisting secrets — such as those needed to authenticate to private source repositories or clodu storage to stora build artifacts in — across reboots. Credentials are encrypted with the machine's TPM and can only be decrypted on the same hardware with the same Secure Boot policy.
+The builder includes a TPM-backed credential store for persisting secrets - such as those needed to authenticate to private source repositories or clodu storage to stora build artifacts in - across reboots. Credentials are encrypted with the machine's TPM and can only be decrypted on the same hardware with the same Secure Boot policy.
 
 The `credential-store` command manages credentials on the target machine:
 
@@ -390,7 +404,7 @@ Credential names must start with a letter or digit and may only contain letters,
 
 Stored credentials are encrypted with the machine's TPM, bound to PCR 7 (Secure Boot policy). They are persisted on the artifact storage disk at `/var/lib/artifacts/credentials/` and bind-mounted to `/run/credstore.encrypted/`, which is automatically searched by systemd when services use `LoadCredentialEncrypted=`.
 
-The encryption parameters can be customized via `nixosAndroidBuilder.credentialStorage.encryptionFlags` — for example, to also bind to PCR 11 (the specific UKI):
+The encryption parameters can be customized via `nixosAndroidBuilder.credentialStorage.encryptionFlags` - for example, to also bind to PCR 11 (the specific UKI):
 
 ```nix
 nixosAndroidBuilder.credentialStorage.encryptionFlags = [
@@ -408,7 +422,7 @@ To start a fresh build, simply reboot.
 Shutting down the machine, even sudden power loss, will flush the disk encryption key from RAM and render all previous build artifacts - except those explicitly copied to `/var/lib/artifacts` - inaccessible.
 Upon reboot, the `/var/lib/build` partition will be re-formatted and re-encrypted.
 
-To reboot, use your machine’s physical power buttons or run the following in a shell:
+To reboot, use your machine's physical power buttons or run the following in a shell:
 
 ```shell-session
 $ systemctl reboot
@@ -420,7 +434,7 @@ $ systemctl reboot
 
 All dependencies besides Android sources are coming from `nixpkgs`. So just updating the pinned `nixpkgs` revision in our flake, updates all software packages used to build the image.
 
-To update all flake’s inputs, run:
+To update all flake's inputs, run:
 
 ```shell-session
 $ nix flake update
@@ -496,6 +510,9 @@ Installation target:
 Storage target:
   Interactive menu (user will select artifact storage)
 
+PCR 11 (UKI measurement):
+  ✓ Expected hash: 00e9c94ef58cd0c569e2872b451fee0e30b322dffb38cf79415c9f478807dddf
+
 Installer Secure Boot status:
   ✓ Signed and verified
 
@@ -506,7 +523,7 @@ Payload Secure Boot status:
 
 # Automated Tests {#automated-tests}
 
-The repository ships a NixOS VM test that boots a built image and checks the build environment, secure‑boot enrollment, and dm‑verity status.
+The repository ships a NixOS VM test that boots a built image and checks the build environment, secure-boot enrollment, and dm-verity status.
 
 To run the tests in a virtual machine on your local machine:
 
@@ -602,7 +619,7 @@ This will:
 3. Pre-configure artifact storage to use `/dev/vdb` (a second virtual disk is created automatically when `nixosAndroidBuilder.artifactStorage.enable` is set).
 4. Start a QEMU VM with Secure Boot, a TPM, and a graphical window.
 
-If the writable disk image already exists from a previous run, steps 1–3 are skipped and the existing image is reused. Delete the `.raw` file to force a fresh image.
+If the writable disk image already exists from a previous run, steps 1-3 are skipped and the existing image is reused. Delete the `.raw` file to force a fresh image.
 
 Use `systemctl poweroff` from within the VM, or close the QEMU window, to stop it.
 
@@ -620,7 +637,7 @@ The system requires Secure Boot to be active. Enter your firmware setup (usually
 2. Enable Secure Boot
 3. Save and reboot
 
-**Problem: "Secure Boot setup mode" – keys won't enroll**
+**Problem: "Secure Boot setup mode" - keys won't enroll**
 
 Ensure the firmware is in Setup Mode, not User Mode with existing keys:
 
@@ -680,7 +697,7 @@ $ ls -la /bin/bash /lib/ld-linux-x86-64.so.2
 
 **Problem: Build outputs disappeared after reboot**
 
-This is expected behavior – the `/var/lib/build` partition is ephemeral by design. To persist outputs, enable artifact storage: set `nixosAndroidBuilder.artifactStorage.enable = true` in `configuration.nix`.
+This is expected behavior - the `/var/lib/build` partition is ephemeral by design. To persist outputs, enable artifact storage: set `nixosAndroidBuilder.artifactStorage.enable = true` in `configuration.nix`.
 
 
 ## VM Testing Issues
