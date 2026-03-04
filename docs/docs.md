@@ -20,7 +20,7 @@ We created a modular proof‑of‑concept based on NixOS that fulfills most of t
 * **aarch64 support** could be added if needed. Only `x86_64` with `UEFI` is implemented at the moment.
 * **artifact uploads**: build artifacts are currently not automatically uploaded anywhere, but stay on the build machine.
   Integration of a Trusted Platform Module (TPM) could be useful here, to ease authentication to private repositories as well as destinations for artifact upload.
-* **measured boot**: while we use Secure Boot with a platform custom key, we do not measure involved components via a TPM yet. Doing so would improve existing Secure Boot measures as well as help with implementing attestation capabilities later on.
+* **measured boot & attestation**: PCR 11 (UKI) is now pre-calculated at build time and verified at runtime via `read-firmware-pcrs`. Experimental keylime modules provide continuous remote attestation against PCR 7 + 11. Remaining work: firmware PCR baseline capture workflow for real hardware, wiring the keylime agent into the production boot flow, and replacing the `accept-all` measured boot policy.
 * **credential storage**: TPM-encrypted credentials (via `systemd-creds`) are currently bound to PCR 7 (Secure Boot policy) only, not PCR 11 (UKI). Since the Secure Boot signing keys are created specifically for this project, only images signed with our key can produce a matching PCR 7 — so the practical risk is low. Binding to PCR 11 as well would prevent a *different* image signed with the same key from decrypting credentials, at the cost of invalidating all stored credentials on every image update. A `systemd-measure sign` based approach could provide PCR 11 binding without this drawback.
 * **higher-level configuration**: Adapting the build environment to the needs of custom AOSP distributions might need extra work. Depending on the nature of those
   customizations, a good understanding of `nix` might be needed. We will ease those as far as possible, as we learn more about users customization needs.
@@ -250,8 +250,14 @@ flowchart TB
       copy-auth["<b>(7)</b> Copy Secure Boot update bundles"]
     end
 
-    signing-script --> signed
-    signed["<b>(8)</b> Image is signed & ready to boot"]
+    signing-script --> set-pcr11
+    subgraph set-pcr11["configure-disk-image set-pcr11"]
+      direction TB
+      inject-pcr11["<b>(8)</b> Write expected PCR 11 hash to ESP"]
+    end
+
+    set-pcr11 --> signed
+    signed["<b>(9)</b> Image is signed & ready to boot"]
 
 ~~~
 
@@ -284,7 +290,8 @@ Usage is documented in [user-guide.pdf](user-guide.pdf). `configure-disk-image` 
 
 - **(6)** The `UKI` is copied to a temporary file, signed, and copied back into the `esp` again.
 - **(7)** Secure Boot update bundles (`*.auth` files) are copied to the `esp` to ensure that `ensure-secure-boot-enrollment.service` can find them during boot.
-- **(8)** We finally have a signed image, ready to flash & boot on a target machine.
+- **(8)** The expected PCR 11 value is pre-calculated from the signed UKI and written to the ESP as `/boot/expected-pcr11`. At runtime, `read-firmware-pcrs --verify-pcr11` compares the live TPM PCR 11 against this value.
+- **(9)** We finally have a signed image, ready to flash & boot on a target machine.
 
 
 \pagebreak
