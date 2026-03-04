@@ -47,7 +47,6 @@ in
         registrar = {
           enable = true;
           settings = {
-            ip = "0.0.0.0";
             tls_dir = tlsDir;
             server_key = serverKey;
             server_cert = serverCert;
@@ -58,7 +57,6 @@ in
         verifier = {
           enable = true;
           settings = {
-            ip = "0.0.0.0";
             enable_agent_mtls = true;
             tls_dir = tlsDir;
             server_key = serverKey;

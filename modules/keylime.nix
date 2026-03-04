@@ -99,7 +99,7 @@ let
   # Defaults taken from keylime 7.14.1 keylime/config.py
   registrarDefaults = {
     version = "2.5";
-    ip = "127.0.0.1";
+    ip = "0.0.0.0";
     port = 8890;
     tls_port = 8891;
     tls_dir = "default";
@@ -133,7 +133,7 @@ let
   verifierDefaults = {
     version = "2.5";
     uuid = "default";
-    ip = "127.0.0.1";
+    ip = "0.0.0.0";
     port = 8881;
     registrar_ip = "127.0.0.1";
     registrar_port = 8891;
@@ -254,7 +254,6 @@ in
           Values are merged over built-in defaults.
         '';
         example = {
-          ip = "0.0.0.0";
           tls_dir = "/var/lib/keylime/tls";
           server_key = "/var/lib/keylime/tls/server-key.pem";
           server_cert = "/var/lib/keylime/tls/server-cert.pem";
@@ -276,7 +275,6 @@ in
           Values are merged over built-in defaults.
         '';
         example = {
-          ip = "0.0.0.0";
           tls_dir = "/var/lib/keylime/tls";
           server_key = "/var/lib/keylime/tls/server-key.pem";
           trusted_client_ca = [ "/var/lib/keylime/tls/ca-cert.pem" ];
@@ -339,5 +337,13 @@ in
           };
         };
       };
+
+    networking.firewall.allowedTCPPorts =
+      lib.optionals cfg.registrar.enable [
+        (cfg.registrar.settings.port or registrarDefaults.port)
+        (cfg.registrar.settings.tls_port or registrarDefaults.tls_port)
+      ]
+      ++ lib.optional cfg.verifier.enable
+        (cfg.verifier.settings.port or verifierDefaults.port);
   };
 }
