@@ -82,7 +82,7 @@
 
         echo "Extracting $SOURCE_TAR..."
         mkdir -p "$SOURCE_DIR"
-        tar xf "$SOURCE_TAR" -C "$SOURCE_DIR"
+        tar xf "$SOURCE_TAR" -C "$SOURCE_DIR" --strip-components=1
         echo "Done."
       '';
 
