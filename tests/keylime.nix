@@ -57,6 +57,7 @@ in
         verifier = {
           enable = true;
           settings = {
+            mode = "push";
             enable_agent_mtls = true;
             tls_dir = tlsDir;
             server_key = serverKey;
@@ -147,10 +148,13 @@ in
           port = 9002;
           contact_ip = "192.168.1.1";
           contact_port = 9002;
-          registrar_ip = "server";
-          registrar_port = 8890;
-          registrar_tls_enabled = true;
-          registrar_tls_ca_cert = caCert;
+          registrar_ip = lib.mkForce "server";
+          registrar_port = lib.mkForce 8890;
+          registrar_tls_enabled = lib.mkForce true;
+          registrar_tls_ca_cert = lib.mkForce caCert;
+          verifier_url = lib.mkForce "https://server:8881";
+          verifier_tls_ca_cert = lib.mkForce caCert;
+          attestation_interval_seconds = lib.mkForce 2;
           enable_agent_mtls = true;
           enable_insecure_payload = true;
           trusted_client_ca = caCert;
@@ -180,7 +184,6 @@ in
       server.wait_for_unit("multi-user.target")
       # Agent reboots once to enroll Secure Boot keys; wait for the second boot
       agent.wait_for_unit("multi-user.target")
-
       with subtest("Generate mTLS PKI on server and distribute CA cert to agent"):
         server.succeed("mkdir -p ${tlsDir}")
 
