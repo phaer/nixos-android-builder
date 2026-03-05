@@ -171,7 +171,11 @@ in
     };
 
     users.groups.keylime = { };
-    users.groups.tss = { };
+
+    security.tpm2 = {
+      enable = true;
+      tctiEnvironment.enable = true;
+    };
 
     # When a registrar CA cert is provided, enable TLS toward the registrar
     # and use the same CA for verifier mTLS, unless the user overrides them.
