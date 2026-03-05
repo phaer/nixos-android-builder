@@ -10,6 +10,22 @@
 }:
 let
   inherit (pkgs) lib;
+
+  # Disable the keylime agent in tests that don't provide a registrar.
+  # Without a registrar the agent crash-loops, which can delay boot.
+  noKeylimeAgent = {
+    nodes.machine =
+      { ... }:
+      {
+        services.keylime-agent.enable = lib.mkForce false;
+      };
+  };
+
+  # NixOS VM tests include a custom backdoor for test instrumentation.
+  # The installer does as well, while running inside a test VM, but
+  # the installed system it boots into does not by default. So we
+  # swap out the image to install with one that's extended to include
+  # the test instrumentation backdoor.
   nixosWithBackdoor = nixos.extendModules {
     modules = [
       (
@@ -35,9 +51,10 @@ in
   integration = pkgs.testers.runNixOSTest {
     imports = [
       ./integration.nix
+      noKeylimeAgent
       {
         _module.args = {
-          inherit imageModules;
+          imageModules = imageModules;
         };
       }
     ];
@@ -74,8 +91,8 @@ in
       ./keylime.nix
       {
         _module.args = {
+          imageModules = imageModules;
           inherit
-            imageModules
             keylimeModule
             keylimeAgentModule
             keylimePackage
@@ -87,7 +104,9 @@ in
   };
 
   credentialStorage = pkgs.testers.runNixOSTest {
-    imports = [ ./credential-storage.nix ];
+    imports = [
+      ./credential-storage.nix
+    ];
   };
 
 }
