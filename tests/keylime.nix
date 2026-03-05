@@ -266,6 +266,8 @@ in
         agent.log(f"Agent EK-derived UUID: {agent_uuid}")
 
       with subtest("Read and verify PCRs from agent TPM"):
+        # Ensure /boot is mounted (may need a moment after second boot)
+        agent.succeed("mkdir -p /boot && mountpoint -q /boot || mount /boot")
         # read-firmware-pcrs reads PCRs 0-3, 7 from the TPM.
         # --verify-pcr11 also reads PCR 11 and checks it against the
         # expected value baked into the ESP at /boot/expected-pcr11.
