@@ -250,7 +250,7 @@ let
     transparency_log_sign_algo = "sha256";
     signed_attributes = "";
     require_allow_list_signatures = false;
-    mode = "pull";
+    mode = "push";
     challenge_lifetime = 1800;
     verification_timeout = 0;
     session_create_rate_limit_per_ip = 50;

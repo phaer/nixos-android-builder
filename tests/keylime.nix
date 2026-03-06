@@ -128,8 +128,6 @@ in
 
       nixosAndroidBuilder.unattended.enable = lib.mkForce false;
 
-      networking.firewall.allowedTCPPorts = [ 9002 ];
-
       environment.systemPackages = [
         pkgs.coreutils
         pkgs.openssl
@@ -143,23 +141,12 @@ in
       services.keylime-agent = {
         enable = true;
         settings = {
-          uuid = "hash_ek";
-          ip = "0.0.0.0";
-          port = 9002;
-          contact_ip = "192.168.1.1";
-          contact_port = 9002;
+          contact_ip = lib.mkForce "192.168.1.1";
           registrar_ip = lib.mkForce "server";
-          registrar_port = lib.mkForce 8890;
-          registrar_tls_enabled = lib.mkForce true;
           registrar_tls_ca_cert = lib.mkForce caCert;
           verifier_url = lib.mkForce "https://server:8881";
           verifier_tls_ca_cert = lib.mkForce caCert;
           attestation_interval_seconds = lib.mkForce 2;
-          enable_agent_mtls = true;
-          enable_insecure_payload = true;
-          trusted_client_ca = caCert;
-          enable_revocation_notifications = false;
-          run_as = "";
         };
       };
 
@@ -252,22 +239,27 @@ in
         server.wait_for_unit("keylime-verifier.service")
         server.wait_for_open_port(8881)
 
-      with subtest("Agent starts and registers with mTLS (EK-derived UUID)"):
+      with subtest("Agent starts and registers (EK-derived UUID)"):
         agent.succeed("systemctl start keylime-agent.service")
         agent.wait_for_unit("keylime-agent.service")
-        agent.wait_for_open_port(9002)
 
-        # Discover the EK-derived UUID from the agent's log
-        agent_uuid = agent.succeed(
-          "journalctl -u keylime-agent -o cat"
-          " | grep -oP 'Agent UUID: \\K[0-9a-f]+'"
-        ).strip()
-        assert len(agent_uuid) > 0, "Could not find agent UUID in journal"
+        # Discover the EK-derived UUID from the registrar API.
+        # Registration is async, so retry until the agent appears.
+        agent_uuid = None
+        for _ in range(30):
+          resp = json.loads(server.succeed(
+            "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
+            " https://127.0.0.1:8891/v2.5/agents/"
+          ))
+          uuids = resp.get("results", {}).get("uuids", [])
+          if uuids:
+            agent_uuid = uuids[0]
+            break
+          import time; time.sleep(1)
+        assert agent_uuid, "Agent did not register within 30s"
         agent.log(f"Agent EK-derived UUID: {agent_uuid}")
 
       with subtest("Read and verify PCRs from agent TPM"):
-        # Ensure /boot is mounted (may need a moment after second boot)
-        agent.succeed("mkdir -p /boot && mountpoint -q /boot || mount /boot")
         # read-firmware-pcrs reads PCRs 0-3, 7 from the TPM.
         # --verify-pcr11 also reads PCR 11 and checks it against the
         # expected value baked into the ESP at /boot/expected-pcr11.
@@ -281,9 +273,10 @@ in
 
       with subtest("Agent can be added for attestation with PCR policy"):
         # Use the verified policy from read-firmware-pcrs directly.
+        # --push-model skips contacting the agent (no listening port in push mode).
         policy = json.dumps({"7": tpm_policy["7"], "11": tpm_policy["11"]})
         server.succeed(
-          f"keylime_tenant -c add -t 192.168.1.1 -u {agent_uuid}"
+          f"keylime_tenant --push-model -c add -t 192.168.1.1 -u {agent_uuid}"
           " -r 127.0.0.1 -rp 8891 -v 127.0.0.1 -vp 8881"
           f" --tpm_policy '{policy}'"
         )
