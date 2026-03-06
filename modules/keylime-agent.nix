@@ -172,6 +172,10 @@ in
 
     users.groups.keylime = { };
 
+    systemd.tmpfiles.rules = [
+      "d /var/lib/keylime 0750 keylime keylime -"
+    ];
+
     security.tpm2 = {
       enable = true;
       tctiEnvironment.enable = true;
@@ -229,12 +233,9 @@ in
         KEYLIME_AGENT_CONFIG = "/etc/keylime/agent.conf";
       };
       serviceConfig = {
-        ExecStartPre = "!${pkgs.coreutils}/bin/install -d -m 0750 -o keylime -g keylime /var/lib/keylime";
         ExecStart = "${cfg.package}/bin/keylime_agent";
         Restart = "on-failure";
         RestartSec = "10s";
-        StateDirectory = "keylime";
-        StateDirectoryMode = "0750";
       };
     };
   };
