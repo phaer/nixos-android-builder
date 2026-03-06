@@ -269,6 +269,7 @@ def cmd_status(args):
 
         show_storage_target(esp_img_spec)
         show_pcr11_status(esp_img_spec)
+        show_attestation_server_status(esp_img_spec)
         extract_and_verify_uki(esp_img_spec, cert_path, "Payload")
     else:
         # Full installer image with nested payload
@@ -289,6 +290,7 @@ def cmd_status(args):
         show_install_target(installer_img_spec)
         show_storage_target(installer_img_spec)
         show_pcr11_status(payload_img_spec)
+        show_attestation_server_status(payload_img_spec)
 
         extract_and_verify_uki(installer_img_spec, cert_path, "Installer")
         extract_and_verify_uki(payload_img_spec, cert_path, "Payload")
@@ -501,6 +503,78 @@ def cmd_set_storage(args):
         temp_path.unlink(missing_ok=True)
 
 
+def show_attestation_server_status(img_spec):
+    result = subprocess.run(
+        ["mtype", "-i", img_spec, "::/registrar.json"],
+        capture_output=True, text=True, check=False,
+    )
+    print("Attestation server:")
+    if result.returncode == 0:
+        try:
+            data = json.loads(result.stdout)
+            ip = data.get("ip", "?")
+            port = data.get("port", 8891)
+            verifier_port = data.get("verifier_port", 8881)
+            has_cert = "ca_cert" in data and data["ca_cert"]
+            print(f"  ✓ Server: {ip} (registrar:{port}, verifier:{verifier_port})")
+            print(f"  ✓ CA cert: {'present' if has_cert else 'MISSING'}")
+        except json.JSONDecodeError:
+            print("  ✗ registrar.json exists but is not valid JSON")
+    else:
+        print("  ✗ Not configured (run: configure-disk-image set-attestation-server --ip <server> --ca-cert <pem> --device <image>)")
+    print()
+
+
+def cmd_set_attestation_server(args):
+    """Write registrar.json to the ESP for runtime keylime agent configuration."""
+    device = Path(args.device)
+    if not device.exists():
+        raise InstallerError(f"Device or image file not found: {device}")
+
+    ca_cert_path = Path(args.ca_cert)
+    if not ca_cert_path.is_file():
+        raise InstallerError(f"CA certificate file not found: {ca_cert_path}")
+
+    ca_cert_pem = ca_cert_path.read_text()
+
+    payload_only = is_payload_only(device)
+    if payload_only:
+        esp_offset = get_partition_offset(device, UUID_EFI_SYSTEM)
+    else:
+        esp_offset = get_payload_esp_offset(device)
+
+    esp_img_spec = f"{device}@@{esp_offset}"
+    if not verify_mtools_access(esp_img_spec):
+        raise InstallerError("Cannot access EFI partition")
+
+    registrar_data = {
+        "ip": args.ip,
+        "ca_cert": ca_cert_pem,
+    }
+    if args.port != 8891:
+        registrar_data["port"] = args.port
+    if args.verifier_port != 8881:
+        registrar_data["verifier_port"] = args.verifier_port
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        json.dump(registrar_data, f, indent=2)
+        temp_path = Path(f.name)
+
+    try:
+        if subprocess.run(
+            ["mcopy", "-n", "-o", "-i", esp_img_spec,
+             str(temp_path), "::/registrar.json"],
+            check=False, capture_output=True
+        ).returncode != 0:
+            raise InstallerError("Failed to write registrar.json to ESP")
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+    print(f"✓ Attestation server configured on ESP:")
+    print(f"  Server: {args.ip} (registrar:{args.port}, verifier:{args.verifier_port})")
+    print(f"  CA cert: {ca_cert_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Manage installer disk images",
@@ -545,10 +619,24 @@ Examples:
     pcr11_parser.add_argument('--expected-pcr11', help='File containing pre-computed PCR 11 hash (default: compute from UKI in image)')
     pcr11_parser.add_argument('--device', required=True, help='Block device or disk image file')
 
+    registrar_parser = subparsers.add_parser('set-attestation-server', help='Configure keylime registrar/verifier connection on ESP')
+    registrar_parser.add_argument('--ip', required=True, help='Registrar/verifier server IP address')
+    registrar_parser.add_argument('--ca-cert', required=True, help='Path to CA certificate PEM file')
+    registrar_parser.add_argument('--port', type=int, default=8891, help='Registrar TLS port (default: 8891)')
+    registrar_parser.add_argument('--verifier-port', type=int, default=8881, help='Verifier port (default: 8881)')
+    registrar_parser.add_argument('--device', required=True, help='Block device or disk image file')
+
     args = parser.parse_args()
 
     try:
-        {'status': cmd_status, 'sign': cmd_sign, 'set-target': cmd_set_target, 'set-storage': cmd_set_storage, 'set-pcr11': cmd_set_pcr11}[args.command](args)
+        {
+            'status': cmd_status,
+            'sign': cmd_sign,
+            'set-target': cmd_set_target,
+            'set-storage': cmd_set_storage,
+            'set-pcr11': cmd_set_pcr11,
+            'set-attestation-server': cmd_set_attestation_server,
+        }[args.command](args)
     except InstallerError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
