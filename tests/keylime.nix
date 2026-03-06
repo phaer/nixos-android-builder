@@ -142,10 +142,6 @@ in
         enable = true;
         settings = {
           contact_ip = lib.mkForce "192.168.1.1";
-          registrar_ip = lib.mkForce "server";
-          registrar_tls_ca_cert = lib.mkForce caCert;
-          verifier_url = lib.mkForce "https://server:8881";
-          verifier_tls_ca_cert = lib.mkForce caCert;
           attestation_interval_seconds = lib.mkForce 2;
         };
       };
@@ -171,8 +167,12 @@ in
       server.wait_for_unit("multi-user.target")
       # Agent reboots once to enroll Secure Boot keys; wait for the second boot
       agent.wait_for_unit("multi-user.target")
-      with subtest("Generate mTLS PKI on server and distribute CA cert to agent"):
+      with subtest("Generate mTLS PKI on server and configure agent via attestation-server.json"):
         server.succeed("mkdir -p ${tlsDir}")
+
+        # Discover server IP on the test vlan (eth1)
+        server_ip = server.succeed("ip -4 -o addr show eth1 | awk '{print $4}' | cut -d/ -f1").strip()
+        server.log(f"Server IP: {server_ip}")
 
         server.succeed(
           "openssl req -x509 -newkey rsa:2048 -nodes"
@@ -198,7 +198,7 @@ in
           " -CAcreateserial"
           " -out ${serverCert}"
           " -days 365 -sha256"
-          " -extfile <(printf 'subjectAltName=DNS:server,DNS:localhost,IP:127.0.0.1')"
+          f" -extfile <(printf 'subjectAltName=DNS:server,DNS:localhost,IP:127.0.0.1,IP:{server_ip}')"
         )
 
         server.succeed(
@@ -220,13 +220,15 @@ in
         server.succeed("chown -R keylime:keylime ${tlsDir}")
         server.succeed("chmod 0640 ${tlsDir}/*")
 
-        ca_cert = server.succeed("cat ${caCert}")
-        agent.succeed(f"cat > ${caCert} << 'EOF'\n{ca_cert}EOF")
-        agent.succeed("chown -R keylime:keylime ${tlsDir}")
-        agent.succeed("chmod 0640 ${tlsDir}/*")
-
         server.succeed("openssl verify -CAfile ${caCert} ${serverCert}")
         server.succeed("openssl verify -CAfile ${caCert} ${clientCert}")
+
+        # Write attestation-server.json to /boot on the agent (replaces build-time config)
+        ca_cert_pem = server.succeed("cat ${caCert}")
+        server_json = json.dumps({"ip": server_ip, "ca_cert": ca_cert_pem})
+        agent.succeed("mount -o remount,rw /boot")
+        agent.succeed(f"cat > /boot/attestation-server.json << 'EOF'\n{server_json}\nEOF")
+        agent.succeed("mount -o remount,ro /boot")
 
       with subtest("Registrar starts and is listening with TLS"):
         server.succeed("systemctl start keylime-registrar.service")

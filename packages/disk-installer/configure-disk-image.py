@@ -505,7 +505,7 @@ def cmd_set_storage(args):
 
 def show_attestation_server_status(img_spec):
     result = subprocess.run(
-        ["mtype", "-i", img_spec, "::/registrar.json"],
+        ["mtype", "-i", img_spec, "::/attestation-server.json"],
         capture_output=True, text=True, check=False,
     )
     print("Attestation server:")
@@ -519,14 +519,14 @@ def show_attestation_server_status(img_spec):
             print(f"  ✓ Server: {ip} (registrar:{port}, verifier:{verifier_port})")
             print(f"  ✓ CA cert: {'present' if has_cert else 'MISSING'}")
         except json.JSONDecodeError:
-            print("  ✗ registrar.json exists but is not valid JSON")
+            print("  ✗ attestation-server.json exists but is not valid JSON")
     else:
         print("  ✗ Not configured (run: configure-disk-image set-attestation-server --ip <server> --ca-cert <pem> --device <image>)")
     print()
 
 
 def cmd_set_attestation_server(args):
-    """Write registrar.json to the ESP for runtime keylime agent configuration."""
+    """Write attestation-server.json to the ESP for runtime keylime agent configuration."""
     device = Path(args.device)
     if not device.exists():
         raise InstallerError(f"Device or image file not found: {device}")
@@ -547,26 +547,26 @@ def cmd_set_attestation_server(args):
     if not verify_mtools_access(esp_img_spec):
         raise InstallerError("Cannot access EFI partition")
 
-    registrar_data = {
+    server_data = {
         "ip": args.ip,
         "ca_cert": ca_cert_pem,
     }
     if args.port != 8891:
-        registrar_data["port"] = args.port
+        server_data["port"] = args.port
     if args.verifier_port != 8881:
-        registrar_data["verifier_port"] = args.verifier_port
+        server_data["verifier_port"] = args.verifier_port
 
     with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-        json.dump(registrar_data, f, indent=2)
+        json.dump(server_data, f, indent=2)
         temp_path = Path(f.name)
 
     try:
         if subprocess.run(
             ["mcopy", "-n", "-o", "-i", esp_img_spec,
-             str(temp_path), "::/registrar.json"],
+             str(temp_path), "::/attestation-server.json"],
             check=False, capture_output=True
         ).returncode != 0:
-            raise InstallerError("Failed to write registrar.json to ESP")
+            raise InstallerError("Failed to write attestation-server.json to ESP")
     finally:
         temp_path.unlink(missing_ok=True)
 
