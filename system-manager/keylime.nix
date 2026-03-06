@@ -25,69 +25,9 @@ let
 
   # Shell script that generates a full mTLS PKI if the CA cert does not yet
   # exist.  Idempotent: re-running after certs are already present is a no-op.
-  generateCertsScript = pkgs.writeShellScript "keylime-generate-certs" ''
-    set -euo pipefail
-
-    if [ -f "${caCert}" ]; then
-      echo "keylime-tls: certificates already exist, skipping generation"
-      exit 0
-    fi
-
-    echo "keylime-tls: generating mTLS PKI in ${tlsDir} …"
-    mkdir -p "${tlsDir}"
-
-    HOSTNAME="$(${pkgs.inetutils}/bin/hostname -f 2>/dev/null || ${pkgs.inetutils}/bin/hostname)"
-    SANS="DNS:$HOSTNAME,DNS:localhost,IP:127.0.0.1"
-    ${lib.concatMapStringsSep "\n" (s: ''SANS="$SANS,${s}"'') tlsCfg.subjectAlternativeNames}
-
-    # --- CA ---
-    ${pkgs.openssl}/bin/openssl req -x509 -newkey rsa:2048 -nodes \
-      -keyout "${caKey}" \
-      -out "${caCert}" \
-      -days ${toString tlsCfg.certLifetime} \
-      -subj '/CN=Keylime CA' \
-      -addext 'basicConstraints=critical,CA:TRUE' \
-      -addext 'keyUsage=critical,keyCertSign,cRLSign'
-
-    # --- server cert ---
-    ${pkgs.openssl}/bin/openssl req -newkey rsa:2048 -nodes \
-      -keyout "${serverKey}" \
-      -out "${tlsDir}/server.csr" \
-      -subj '/CN=keylime-server'
-
-    ${pkgs.openssl}/bin/openssl x509 -req \
-      -in "${tlsDir}/server.csr" \
-      -CA "${caCert}" \
-      -CAkey "${caKey}" \
-      -CAcreateserial \
-      -out "${serverCert}" \
-      -days ${toString tlsCfg.certLifetime} -sha256 \
-      -extfile <(printf "subjectAltName=$SANS")
-
-    # --- client cert (verifier → registrar mTLS) ---
-    ${pkgs.openssl}/bin/openssl req -newkey rsa:2048 -nodes \
-      -keyout "${clientKey}" \
-      -out "${tlsDir}/client.csr" \
-      -subj '/CN=keylime-client'
-
-    ${pkgs.openssl}/bin/openssl x509 -req \
-      -in "${tlsDir}/client.csr" \
-      -CA "${caCert}" \
-      -CAkey "${caKey}" \
-      -CAcreateserial \
-      -out "${clientCert}" \
-      -days ${toString tlsCfg.certLifetime} -sha256
-
-    # --- clean up CSRs ---
-    rm -f "${tlsDir}"/*.csr "${tlsDir}"/*.srl
-
-    # --- permissions ---
-    chown -R keylime:keylime "${tlsDir}"
-    chmod 0750 "${tlsDir}"
-    chmod 0640 "${tlsDir}"/*.pem
-
-    echo "keylime-tls: PKI generation complete"
-  '';
+  generateCertsScript = pkgs.writers.writePython3 "keylime-generate-certs" {
+    libraries = [ ];
+  } (builtins.readFile ./keylime-generate-certs.py);
 
   mkValueString =
     v:
@@ -422,8 +362,18 @@ in
     systemd.services =
       lib.optionalAttrs tlsCfg.autoGenerate {
         keylime-tls = {
-          description = "Generate Keylime mTLS certificates";
+          description = "Generate Keylime TLS certificates";
           wantedBy = [ "system-manager.target" ];
+          path = [
+            pkgs.openssl
+            pkgs.iproute2
+            pkgs.coreutils
+          ];
+          environment = {
+            KEYLIME_TLS_DIR = tlsDir;
+            KEYLIME_CERT_DAYS = toString tlsCfg.certLifetime;
+            KEYLIME_EXTRA_SANS = builtins.toJSON tlsCfg.subjectAlternativeNames;
+          };
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
