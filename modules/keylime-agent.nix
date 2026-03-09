@@ -32,6 +32,9 @@ let
   runtimeConf = "/run/keylime/agent.conf";
   runtimeCaCert = "/run/keylime/ca-cert.pem";
 
+  # Agent state (AK) persisted here across reboots.
+  persistDir = "/boot/keylime";
+
   # Defaults for the push model agent (keylime_push_model_agent).
   # Only settings read by the push model are included.
   # registrar_ip, verifier_url, and CA cert paths are placeholders —
@@ -83,75 +86,104 @@ let
 
   # Reads /boot/attestation-server.json at boot, extracts the CA cert,
   # and patches the agent config with the server IP and ports.
-  configureAgent = pkgs.writers.writePython3 "keylime-configure-agent" {
-    flakeIgnore = [ "E501" ];
-  } ''
-    import json
-    import os
-    import pwd
-    import grp
-    import re
-    import shutil
-    import sys
+  configureAgent =
+    pkgs.writers.writePython3 "keylime-configure-agent"
+      {
+        flakeIgnore = [ "E501" ];
+      }
+      ''
+        import json
+        import os
+        import pwd
+        import grp
+        import re
+        import shutil
+        import sys
 
-    SRC = "/boot/attestation-server.json"
-    BUILD_CONF = "/etc/keylime/agent.conf"
-    RUNTIME_CONF = "${runtimeConf}"
-    CA_CERT = "${runtimeCaCert}"
-
-
-    def owner():
-        uid = pwd.getpwnam("keylime").pw_uid
-        gid = grp.getgrnam("keylime").gr_gid
-        return uid, gid
+        SRC = "/boot/attestation-server.json"
+        BUILD_CONF = "/etc/keylime/agent.conf"
+        RUNTIME_CONF = "${runtimeConf}"
+        CA_CERT = "${runtimeCaCert}"
 
 
-    if not os.path.exists(SRC):
-        print(f"No {SRC}, using build-time defaults", file=sys.stderr)
-        shutil.copy2(BUILD_CONF, RUNTIME_CONF)
-        os.chown(RUNTIME_CONF, *owner())
+        def owner():
+            uid = pwd.getpwnam("keylime").pw_uid
+            gid = grp.getgrnam("keylime").gr_gid
+            return uid, gid
+
+
+        uid, gid = owner()
+
+        if not os.path.exists(SRC):
+            sys.exit(f"Error: {SRC} not found. Run 'configure-disk-image set-attestation-server' first.")
+
+        with open(SRC) as f:
+            data = json.load(f)
+
+        ip = data.get("ip")
+        ca_cert = data.get("ca_cert")
+        port = data.get("port", 8891)
+        vport = data.get("verifier_port", 8881)
+
+        if not ip:
+            sys.exit("Error: attestation-server.json missing 'ip'")
+        if not ca_cert:
+            sys.exit("Error: attestation-server.json missing 'ca_cert'")
+
+        with open(CA_CERT, "w") as f:
+            f.write(ca_cert if ca_cert.endswith("\n") else ca_cert + "\n")
+        os.chown(CA_CERT, uid, gid)
+        os.chmod(CA_CERT, 0o440)
+
+        with open(BUILD_CONF) as f:
+            conf = f.read()
+
+        for key, val in [
+            ("registrar_ip", f'"{ip}"'),
+            ("registrar_port", str(port)),
+            ("verifier_url", f'"https://{ip}:{vport}"'),
+        ]:
+            conf = re.sub(
+                rf"^{key} = .*$", f"{key} = {val}",
+                conf, flags=re.M,
+            )
+
+        with open(RUNTIME_CONF, "w") as f:
+            f.write(conf)
+        os.chown(RUNTIME_CONF, uid, gid)
         os.chmod(RUNTIME_CONF, 0o440)
-        sys.exit(0)
 
-    with open(SRC) as f:
-        data = json.load(f)
+        print(f"Configured: registrar={ip}:{port} verifier=https://{ip}:{vport}")
 
-    ip = data.get("ip")
-    ca_cert = data.get("ca_cert")
-    port = data.get("port", 8891)
-    vport = data.get("verifier_port", 8881)
+        # Restore persisted AK from /boot. /var/lib is ephemeral, so without
+        # this the agent creates a new AK on every boot and the registrar
+        # rejects re-registration.
+        PERSIST = "${persistDir}"
+        WORK = "/var/lib/keylime"
+        if os.path.isdir(PERSIST):
+            for name in os.listdir(PERSIST):
+                src = os.path.join(PERSIST, name)
+                dst = os.path.join(WORK, name)
+                if os.path.isfile(src):
+                    shutil.copy2(src, dst)
+                    os.chown(dst, uid, gid)
+            print(f"Restored agent state from {PERSIST}")
+        else:
+            print(f"No persisted state at {PERSIST}")
+      '';
 
-    if not ip:
-        sys.exit("Error: attestation-server.json missing 'ip'")
-    if not ca_cert:
-        sys.exit("Error: attestation-server.json missing 'ca_cert'")
-
-    uid, gid = owner()
-
-    with open(CA_CERT, "w") as f:
-        f.write(ca_cert if ca_cert.endswith("\n") else ca_cert + "\n")
-    os.chown(CA_CERT, uid, gid)
-    os.chmod(CA_CERT, 0o440)
-
-    with open(BUILD_CONF) as f:
-        conf = f.read()
-
-    for key, val in [
-        ("registrar_ip", f'"{ip}"'),
-        ("registrar_port", str(port)),
-        ("verifier_url", f'"https://{ip}:{vport}"'),
-    ]:
-        conf = re.sub(
-            rf"^{key} = .*$", f"{key} = {val}",
-            conf, flags=re.M,
-        )
-
-    with open(RUNTIME_CONF, "w") as f:
-        f.write(conf)
-    os.chown(RUNTIME_CONF, uid, gid)
-    os.chmod(RUNTIME_CONF, 0o440)
-
-    print(f"Configured: registrar={ip}:{port} verifier=https://{ip}:{vport}")
+  # Persist agent AK to /boot after the file appears so it survives reboots.
+  # Triggered by keylime-persist-agent.path (PathExists watch).
+  persistAgent = pkgs.writeShellScript "keylime-persist-agent" ''
+    set -euo pipefail
+    src=/var/lib/keylime/agent_data.json
+    dst=${persistDir}
+    [ -f "$src" ] || { echo "$src not found, skipping"; exit 0; }
+    ${pkgs.util-linux}/bin/mount -o remount,rw /boot
+    mkdir -p "$dst"
+    cp "$src" "$dst"/
+    ${pkgs.util-linux}/bin/mount -o remount,ro /boot
+    echo "Persisted agent AK to $dst"
   '';
 
 in
@@ -238,6 +270,26 @@ in
         ExecStart = "${cfg.package}/bin/keylime_push_model_agent";
         Restart = "on-failure";
         RestartSec = "10s";
+      };
+    };
+
+    # Watch for agent_data.json and persist it to /boot once it appears.
+    systemd.paths.keylime-persist-agent = {
+      description = "Watch for Keylime agent data to persist";
+      wantedBy = [ "multi-user.target" ];
+      pathConfig = {
+        PathExists = "/var/lib/keylime/agent_data.json";
+        Unit = "keylime-persist-agent.service";
+      };
+    };
+
+    systemd.services.keylime-persist-agent = {
+      description = "Persist Keylime agent AK to /boot";
+      after = [ "boot.mount" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${persistAgent}";
       };
     };
   };
