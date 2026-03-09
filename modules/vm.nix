@@ -89,6 +89,20 @@ in
                 --expected-pcr11 "${config.system.build.expectedPcr11}" \
                 --device "${cfg.diskImage}"
 
+              # Configure attestation server from local attestation-server.json
+              # (same format as /boot/attestation-server.json).
+              if [ -f attestation-server.json ]; then
+                echo >&2 "Configuring attestation server from ./attestation-server.json"
+                jq=${hostPkgs.jq}/bin/jq
+                ca_cert=$(mktemp)
+                $jq -r '.ca_cert' attestation-server.json > "$ca_cert"
+                ${lib.getExe disk-installer.configure} set-attestation-server \
+                  --ip "$($jq -r '.ip' attestation-server.json)" \
+                  --ca-cert "$ca_cert" \
+                  --device "${cfg.diskImage}"
+                rm -f "$ca_cert"
+              fi
+
             else
               echo "${cfg.diskImage} already exists, skipping creation & signing"
           fi

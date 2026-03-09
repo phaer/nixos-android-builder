@@ -81,16 +81,8 @@ let
     ]
   );
 
-  # Script that reads /boot/attestation-server.json at boot and generates the
-  # runtime agent config with the correct IP and CA cert.
-  #
-  # attestation-server.json format:
-  #   { "ip": "<server-ip>", "ca_cert": "<PEM string>" }
-  #
-  # The script:
-  #   1. Extracts the CA cert PEM and writes it to /run/keylime/ca-cert.pem
-  #   2. Copies the build-time agent.conf to /run/keylime/agent.conf
-  #   3. Patches registrar_ip and verifier_url with the IP from the JSON
+  # Reads /boot/attestation-server.json at boot, extracts the CA cert,
+  # and patches the agent config with the server IP and ports.
   configureAgent = pkgs.writers.writePython3 "keylime-configure-agent" {
     flakeIgnore = [ "E501" ];
   } ''
