@@ -141,7 +141,6 @@
           ;
         keylimeModule = nixosModules.keylime;
         keylimeAgentModule = nixosModules.keylime-agent;
-        keylimePackage = keylime;
         keylimeAgentPackage = keylime-agent;
       };
     };

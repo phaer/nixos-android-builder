@@ -5,7 +5,6 @@
   nixos,
   keylimeModule,
   keylimeAgentModule,
-  keylimePackage,
   keylimeAgentPackage,
 }:
 let
@@ -95,7 +94,6 @@ in
           inherit
             keylimeModule
             keylimeAgentModule
-            keylimePackage
             keylimeAgentPackage
             ;
         };

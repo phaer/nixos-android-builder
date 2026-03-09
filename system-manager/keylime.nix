@@ -145,6 +145,28 @@ let
     registrar = registrarDefaults // cfg.registrar.settings;
   };
 
+  tenantDefaults = {
+    version = "2.5";
+    registrar_ip = "127.0.0.1";
+    registrar_port = 8891;
+    verifier_ip = "127.0.0.1";
+    verifier_port = 8881;
+    tls_dir = "default";
+    client_key = "default";
+    client_cert = "default";
+    trusted_server_ca = "default";
+    max_retries = 5;
+    retry_interval = 2;
+    accept_tpm_hash_algs = ''["sha512", "sha384", "sha256"]'';
+    accept_tpm_encryption_algs = ''["ecc", "rsa"]'';
+    accept_tpm_signing_algs = ''["ecschnorr", "rsassa"]'';
+    require_ek_cert = false;
+  };
+
+  tenantConf = toINI {
+    tenant = tenantDefaults // cfg.tenant.settings;
+  };
+
   verifierDefaults = {
     version = "2.5";
     uuid = "default";
@@ -313,9 +335,19 @@ in
         '';
       };
     };
+
+    tenant = {
+      settings = lib.mkOption {
+        type = settingsType;
+        default = { };
+        description = "Settings for tenant.conf [tenant] section.";
+      };
+    };
   };
 
   config = lib.mkIf cfg.enable {
+    environment.systemPackages = [ keylimePkg ];
+
     security.tpm2 = {
       enable = true;
       tctiEnvironment.enable = true;
@@ -343,6 +375,14 @@ in
       trusted_client_ca = lib.mkDefault [ caCert ];
     };
 
+    # Tenant also needs TLS creds for keylime_tenant CLI.
+    services.keylime.tenant.settings = lib.mkIf tlsCfg.autoGenerate {
+      tls_dir = lib.mkDefault tlsDir;
+      client_key = lib.mkDefault clientKey;
+      client_cert = lib.mkDefault clientCert;
+      trusted_server_ca = lib.mkDefault [ caCert ];
+    };
+
     services.keylime.verifier.settings = lib.mkIf (tlsCfg.autoGenerate && cfg.verifier.enable) {
       tls_dir = lib.mkDefault tlsDir;
       server_key = lib.mkDefault serverKey;
@@ -356,6 +396,7 @@ in
     environment.etc =
       keylimeEtc "keylime/ca.conf" caConf
       // keylimeEtc "keylime/logging.conf" loggingConf
+      // keylimeEtc "keylime/tenant.conf" tenantConf
       // lib.optionalAttrs cfg.registrar.enable (keylimeEtc "keylime/registrar.conf" registrarConf)
       // lib.optionalAttrs cfg.verifier.enable (keylimeEtc "keylime/verifier.conf" verifierConf);
 

@@ -2,7 +2,6 @@
   keylimeModule,
   keylimeAgentModule,
   keylimeAgentPackage,
-  keylimePackage,
   imageModules,
   lib,
   pkgs,
@@ -28,14 +27,7 @@ in
 
       virtualisation.tpm.enable = true;
 
-      networking.firewall.allowedTCPPorts = [
-        8881
-        8890
-        8891
-      ];
-
       environment.systemPackages = [
-        keylimePackage
         pkgs.openssl
         pkgs.tpm2-tools
       ];
@@ -70,38 +62,11 @@ in
         };
       };
 
-      # Tenant configuration (runs on the server node to enroll agents)
-      environment.etc."keylime/tenant.conf" = {
-        text = ''
-          [tenant]
-          version = 2.5
-          verifier_ip = 127.0.0.1
-          verifier_port = 8881
-          registrar_ip = 127.0.0.1
-          registrar_port = 8891
-          tls_dir = ${tlsDir}
-          enable_agent_mtls = True
-          client_key = ${clientKey}
-          client_key_password =
-          client_cert = ${clientCert}
-          trusted_server_ca = ["${caCert}"]
-          agent_mtls_cert = default
-          tpm_cert_store = /var/lib/keylime/tpm_cert_store
-          max_payload_size = 1048576
-          accept_tpm_hash_algs = ["sha512", "sha384", "sha256"]
-          accept_tpm_encryption_algs = ["ecc", "rsa"]
-          accept_tpm_signing_algs = ["ecschnorr", "rsassa", "rsapss", "ecdsa", "ecdaa"]
-          exponential_backoff = False
-          retry_interval = 2
-          max_retries = 5
-          request_timeout = 60
-          require_ek_cert = False
-          ek_check_script =
-          mb_refstate =
-        '';
-        user = "keylime";
-        group = "keylime";
-        mode = "0440";
+      services.keylime.tenant.settings = {
+        tls_dir = tlsDir;
+        client_key = clientKey;
+        client_cert = clientCert;
+        trusted_server_ca = [ caCert ];
       };
 
       # Don't start keylime services automatically — start after cert provisioning
