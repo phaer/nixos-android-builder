@@ -202,6 +202,44 @@ The `debug.nix` module, activated by `nixosAndroidBuilder.debug`, adds convenien
 - Enables password-less `sudo` for `wheel` group members.
 - Adds verbose boot logging and a debug shell on tty3.
 
+## Remote Attestation (Keylime) {#keylime}
+
+The builder integrates [Keylime](https://keylime.dev/) for TPM-based remote attestation, allowing an external verifier to continuously confirm that the builder is running the expected software.
+
+### Agent
+
+The keylime agent (`services.keylime-agent`) is enabled by default on every builder image. It uses the **push model**, where the agent periodically sends attestation evidence to the verifier rather than waiting for incoming requests. The agent identifies itself using the TPM **Endorsement Key**, so no pre-provisioned identity is needed.
+
+At boot, the agent reads `/boot/attestation-server.json` (written to the ESP by `configure-disk-image set-attestation-server`) to learn the registrar IP, verifier URL, and CA certificate. It then registers with the registrar and begins periodic attestation.
+
+The agent's **Attestation Key** (AK) is persisted to `/boot/keylime/` so that re-registrations after reboot use the same key, avoiding rejection by the registrar.
+
+### Server (Registrar & Verifier)
+
+The keylime server components are provided by the `services.keylime` NixOS module and can also run on non-NixOS hosts via `system-manager`. The server module includes:
+
+- **Registrar** (`services.keylime.registrar.enable`) – accepts agent registrations and stores their EK/AK.
+- **Verifier** (`services.keylime.verifier.enable`) – performs attestation checks against registered agents using a configurable TPM policy.
+- **Tenant** configuration (`services.keylime.tenant.settings`) – for enrolling agents with `keylime_tenant`.
+
+### PCR Policy
+
+Attestation verifies the following Platform Configuration Registers (PCRs) by default:
+
+- **PCR 0** – UEFI firmware code
+- **PCR 1** – UEFI firmware configuration
+- **PCR 2** – Option ROMs / external firmware
+- **PCR 3** – Option ROM configuration
+- **PCR 7** – Secure Boot state (keys, policy, boot variables)
+- **PCR 11** – UKI components and boot phases
+
+PCRs 0–3 and 7 are firmware-dependent and can only be read from the live TPM. PCR 11 is pre-calculated at build time from the UKI using `systemd-measure` and written to the ESP as `/boot/expected-pcr11` by `configure-disk-image set-pcr11`.
+
+Two tools are included for PCR management:
+
+- `read-firmware-pcrs` – reads PCR values from the TPM sysfs (`/sys/class/tpm/tpm0/pcr-sha256/`) and emits a keylime `tpm_policy` JSON. Supports `--verify-pcr11` to include PCR 11 after verifying it against the expected value, `--save` to persist a baseline, and `--diff` to compare against a previously saved baseline.
+- `calculate-pcr11` – offline tool for use on a local workstation that computes the expected PCR 11 value from a UKI file by extracting its PE sections and running `systemd-measure calculate` with the `sysinit:ready` phase.
+
 ## Credential Storage {#credential-storage}
 
 The `credential-storage.nix` module provides TPM-backed persistent storage for secrets on the target machine. It uses `systemd-creds` to encrypt credentials with the machine's TPM, bound to PCR 7 (Secure Boot policy), and stores them on the artifact storage disk.
