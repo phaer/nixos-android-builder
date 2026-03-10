@@ -400,6 +400,24 @@ Once artifact storage is enabled, the `copy-android-outputs` script copies build
 
 Copying them to a remote persistent storage medium is left to the user at this time.
 
+## Inspect PCR State {#inspect-pcrs}
+
+The `read-firmware-pcrs` tool is available on the running system to inspect and verify TPM Platform Configuration Register (PCR) values. It reads PCRs from the TPM sysfs and outputs a keylime-compatible `tpm_policy` JSON.
+
+```shell-session
+$ read-firmware-pcrs
+{"0": ["abc123..."], "1": ["def456..."], "2": ["..."], "3": ["..."], "7": ["..."]}
+```
+
+To also verify PCR 11 against the expected value baked into the ESP:
+
+```shell-session
+$ read-firmware-pcrs --verify-pcr11
+{"0": ["..."], "1": ["..."], "2": ["..."], "3": ["..."], "7": ["..."], "11": ["..."]}
+```
+
+The tool also supports `--save` to persist a PCR baseline and `--diff` to compare against a previously saved baseline, which is useful after firmware updates.
+
 ## Credential Storage {#credential-storage}
 
 The builder includes a TPM-backed credential store for persisting secrets - such as those needed to authenticate to private source repositories or clodu storage to stora build artifacts in - across reboots. Credentials are encrypted with the machine's TPM and can only be decrypted on the same hardware with the same Secure Boot policy.
