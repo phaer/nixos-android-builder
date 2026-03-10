@@ -34,6 +34,7 @@ We created a modular proof‑of‑concept based on NixOS that fulfills most of t
 * **[`systemd`](https://systemd.io)** - orchestrates both upstream and custom components while managing credentials and persistent state.
 * **[`systemd-repart`](https://www.freedesktop.org/software/systemd/man/latest/systemd-repart.html)** - prepares signable read‑only disk images for the builder and resizes and re‑encrypts the state partition at each boot.
 * **[Linux Unified Key Setup (`LUKS`)](https://gitlab.com/cryptsetup/cryptsetup/blob/master/README.md)** - encrypts the state partition with an ephemerally generated key on each boot.
+* **[`Keylime`](https://keylime.dev/)** - TPM-based remote attestation framework. The Rust agent runs on the builder; a Python registrar and verifier run on the attestation server.
 * Various **build requirements** for Android, such as Python 3 and OpenJDK. The complete list is in the `packages` section of `android-build-env.nix`.
 
 A complete **Software Bill of Materials (SBOM)** for the builder's NixOS closure can be generated from the repository root by running, e.g.:
