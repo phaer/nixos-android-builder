@@ -1,0 +1,44 @@
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+
+let
+  cfg = config.services.keylime;
+  shared = import ./lib/keylime-shared.nix { inherit lib pkgs; };
+  keylimePkg = pkgs.callPackage ../packages/keylime { };
+in
+{
+  options.services.keylime = shared.mkOptions keylimePkg;
+
+  config = lib.mkIf cfg.enable {
+    security.tpm2 = {
+      enable = true;
+      tctiEnvironment.enable = true;
+    };
+
+    users.users.keylime = {
+      isSystemUser = true;
+      group = "keylime";
+      home = "/var/lib/keylime";
+    };
+
+    users.groups.keylime = { };
+
+    systemd.tmpfiles.rules = [
+      "d /var/lib/keylime 0750 keylime keylime -"
+    ];
+
+    environment.systemPackages = [ cfg.package ];
+    environment.etc = shared.mkEtcFiles cfg;
+
+    systemd.services = shared.mkServices {
+      inherit cfg;
+      wantedBy = [ "multi-user.target" ];
+    };
+
+    networking.firewall.allowedTCPPorts = shared.mkFirewallPorts cfg;
+  };
+}

@@ -87,6 +87,28 @@
       "z /var/lib/build 0700 user user - -"
     ];
 
+    # The fstab generator does not reliably activate mount units for
+    # /boot and FHS bind mounts after  Require them
+    # via an explicit target before multi-user.target.
+    systemd.targets.image-mounts = {
+      description = "ESP and FHS bind mounts (/boot, /bin, /lib, /lib64, /usr/bin)";
+      requires = [
+        "boot.mount"
+        "bin.mount"
+        "lib.mount"
+        "lib64.mount"
+        "usr-bin.mount"
+      ];
+      after = [
+        "boot.mount"
+        "bin.mount"
+        "lib.mount"
+        "lib64.mount"
+        "usr-bin.mount"
+      ];
+      wantedBy = [ "multi-user.target" ];
+    };
+
     ## Build-time configuration of systemd-repart during image build
     image = {
       repart = {

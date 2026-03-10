@@ -1,12 +1,21 @@
 {
-  description = "A ephemeral NixOS VMs to build Android Open Source Project";
+  description = "An ephemeral NixOS system to build Android Open Source Project";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-25.11";
+    system-manager = {
+      url = "github:numtide/system-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
-    { self, nixpkgs, ... }:
+    {
+      self,
+      nixpkgs,
+      system-manager,
+      ...
+    }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
@@ -68,6 +77,11 @@
       docs = pkgs.callPackage ./packages/docs {
         inherit self nixos;
       };
+
+      keylime = pkgs.callPackage ./packages/keylime { };
+      keylime-agent = pkgs.callPackage ./packages/keylime-agent { };
+      pcrPolicy = pkgs.callPackage ./packages/pcr-policy { };
+
     in
     {
       inherit nixosModules;
@@ -80,6 +94,7 @@
           packages = with secureBootScripts; [
             create-signing-keys
             diskInstaller.configure
+            pcrPolicy.calculate-pcr11
             docs.build-docs
             docs.watch-docs
             pkgs.pam_u2f
@@ -93,10 +108,28 @@
           image
           installer-image
           installer-vm
+          keylime
+          keylime-agent
           ;
         inherit (secureBootScripts) create-signing-keys;
+        inherit (pcrPolicy) calculate-pcr11 read-firmware-pcrs;
         configure-disk-image = diskInstaller.configure;
         default = image;
+      };
+
+      systemConfigs.default = system-manager.lib.makeSystemConfig {
+        modules = [
+          ./system-manager/tpm2.nix
+          ./system-manager/keylime.nix
+          {
+            nixpkgs.hostPlatform = system;
+            services.keylime = {
+              enable = true;
+              registrar.enable = true;
+              verifier.enable = true;
+            };
+          }
+        ];
       };
 
       checks.${system} = import ./tests/default.nix {
@@ -106,6 +139,9 @@
           imageModules
           nixos
           ;
+        keylimeModule = nixosModules.keylime;
+        keylimeAgentModule = nixosModules.keylime-agent;
+        keylimeAgentPackage = keylime-agent;
       };
     };
 }

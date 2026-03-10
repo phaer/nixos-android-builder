@@ -20,7 +20,7 @@ We created a modular proof‑of‑concept based on NixOS that fulfills most of t
 * **aarch64 support** could be added if needed. Only `x86_64` with `UEFI` is implemented at the moment.
 * **artifact uploads**: build artifacts are currently not automatically uploaded anywhere, but stay on the build machine.
   Integration of a Trusted Platform Module (TPM) could be useful here, to ease authentication to private repositories as well as destinations for artifact upload.
-* **measured boot**: while we use Secure Boot with a platform custom key, we do not measure involved components via a TPM yet. Doing so would improve existing Secure Boot measures as well as help with implementing attestation capabilities later on.
+* **measured boot & attestation**: PCR 11 (UKI) is pre-calculated at build time and verified at runtime via `read-firmware-pcrs`. The keylime agent is enabled by default (using TPM EK-derived identity). Remaining work: an attestation-gated step in the unattended pipeline, firmware PCR baseline capture/enrollment tooling for real hardware, network policy for attestation traffic, and replacing the `accept-all` measured boot policy with real UEFI event log validation.
 * **credential storage**: TPM-encrypted credentials (via `systemd-creds`) are currently bound to PCR 7 (Secure Boot policy) only, not PCR 11 (UKI). Since the Secure Boot signing keys are created specifically for this project, only images signed with our key can produce a matching PCR 7 — so the practical risk is low. Binding to PCR 11 as well would prevent a *different* image signed with the same key from decrypting credentials, at the cost of invalidating all stored credentials on every image update. A `systemd-measure sign` based approach could provide PCR 11 binding without this drawback.
 * **higher-level configuration**: Adapting the build environment to the needs of custom AOSP distributions might need extra work. Depending on the nature of those
   customizations, a good understanding of `nix` might be needed. We will ease those as far as possible, as we learn more about users customization needs.
@@ -34,6 +34,7 @@ We created a modular proof‑of‑concept based on NixOS that fulfills most of t
 * **[`systemd`](https://systemd.io)** - orchestrates both upstream and custom components while managing credentials and persistent state.
 * **[`systemd-repart`](https://www.freedesktop.org/software/systemd/man/latest/systemd-repart.html)** - prepares signable read‑only disk images for the builder and resizes and re‑encrypts the state partition at each boot.
 * **[Linux Unified Key Setup (`LUKS`)](https://gitlab.com/cryptsetup/cryptsetup/blob/master/README.md)** - encrypts the state partition with an ephemerally generated key on each boot.
+* **[`Keylime`](https://keylime.dev/)** - TPM-based remote attestation framework. The Rust agent runs on the builder; a Python registrar and verifier run on the attestation server.
 * Various **build requirements** for Android, such as Python 3 and OpenJDK. The complete list is in the `packages` section of `android-build-env.nix`.
 
 A complete **Software Bill of Materials (SBOM)** for the builder's NixOS closure can be generated from the repository root by running, e.g.:
@@ -202,6 +203,44 @@ The `debug.nix` module, activated by `nixosAndroidBuilder.debug`, adds convenien
 - Enables password-less `sudo` for `wheel` group members.
 - Adds verbose boot logging and a debug shell on tty3.
 
+## Remote Attestation (Keylime) {#keylime}
+
+The builder integrates [Keylime](https://keylime.dev/) for TPM-based remote attestation, allowing an external verifier to continuously confirm that the builder is running the expected software.
+
+### Agent
+
+The keylime agent (`services.keylime-agent`) is enabled by default on every builder image. It uses the **push model**, where the agent periodically sends attestation evidence to the verifier rather than waiting for incoming requests. The agent identifies itself using the TPM **Endorsement Key**, so no pre-provisioned identity is needed.
+
+At boot, the agent reads `/boot/attestation-server.json` (written to the ESP by `configure-disk-image set-attestation-server`) to learn the registrar IP, verifier URL, and CA certificate. It then registers with the registrar and begins periodic attestation.
+
+The agent's **Attestation Key** (AK) is persisted to `/boot/keylime/` so that re-registrations after reboot use the same key, avoiding rejection by the registrar.
+
+### Server (Registrar & Verifier)
+
+The keylime server components are provided by the `services.keylime` NixOS module and can also run on non-NixOS hosts via `system-manager`. The server module includes:
+
+- **Registrar** (`services.keylime.registrar.enable`) – accepts agent registrations and stores their EK/AK.
+- **Verifier** (`services.keylime.verifier.enable`) – performs attestation checks against registered agents using a configurable TPM policy.
+- **Tenant** configuration (`services.keylime.tenant.settings`) – for enrolling agents with `keylime_tenant`.
+
+### PCR Policy
+
+Attestation verifies the following Platform Configuration Registers (PCRs) by default:
+
+- **PCR 0** – UEFI firmware code
+- **PCR 1** – UEFI firmware configuration
+- **PCR 2** – Option ROMs / external firmware
+- **PCR 3** – Option ROM configuration
+- **PCR 7** – Secure Boot state (keys, policy, boot variables)
+- **PCR 11** – UKI components and boot phases
+
+PCRs 0–3 and 7 are firmware-dependent and can only be read from the live TPM. PCR 11 is pre-calculated at build time from the UKI using `systemd-measure` and written to the ESP as `/boot/expected-pcr11` by `configure-disk-image set-pcr11`.
+
+Two tools are included for PCR management:
+
+- `read-firmware-pcrs` – reads PCR values from the TPM sysfs (`/sys/class/tpm/tpm0/pcr-sha256/`) and emits a keylime `tpm_policy` JSON. Supports `--verify-pcr11` to include PCR 11 after verifying it against the expected value, `--save` to persist a baseline, and `--diff` to compare against a previously saved baseline.
+- `calculate-pcr11` – offline tool for use on a local workstation that computes the expected PCR 11 value from a UKI file by extracting its PE sections and running `systemd-measure calculate` with the `sysinit:ready` phase.
+
 ## Credential Storage {#credential-storage}
 
 The `credential-storage.nix` module provides TPM-backed persistent storage for secrets on the target machine. It uses `systemd-creds` to encrypt credentials with the machine's TPM, bound to PCR 7 (Secure Boot policy), and stores them on the artifact storage disk.
@@ -250,8 +289,14 @@ flowchart TB
       copy-auth["<b>(7)</b> Copy Secure Boot update bundles"]
     end
 
-    signing-script --> signed
-    signed["<b>(8)</b> Image is signed & ready to boot"]
+    signing-script --> set-pcr11
+    subgraph set-pcr11["configure-disk-image set-pcr11"]
+      direction TB
+      inject-pcr11["<b>(8)</b> Write expected PCR 11 hash to ESP"]
+    end
+
+    set-pcr11 --> signed
+    signed["<b>(9)</b> Image is signed & ready to boot"]
 
 ~~~
 
@@ -284,7 +329,8 @@ Usage is documented in [user-guide.pdf](user-guide.pdf). `configure-disk-image` 
 
 - **(6)** The `UKI` is copied to a temporary file, signed, and copied back into the `esp` again.
 - **(7)** Secure Boot update bundles (`*.auth` files) are copied to the `esp` to ensure that `ensure-secure-boot-enrollment.service` can find them during boot.
-- **(8)** We finally have a signed image, ready to flash & boot on a target machine.
+- **(8)** The expected PCR 11 value is pre-calculated from the signed UKI and written to the ESP as `/boot/expected-pcr11`. At runtime, `read-firmware-pcrs --verify-pcr11` compares the live TPM PCR 11 against this value.
+- **(9)** We finally have a signed image, ready to flash & boot on a target machine.
 
 
 \pagebreak
@@ -372,11 +418,17 @@ flowchart TB
 
 # Glossary {#glossary}
 
+**AK** – Attestation Key. A TPM-resident key used by the keylime agent to sign attestation quotes.
+
 **AOSP** – Android Open Source Project. The publicly available source code for Android maintained by Google.
+
+**Attestation** – The process of a remote party (verifier) confirming that a machine is running expected software on genuine hardware, based on TPM-signed measurements.
 
 **dm-verity** – A Linux kernel feature that provides transparent integrity checking of block devices using a Merkle tree.
 
 **EFI/UEFI** – Unified Extensible Firmware Interface. The modern firmware interface between the operating system and hardware, replacing legacy BIOS.
+
+**EK** – Endorsement Key. A unique, manufacturer-provisioned key in the TPM that serves as the device’s hardware identity. Used by the keylime agent to derive a stable UUID.
 
 **ESP** – EFI System Partition. A FAT-formatted partition that contains files needed to boot.
 
@@ -386,6 +438,8 @@ flowchart TB
 
 **initrd** – Initial RAM Disk. A temporary root filesystem loaded into memory during boot, used to prepare the real root filesystem.
 
+**Keylime** – An open-source TPM-based remote attestation framework. Consists of an agent, registrar, and verifier.
+
 **LUKS** – Linux Unified Key Setup. The standard system for Linux disk encryption.
 
 **Nix** – A purely functional package manager and build system that enables reproducible, declarative builds.
@@ -393,6 +447,8 @@ flowchart TB
 **NixOS** – A Linux distribution built on Nix, where the entire system configuration is declared in Nix expressions.
 
 **nixpkgs** – The main repository of Nix packages, containing build instructions for tens of thousands of software packages.
+
+**PCR** – Platform Configuration Register. A set of SHA-256 registers inside the TPM that accumulate measurements of firmware, boot configuration, and software components. Used for attestation and credential binding.
 
 **PK/KEK/DB** – Platform Key, Key Exchange Key, and Signature Database. Keys used by UEFI Secure Boot to verify boot components.
 

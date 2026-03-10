@@ -38,6 +38,7 @@
           if lsusb | grep -qi 'yubikey'; then
             tput sgr0
             tput ed
+            echo "Found. Please touch your YubiKey to authenticate..."
             exec login user
             tput setaf 0
             tput setab 7
@@ -58,9 +59,9 @@
       account required ${pkgs.pam}/lib/security/pam_unix.so
 
       # Authentication management.
-      auth required ${pkgs.pam_u2f}/lib/security/pam_u2f.so authfile=/etc/u2f_mappings_groupA interactive [prompt=Insert Yubikey for Group A, then press Enter before touching that Yubikey.] origin=pam://nixos-android-builder appid=pam://nixos-android-builder
+      auth required ${pkgs.pam_u2f}/lib/security/pam_u2f.so authfile=/etc/u2f_mappings_groupA origin=pam://nixos-android-builder appid=pam://nixos-android-builder
       ${lib.optionalString (config.nixosAndroidBuilder.yubikeys.groupB != [ ])
-        "auth required ${pkgs.pam_u2f}/lib/security/pam_u2f.so authfile=/etc/u2f_mappings_groupB interactive [prompt=Insert Yubikey for Group B, then press Enter before touching that Yubikey.] origin=pam://nixos-android-builder appid=pam://nixos-android-builder"
+        "auth required ${pkgs.pam_u2f}/lib/security/pam_u2f.so authfile=/etc/u2f_mappings_groupB origin=pam://nixos-android-builder appid=pam://nixos-android-builder"
       }
 
       # Session management.

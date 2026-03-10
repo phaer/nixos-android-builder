@@ -39,6 +39,12 @@
     services.userborn.enable = true;
     networking.useNetworkd = true;
 
+    # Enable remote attestation via keylime.  The agent uses the TPM
+    # Endorsement Key as its identity (hash_ek) and auto-generates its
+    # mTLS certificate on first start.  Per-deployment config (registrar
+    # address, CA cert) is set in configuration.nix.
+    services.keylime-agent.enable = true;
+
     # Add all available firmware.
     hardware.enableRedistributableFirmware = true;
     hardware.enableAllHardware = true;
