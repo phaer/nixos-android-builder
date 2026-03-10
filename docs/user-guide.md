@@ -618,11 +618,10 @@ kill vlan (pid 7)
 
 Note that the test are only run again if inputs did change since the last run.
 
-There's additional VM tests in the repository cover the the disk installer, see:
+There's additional VM tests in the repository that cover the disk installer and keylime attestation:
 
 ``` shell-session
-$ nix build -L .#checks.x86_64-linux.installer .#checks.x86_64-linux.installerInteractive
-
+$ nix build -L .#checks.x86_64-linux.installer .#checks.x86_64-linux.installerInteractive .#checks.x86_64-linux.keylime
 ```
 
 # Usage in a Virtual Machine {#virtual-machine}
