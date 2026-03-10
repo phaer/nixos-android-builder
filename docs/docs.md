@@ -418,11 +418,17 @@ flowchart TB
 
 # Glossary {#glossary}
 
+**AK** – Attestation Key. A TPM-resident key used by the keylime agent to sign attestation quotes.
+
 **AOSP** – Android Open Source Project. The publicly available source code for Android maintained by Google.
+
+**Attestation** – The process of a remote party (verifier) confirming that a machine is running expected software on genuine hardware, based on TPM-signed measurements.
 
 **dm-verity** – A Linux kernel feature that provides transparent integrity checking of block devices using a Merkle tree.
 
 **EFI/UEFI** – Unified Extensible Firmware Interface. The modern firmware interface between the operating system and hardware, replacing legacy BIOS.
+
+**EK** – Endorsement Key. A unique, manufacturer-provisioned key in the TPM that serves as the device’s hardware identity. Used by the keylime agent to derive a stable UUID.
 
 **ESP** – EFI System Partition. A FAT-formatted partition that contains files needed to boot.
 
@@ -432,6 +438,8 @@ flowchart TB
 
 **initrd** – Initial RAM Disk. A temporary root filesystem loaded into memory during boot, used to prepare the real root filesystem.
 
+**Keylime** – An open-source TPM-based remote attestation framework. Consists of an agent, registrar, and verifier.
+
 **LUKS** – Linux Unified Key Setup. The standard system for Linux disk encryption.
 
 **Nix** – A purely functional package manager and build system that enables reproducible, declarative builds.
@@ -439,6 +447,8 @@ flowchart TB
 **NixOS** – A Linux distribution built on Nix, where the entire system configuration is declared in Nix expressions.
 
 **nixpkgs** – The main repository of Nix packages, containing build instructions for tens of thousands of software packages.
+
+**PCR** – Platform Configuration Register. A set of SHA-256 registers inside the TPM that accumulate measurements of firmware, boot configuration, and software components. Used for attestation and credential binding.
 
 **PK/KEK/DB** – Platform Key, Key Exchange Key, and Signature Database. Keys used by UEFI Secure Boot to verify boot components.
 
