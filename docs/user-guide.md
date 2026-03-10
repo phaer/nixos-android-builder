@@ -169,6 +169,27 @@ Computing expected PCR 11...
 
 This step must be run **after** signing, since signing changes the UKI and therefore its PCR 11 value. If omitted, runtime PCR 11 verification (`read-firmware-pcrs --verify-pcr11`) will not be available.
 
+## Configure Attestation Server
+
+If you are running a keylime attestation server (registrar & verifier), the builder image needs to know how to reach it. `configure-disk-image set-attestation-server` writes the server address and CA certificate to the ESP so the keylime agent can connect on boot.
+
+You need the CA certificate PEM file from the attestation server (e.g. `/var/lib/keylime/tls/ca-cert.pem`).
+
+```shell-session
+$ nix run .#configure-disk-image -- set-attestation-server \
+    --ip 10.0.0.1 \
+    --ca-cert /path/to/ca-cert.pem \
+    --device android-builder_25.11pre-git.raw
+```
+
+``` text
+✓ Attestation server configured on ESP:
+  Server: 10.0.0.1 (registrar:8891, verifier:8881)
+  CA cert: /path/to/ca-cert.pem
+```
+
+If this step is skipped, the keylime agent will fail to start on boot. The agent reads `/boot/attestation-server.json` at startup to learn the registrar address, verifier URL, and CA certificate.
+
 After this step, `android-builder_25.11pre-git.raw` in the repository's top-level directory is ready to be flashed to a block device in the next step!
 
 ## Flash the Image
