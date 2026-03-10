@@ -71,16 +71,10 @@ in
 
   config = lib.mkIf cfg.enable {
     security.loginDefs.settings.LOGIN_TIMEOUT = 0;
-    security.sudo.enable = false;
-    security.doas = {
+    security.sudo = {
       enable = true;
-      extraRules = [
-        {
-          users = [ "user" ];
-          setEnv = [ "PATH" ];
-          noPass = true;
-        }
-      ];
+      wheelNeedsPassword = false;
+      execWheelOnly = true;
     };
 
     environment.systemPackages = [

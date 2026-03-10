@@ -45,7 +45,7 @@ for i in "${!steps[@]}"; do
 
     cmd="${step#root:}"
     if [[ "$step" == root:* ]]; then
-        cmd="doas $cmd"
+        cmd="sudo $cmd"
     fi
     script -q -c "$cmd" /dev/null 2>&1 | tee >(systemd-cat -t "step-$current")
 
