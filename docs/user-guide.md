@@ -552,6 +552,10 @@ Storage target:
 PCR 11 (UKI measurement):
   ✓ Expected hash: 00e9c94ef58cd0c569e2872b451fee0e30b322dffb38cf79415c9f478807dddf
 
+Attestation server:
+  ✓ Server: 10.0.0.1 (registrar:8891, verifier:8881)
+  ✓ CA cert: present
+
 Installer Secure Boot status:
   ✓ Signed and verified
 
