@@ -658,10 +658,12 @@ This will:
 
 1. Create a writable copy of the read-only disk image (e.g. `android-builder_25.11pre-git.raw`) in the current directory.
 2. Sign the UKI with a pair of auto-generated test keys (stored in the nix store, so they persist across runs).
-3. Pre-configure artifact storage to use `/dev/vdb` (a second virtual disk is created automatically when `nixosAndroidBuilder.artifactStorage.enable` is set).
-4. Start a QEMU VM with Secure Boot, a TPM, and a graphical window.
+3. Inject the expected PCR 11 hash into the ESP.
+4. Pre-configure artifact storage to use `/dev/vdb` (a second virtual disk is created automatically when `nixosAndroidBuilder.artifactStorage.enable` is set).
+5. If an `attestation-server.json` file exists in the current directory, configure the keylime agent to use it. The file uses the same format as `/boot/attestation-server.json` (see [Configure Attestation Server](#configure-attestation-server) above).
+6. Start a QEMU VM with Secure Boot, a TPM, and a graphical window.
 
-If the writable disk image already exists from a previous run, steps 1-3 are skipped and the existing image is reused. Delete the `.raw` file to force a fresh image.
+If the writable disk image already exists from a previous run, steps 1–5 are skipped and the existing image is reused. Delete the `.raw` file to force a fresh image.
 
 Use `systemctl poweroff` from within the VM, or close the QEMU window, to stop it.
 
