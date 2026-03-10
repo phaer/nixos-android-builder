@@ -43,6 +43,7 @@ let
     tput ed
     echo "NOTE: The system will turn off after exiting this shell"
     echo "Build outputs are in /var/lib/artifacts"
+    echo "Please touch your YubiKey to authenticate..."
     login user
     systemctl poweroff
   '';
