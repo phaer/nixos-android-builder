@@ -238,7 +238,7 @@ PCRs 0–3 and 7 are firmware-dependent and can only be read from the live TPM. 
 
 Two tools are included for PCR management:
 
-- `read-firmware-pcrs` – reads PCR values from the TPM sysfs (`/sys/class/tpm/tpm0/pcr-sha256/`) and emits a keylime `tpm_policy` JSON. Supports `--verify-pcr11` to include PCR 11 after verifying it against the expected value, `--save` to persist a baseline, and `--diff` to compare against a previously saved baseline.
+- `read-firmware-pcrs` – reads PCR values (0–3, 7, 11) from the TPM sysfs (`/sys/class/tpm/tpm0/pcr-sha256/`) and emits a keylime `tpm_policy` JSON. PCR 11 is always verified against the expected value on the ESP. Supports `--save` to persist a baseline and `--diff` to compare against a previously saved baseline.
 - `calculate-pcr11` – offline tool for use on a local workstation that computes the expected PCR 11 value from a UKI file by extracting its PE sections and running `systemd-measure calculate` with the `sysinit:ready` phase.
 
 ## Credential Storage {#credential-storage}
@@ -329,7 +329,7 @@ Usage is documented in [user-guide.pdf](user-guide.pdf). `configure-disk-image` 
 
 - **(6)** The `UKI` is copied to a temporary file, signed, and copied back into the `esp` again.
 - **(7)** Secure Boot update bundles (`*.auth` files) are copied to the `esp` to ensure that `ensure-secure-boot-enrollment.service` can find them during boot.
-- **(8)** The expected PCR 11 value is pre-calculated from the signed UKI and written to the ESP as `/boot/expected-pcr11`. At runtime, `read-firmware-pcrs --verify-pcr11` compares the live TPM PCR 11 against this value.
+- **(8)** The expected PCR 11 value is pre-calculated from the UKI and written to the ESP as `/boot/expected-pcr11`. At runtime, `read-firmware-pcrs` compares the live TPM PCR 11 against this value.
 - **(9)** We finally have a signed image, ready to flash & boot on a target machine.
 
 

@@ -4,11 +4,10 @@ These PCRs are populated by UEFI firmware and cannot be pre-calculated
 at build time — they depend on the specific hardware, firmware version,
 BIOS settings, and Secure Boot key enrollment.
 
-When --verify-pcr11 is given, the script also reads PCR 11 from the
-TPM and compares it against the expected value baked into the image
-at build time (see the secure-boot NixOS module).  If they match,
-PCR 11 is included in the output policy.  If not, the script exits
-with an error.
+PCR 11 is always read from the TPM and verified against the expected
+value baked into the image at build time (see the secure-boot NixOS
+module).  If they match, PCR 11 is included in the output policy.
+If not, the script exits with an error.
 
 The --save flag writes the current PCR baseline to a JSON file for
 later comparison.  The --diff flag compares the current PCR values
@@ -42,8 +41,8 @@ def read_pcr(pcr: int) -> str:
         sys.exit(1)
 
 
-def read_policy(verify_pcr11: bool) -> dict:
-    """Read all firmware PCRs, optionally including PCR 11."""
+def read_policy() -> dict:
+    """Read all firmware PCRs and PCR 11 (verified)."""
     policy = {}
     for pcr in FIRMWARE_PCRS:
         digest = read_pcr(pcr)
@@ -57,30 +56,28 @@ def read_policy(verify_pcr11: bool) -> dict:
             sys.exit(1)
         policy[str(pcr)] = [digest]
 
-    if verify_pcr11:
-        if not EXPECTED_PCR11.exists():
-            print(
-                "Error: --verify-pcr11 requires"
-                f" {EXPECTED_PCR11} to exist.\n"
-                "Run: configure-disk-image set-pcr11"
-                " --device <image>",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+    if not EXPECTED_PCR11.exists():
+        print(
+            f"Error: {EXPECTED_PCR11} not found.\n"
+            "Run: configure-disk-image set-pcr11"
+            " --device <image>",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
-        expected = EXPECTED_PCR11.read_text().strip().lower()
-        actual = read_pcr(11)
+    expected = EXPECTED_PCR11.read_text().strip().lower()
+    actual = read_pcr(11)
 
-        if actual != expected:
-            print(
-                "Error: PCR 11 mismatch!\n"
-                f"  expected: {expected}\n"
-                f"  actual:   {actual}",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+    if actual != expected:
+        print(
+            "Error: PCR 11 mismatch!\n"
+            f"  expected: {expected}\n"
+            f"  actual:   {actual}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
-        policy["11"] = [actual]
+    policy["11"] = [actual]
 
     return policy
 
@@ -102,7 +99,7 @@ def diff_baseline(policy: dict, path: Path) -> bool:
     if not path.exists():
         print(
             f"Error: baseline file {path} not found.\n"
-            "Run: read-firmware-pcrs --save first.",
+            "Run with --save first.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -147,15 +144,6 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--verify-pcr11",
-        action="store_true",
-        help=(
-            "Read PCR 11, verify it matches the expected"
-            " value baked into the image, and include it"
-            " in the output."
-        ),
-    )
-    parser.add_argument(
         "--output",
         metavar="FILE",
         help="Write JSON to FILE instead of stdout.",
@@ -183,7 +171,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    policy = read_policy(args.verify_pcr11)
+    policy = read_policy()
 
     if args.save:
         save_baseline(policy, Path(args.save))
@@ -213,6 +201,15 @@ def main() -> None:
         )
     else:
         print(output)
+
+    import qrcode  # type: ignore[import-untyped]
+    qr = qrcode.QRCode(
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+    )
+    qr.add_data(output)
+    qr.make(fit=True)
+    print(file=sys.stderr)
+    qr.print_tty(out=sys.stderr)
 
 
 if __name__ == "__main__":

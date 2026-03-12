@@ -227,10 +227,9 @@ in
         agent.log(f"Agent EK-derived UUID: {agent_uuid}")
 
       with subtest("Read and verify PCRs from agent TPM"):
-        # read-firmware-pcrs reads PCRs 0-3, 7 from the TPM.
-        # --verify-pcr11 also reads PCR 11 and checks it against the
-        # expected value baked into the ESP at /boot/expected-pcr11.
-        tpm_policy_str = agent.succeed("read-firmware-pcrs --verify-pcr11")
+        # read-firmware-pcrs reads PCRs 0-3, 7, 11 from the TPM.
+        # PCR 11 is verified against /boot/expected-pcr11.
+        tpm_policy_str = agent.succeed("read-firmware-pcrs")
         tpm_policy = json.loads(tpm_policy_str)
         for pcr in ("0", "1", "2", "3", "7", "11"):
           agent.log(f"PCR{pcr} = {tpm_policy[pcr][0]}")

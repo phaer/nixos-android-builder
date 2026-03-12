@@ -4,6 +4,7 @@
   binutils,
   systemd,
   runCommand,
+  python3Packages,
 }:
 let
   # systemd-measure lives in systemd's lib output, not in bin.
@@ -28,7 +29,9 @@ in
 
   # Run-time tool: read firmware PCRs from the TPM sysfs on a live machine.
   # No external dependencies — reads directly from /sys/class/tpm/.
-  read-firmware-pcrs = writers.writePython3Bin "read-firmware-pcrs" { } (
+  read-firmware-pcrs = writers.writePython3Bin "read-firmware-pcrs" {
+    libraries = [ python3Packages.qrcode ];
+  } (
     builtins.readFile ./read-firmware-pcrs.py
   );
 }
