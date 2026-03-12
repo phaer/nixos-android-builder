@@ -167,7 +167,7 @@ Computing expected PCR 11...
 ✓ Expected PCR 11 written to ESP: 00e9c94ef58cd0c569e2872b451fee0e30b322dffb38cf79415c9f478807dddf
 ```
 
-This step must be run **after** signing, since signing changes the UKI and therefore its PCR 11 value. If omitted, runtime PCR 11 verification (`read-firmware-pcrs --verify-pcr11`) will not be available.
+Signing does not affect the PCR 11 value (only the UKI payload sections are measured, not the Authenticode signature). This step can be run before or after signing. If omitted, runtime PCR 11 verification (`read-firmware-pcrs --verify-pcr11`) will not be available.
 
 ## Configure Attestation Server
 
