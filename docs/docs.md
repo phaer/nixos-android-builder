@@ -238,7 +238,7 @@ PCRs 0–3 and 7 are firmware-dependent and can only be read from the live TPM. 
 
 Two tools are included for PCR management:
 
-- `read-tpm-pcrs` – reads PCR values (0–3, 7, 11) from the TPM sysfs (`/sys/class/tpm/tpm0/pcr-sha256/`) and emits a keylime `tpm_policy` JSON. PCR 11 is always verified against the expected value on the ESP. Displays a QR code on the terminal for easy transfer from machines with limited connectivity. Supports `--save` to persist a baseline and `--diff` to compare against a previously saved baseline.
+- `read-tpm-pcrs` – reads PCR values (0–3, 7, 11) from the TPM sysfs (`/sys/class/tpm/tpm0/pcr-sha256/`) and emits a keylime `tpm_policy` JSON. PCR 11 is always verified against the expected value on the ESP. Displays a QR code on the terminal for easy transfer from machines with limited connectivity.
 - `calculate-pcr11` – offline tool for use on a local workstation that computes the expected PCR 11 value from a UKI file by extracting its PE sections and running `systemd-measure calculate` with the `sysinit:ready` phase.
 
 ## Credential Storage {#credential-storage}

@@ -413,8 +413,6 @@ PCR 11 is always verified against the expected value on the ESP (`/boot/expected
 
 When run on a terminal, the tool also displays the policy as a QR code, which can be scanned to transfer PCR values from machines with limited network connectivity.
 
-The tool also supports `--save` to persist a PCR baseline and `--diff` to compare against a previously saved baseline, which is useful after firmware updates.
-
 ## Credential Storage {#credential-storage}
 
 The builder includes a TPM-backed credential store for persisting secrets - such as those needed to authenticate to private source repositories or clodu storage to stora build artifacts in - across reboots. Credentials are encrypted with the machine's TPM and can only be decrypted on the same hardware with the same Secure Boot policy.
