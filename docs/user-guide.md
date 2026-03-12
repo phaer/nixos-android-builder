@@ -167,7 +167,7 @@ Computing expected PCR 11...
 ✓ Expected PCR 11 written to ESP: 00e9c94ef58cd0c569e2872b451fee0e30b322dffb38cf79415c9f478807dddf
 ```
 
-Signing does not affect the PCR 11 value (only the UKI payload sections are measured, not the Authenticode signature). This step can be run before or after signing. If omitted, `read-firmware-pcrs` will fail at runtime because it cannot verify PCR 11.
+Signing does not affect the PCR 11 value (only the UKI payload sections are measured, not the Authenticode signature). This step can be run before or after signing. If omitted, `read-tpm-pcrs` will fail at runtime because it cannot verify PCR 11.
 
 ## Configure Attestation Server
 
@@ -402,14 +402,16 @@ Copying them to a remote persistent storage medium is left to the user at this t
 
 ## Inspect PCR State {#inspect-pcrs}
 
-The `read-firmware-pcrs` tool is available on the running system to inspect and verify TPM Platform Configuration Register (PCR) values. It reads PCRs from the TPM sysfs and outputs a keylime-compatible `tpm_policy` JSON.
+The `read-tpm-pcrs` tool is available on the running system to inspect and verify TPM Platform Configuration Register (PCR) values. It reads PCRs from the TPM sysfs and outputs a keylime-compatible `tpm_policy` JSON.
 
 ```shell-session
-$ read-firmware-pcrs
+$ read-tpm-pcrs
 {"0": ["abc123..."], "1": ["def456..."], "2": ["..."], "3": ["..."], "7": ["..."], "11": ["..."]}
 ```
 
 PCR 11 is always verified against the expected value on the ESP (`/boot/expected-pcr11`). If they don't match, the command exits with an error.
+
+When run on a terminal, the tool also displays the policy as a QR code, which can be scanned to transfer PCR values from machines with limited network connectivity.
 
 The tool also supports `--save` to persist a PCR baseline and `--diff` to compare against a previously saved baseline, which is useful after firmware updates.
 

@@ -227,9 +227,9 @@ in
         agent.log(f"Agent EK-derived UUID: {agent_uuid}")
 
       with subtest("Read and verify PCRs from agent TPM"):
-        # read-firmware-pcrs reads PCRs 0-3, 7, 11 from the TPM.
+        # read-tpm-pcrs reads PCRs 0-3, 7, 11 from the TPM.
         # PCR 11 is verified against /boot/expected-pcr11.
-        tpm_policy_str = agent.succeed("read-firmware-pcrs")
+        tpm_policy_str = agent.succeed("read-tpm-pcrs")
         tpm_policy = json.loads(tpm_policy_str)
         for pcr in ("0", "1", "2", "3", "7", "11"):
           agent.log(f"PCR{pcr} = {tpm_policy[pcr][0]}")
@@ -238,7 +238,7 @@ in
         assert pcr7 != "0" * 64, "PCR7 is all zeros — Secure Boot not active?"
 
       with subtest("Agent can be added for attestation with PCR policy"):
-        # Use the verified policy from read-firmware-pcrs directly.
+        # Use the verified policy from read-tpm-pcrs directly.
         # --push-model skips contacting the agent (no listening port in push mode).
         policy = json.dumps({"7": tpm_policy["7"], "11": tpm_policy["11"]})
         server.succeed(

@@ -27,11 +27,11 @@ in
     ];
   } (builtins.readFile ./calculate-pcr11.py);
 
-  # Run-time tool: read firmware PCRs from the TPM sysfs on a live machine.
-  # No external dependencies — reads directly from /sys/class/tpm/.
-  read-firmware-pcrs = writers.writePython3Bin "read-firmware-pcrs" {
+  # Run-time tool: read PCRs from the TPM sysfs on a live machine and
+  # emit a keylime tpm_policy JSON.  Displays a QR code when on a TTY.
+  read-tpm-pcrs = writers.writePython3Bin "read-tpm-pcrs" {
     libraries = [ python3Packages.qrcode ];
   } (
-    builtins.readFile ./read-firmware-pcrs.py
+    builtins.readFile ./read-tpm-pcrs.py
   );
 }

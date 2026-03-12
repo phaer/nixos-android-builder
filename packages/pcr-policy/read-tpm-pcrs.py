@@ -1,23 +1,26 @@
-"""Read firmware PCR values from the TPM and emit a keylime tpm_policy JSON.
+"""Read PCR values from the TPM and emit a keylime tpm_policy JSON.
 
-These PCRs are populated by UEFI firmware and cannot be pre-calculated
-at build time — they depend on the specific hardware, firmware version,
-BIOS settings, and Secure Boot key enrollment.
-
-PCR 11 is always read from the TPM and verified against the expected
-value baked into the image at build time (see the secure-boot NixOS
-module).  If they match, PCR 11 is included in the output policy.
-If not, the script exits with an error.
+Reads firmware PCRs (0–3, 7) and PCR 11 (UKI + boot phases) from the
+TPM sysfs.  Firmware PCRs depend on the specific hardware, firmware
+version, BIOS settings, and Secure Boot key enrollment.  PCR 11 is
+verified against the expected value baked into the image at build
+time (see the secure-boot NixOS module); a mismatch causes the
+script to exit with an error.
 
 The --save flag writes the current PCR baseline to a JSON file for
 later comparison.  The --diff flag compares the current PCR values
 against a previously saved baseline and reports any changes.
+
+When run on a terminal, a QR code of the policy is displayed on
+stderr for easy transfer from machines with limited connectivity.
 """
 
 import argparse
 import json
 import sys
 from pathlib import Path
+
+import qrcode  # type: ignore[import-untyped]
 
 FIRMWARE_PCRS = [0, 1, 2, 3, 7]
 TPM_SYSFS = Path("/sys/class/tpm/tpm0/pcr-sha256")
@@ -139,7 +142,7 @@ def diff_baseline(policy: dict, path: Path) -> bool:
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Read firmware PCRs from the TPM"
+            "Read PCRs from the TPM"
             " and emit a keylime tpm_policy JSON."
         ),
     )
@@ -202,14 +205,14 @@ def main() -> None:
     else:
         print(output)
 
-    import qrcode  # type: ignore[import-untyped]
-    qr = qrcode.QRCode(
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-    )
-    qr.add_data(output)
-    qr.make(fit=True)
-    print(file=sys.stderr)
-    qr.print_tty(out=sys.stderr)
+    if sys.stderr.isatty():
+        qr = qrcode.QRCode(
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+        )
+        qr.add_data(output)
+        qr.make(fit=True)
+        print(file=sys.stderr)
+        qr.print_tty(out=sys.stderr)
 
 
 if __name__ == "__main__":

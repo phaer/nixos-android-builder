@@ -112,7 +112,7 @@
           keylime-agent
           ;
         inherit (secureBootScripts) create-signing-keys;
-        inherit (pcrPolicy) calculate-pcr11 read-firmware-pcrs;
+        inherit (pcrPolicy) calculate-pcr11 read-tpm-pcrs;
         configure-disk-image = diskInstaller.configure;
         default = image;
       };
