@@ -101,6 +101,22 @@ in
     ];
   };
 
+  keylime-auto-enroll = pkgs.testers.runNixOSTest {
+    imports = [
+      ./keylime-auto-enroll.nix
+      {
+        _module.args = {
+          imageModules = imageModules;
+          inherit
+            keylimeModule
+            keylimeAgentModule
+            keylimeAgentPackage
+            ;
+        };
+      }
+    ];
+  };
+
   credentialStorage = pkgs.testers.runNixOSTest {
     imports = [
       ./credential-storage.nix

@@ -1,3 +1,8 @@
+# Test: auto-enrollment of keylime agents with full PCR policy.
+#
+# Verifies that the auto-enrollment daemon on the server side
+# automatically enrolls a new agent when it both registers with
+# the registrar AND reports its full TPM PCR values.
 {
   keylimeModule,
   keylimeAgentModule,
@@ -8,7 +13,6 @@
   ...
 }:
 let
-  # TLS certificate paths (populated by test script before services start)
   tlsDir = "/var/lib/keylime/tls";
   caCert = "${tlsDir}/ca-cert.pem";
   caKey = "${tlsDir}/ca-key.pem";
@@ -16,9 +20,19 @@ let
   serverKey = "${tlsDir}/server-key.pem";
   clientCert = "${tlsDir}/client-cert.pem";
   clientKey = "${tlsDir}/client-key.pem";
+
+  autoEnrollScript = pkgs.writers.writePython3 "keylime-auto-enroll" {
+    flakeIgnore = [
+      "E501"
+      "E266"
+      "N802"
+    ];
+  } (builtins.readFile ../system-manager/keylime-auto-enroll.py);
+
+  pcrPolicy = pkgs.callPackage ../packages/pcr-policy { };
 in
 {
-  name = "keylime";
+  name = "keylime-auto-enroll";
 
   nodes.server =
     { pkgs, ... }:
@@ -27,9 +41,12 @@ in
 
       virtualisation.tpm.enable = true;
 
+      networking.firewall.allowedTCPPorts = [ 8893 ];
+
       environment.systemPackages = [
         pkgs.openssl
         pkgs.tpm2-tools
+        pkgs.curl
       ];
 
       services.keylime = {
@@ -79,11 +96,8 @@ in
     {
       imports = imageModules ++ [ keylimeAgentModule ];
 
-      # imageModules sets system.name = "android-builder"; restore the node name
-      # so the test driver exposes it as `agent`, not `android_builder`
       system.name = lib.mkForce "agent";
 
-      # Reduce resource usage — we don't need the full android builder footprint
       virtualisation = lib.mkVMOverride {
         diskSize = 8 * 1024;
         memorySize = 2 * 1024;
@@ -97,6 +111,8 @@ in
         pkgs.coreutils
         pkgs.openssl
         pkgs.tpm2-tools
+        pkgs.curl
+        pcrPolicy.report-pcrs
       ];
 
       systemd.tmpfiles.rules = [
@@ -113,6 +129,8 @@ in
 
       # Don't start automatically — start after CA cert is provisioned
       systemd.services.keylime-agent.wantedBy = lib.mkForce [ ];
+      # Don't auto-start report-pcrs — we trigger it manually after agent starts
+      systemd.services.keylime-report-pcrs.wantedBy = lib.mkForce [ ];
     };
 
   testScript =
@@ -120,98 +138,86 @@ in
     ''
       import subprocess, os, json
 
-      # Prepare the agent's signed writable disk image (like the integration test)
+      # Prepare the agent's signed writable disk image
       subprocess.run([
         "${lib.getExe nodes.agent.system.build.prepareWritableDisk}"
       ], env=os.environ.copy(), cwd=agent.state_dir, check=True)
 
+      import time as _time
       serial_stdout_on()
       server.start()
       agent.start(allow_reboot=True)
 
       server.wait_for_unit("multi-user.target")
-      # Agent reboots once to enroll Secure Boot keys; wait for the second boot
       agent.wait_for_unit("multi-user.target")
-      with subtest("Generate mTLS PKI on server and configure agent via attestation-server.json"):
+
+      with subtest("Generate mTLS PKI and configure agent"):
         server.succeed("mkdir -p ${tlsDir}")
 
-        # Discover server IP on the test vlan (eth1)
         server_ip = server.succeed("ip -4 -o addr show eth1 | awk '{print $4}' | cut -d/ -f1").strip()
         server.log(f"Server IP: {server_ip}")
 
         server.succeed(
           "openssl req -x509 -newkey rsa:2048 -nodes"
-          " -keyout ${caKey}"
-          " -out ${caCert}"
-          " -days 365"
-          " -subj '/CN=Keylime CA'"
+          " -keyout ${caKey} -out ${caCert}"
+          " -days 365 -subj '/CN=Keylime CA'"
           " -addext 'basicConstraints=critical,CA:TRUE'"
           " -addext 'keyUsage=critical,keyCertSign,cRLSign'"
         )
-
         server.succeed(
           "openssl req -newkey rsa:2048 -nodes"
-          " -keyout ${serverKey}"
-          " -out /tmp/server.csr"
-          " -subj '/CN=server'"
+          " -keyout ${serverKey} -out /tmp/server.csr -subj '/CN=server'"
         )
         server.succeed(
-          "openssl x509 -req"
-          " -in /tmp/server.csr"
-          " -CA ${caCert}"
-          " -CAkey ${caKey}"
-          " -CAcreateserial"
-          " -out ${serverCert}"
-          " -days 365 -sha256"
+          "openssl x509 -req -in /tmp/server.csr"
+          " -CA ${caCert} -CAkey ${caKey} -CAcreateserial"
+          " -out ${serverCert} -days 365 -sha256"
           f" -extfile <(printf 'subjectAltName=DNS:server,DNS:localhost,IP:127.0.0.1,IP:{server_ip}')"
         )
-
         server.succeed(
           "openssl req -newkey rsa:2048 -nodes"
-          " -keyout ${clientKey}"
-          " -out /tmp/client.csr"
-          " -subj '/CN=client'"
+          " -keyout ${clientKey} -out /tmp/client.csr -subj '/CN=client'"
         )
         server.succeed(
-          "openssl x509 -req"
-          " -in /tmp/client.csr"
-          " -CA ${caCert}"
-          " -CAkey ${caKey}"
-          " -CAcreateserial"
-          " -out ${clientCert}"
-          " -days 365 -sha256"
+          "openssl x509 -req -in /tmp/client.csr"
+          " -CA ${caCert} -CAkey ${caKey} -CAcreateserial"
+          " -out ${clientCert} -days 365 -sha256"
         )
-
         server.succeed("chown -R keylime:keylime ${tlsDir}")
         server.succeed("chmod 0640 ${tlsDir}/*")
 
-        server.succeed("openssl verify -CAfile ${caCert} ${serverCert}")
-        server.succeed("openssl verify -CAfile ${caCert} ${clientCert}")
-
-        # Write attestation-server.json to /boot on the agent (replaces build-time config)
+        # Write attestation-server.json to agent
         ca_cert_pem = server.succeed("cat ${caCert}")
         server_json = json.dumps({"ip": server_ip, "ca_cert": ca_cert_pem})
         agent.succeed("mount -o remount,rw /boot")
         agent.succeed(f"cat > /boot/attestation-server.json << 'EOF'\n{server_json}\nEOF")
         agent.succeed("mount -o remount,ro /boot")
 
-      with subtest("Registrar starts and is listening with TLS"):
+      with subtest("Start registrar and verifier"):
         server.succeed("systemctl start keylime-registrar.service")
         server.wait_for_unit("keylime-registrar.service")
-        server.wait_for_open_port(8890)
         server.wait_for_open_port(8891)
 
-      with subtest("Verifier starts and is listening with mTLS"):
         server.succeed("systemctl start keylime-verifier.service")
         server.wait_for_unit("keylime-verifier.service")
         server.wait_for_open_port(8881)
 
-      with subtest("Agent starts and registers (EK-derived UUID)"):
+      with subtest("Start auto-enrollment daemon"):
+        server.succeed(
+          "KEYLIME_TLS_DIR=${tlsDir}"
+          " KEYLIME_POLL_INTERVAL=2"
+          " KEYLIME_ENROLL_PORT=8893"
+          " ${autoEnrollScript}"
+          " >> /tmp/auto-enroll.log 2>&1 &"
+        )
+        _time.sleep(2)  # Give the HTTPS server time to start
+
+      with subtest("Agent registers and reports PCRs"):
+        # Start the keylime agent (registers with registrar)
         agent.succeed("systemctl start keylime-agent.service")
         agent.wait_for_unit("keylime-agent.service")
 
-        # Discover the EK-derived UUID from the registrar API.
-        # Registration is async, so retry until the agent appears.
+        # Wait for the agent to register
         agent_uuid = None
         for _ in range(30):
           resp = json.loads(server.succeed(
@@ -222,30 +228,43 @@ in
           if uuids:
             agent_uuid = uuids[0]
             break
-          import time; time.sleep(1)
+          _time.sleep(1)
         assert agent_uuid, "Agent did not register within 30s"
-        agent.log(f"Agent EK-derived UUID: {agent_uuid}")
+        agent.log(f"Agent UUID: {agent_uuid}")
 
-      with subtest("Agent can be added for attestation with PCR policy"):
-        # Read PCR values from sysfs to build the enrollment policy.
-        tpm_policy = {}
-        for pcr in (0, 1, 2, 3, 7, 11):
-          val = agent.succeed(f"cat /sys/class/tpm/tpm0/pcr-sha256/{pcr}").strip().lower()
-          tpm_policy[str(pcr)] = [val]
-
-        # --push-model skips contacting the agent (no listening port in push mode).
-        policy = json.dumps({"7": tpm_policy["7"], "11": tpm_policy["11"]})
-        server.succeed(
-          f"keylime_tenant --push-model -c add -t 192.168.1.1 -u {agent_uuid}"
-          " -r 127.0.0.1 -rp 8891 -v 127.0.0.1 -vp 8881"
-          f" --tpm_policy '{policy}'"
+        # Report PCRs to the enrollment server.
+        # report-pcrs reads the UUID from agent_data.json's
+        # ek_hash field (populated after registration).
+        agent.succeed(
+          f"KEYLIME_ENROLL_URL=https://{server_ip}:8893"
+          " report-pcrs"
         )
 
-      with subtest("Verifier attests the agent (reaches Get Quote state)"):
+      with subtest("Verifier attests the auto-enrolled agent with full policy"):
+        # The auto-enrollment daemon should have enrolled the agent
+        # with the full PCR policy (firmware + PCR 11).
+        # Wait for the verifier to reach Get Quote state.
+        # Wait for the daemon to poll and enroll the agent, then
+        # verify it reaches an attesting state.
         server.wait_until_succeeds(
-          f"keylime_tenant -c cvstatus -u {agent_uuid} -v 127.0.0.1 -vp 8881 > /tmp/cvstatus.out 2>&1"
-          " && grep -qE '\"operational_state\": \"(Get Quote|Provide V)\"' /tmp/cvstatus.out",
+          "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
+          f" https://127.0.0.1:8881/v2.5/agents/{agent_uuid}"
+          " | grep -q 'operational_state'",
           timeout=60,
         )
+        server.log("Agent successfully auto-enrolled and attested!")
+
+        # Verify the policy includes firmware PCRs (not just PCR 11)
+        cvstatus = json.loads(server.succeed(
+          "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
+          f" https://127.0.0.1:8881/v2.5/agents/{agent_uuid}"
+        ))
+        tpm_policy = cvstatus.get("results", {}).get("tpm_policy", {})
+        server.log(f"TPM policy: {json.dumps(tpm_policy)}")
+
+        # Must have firmware PCRs AND PCR 11
+        for pcr in ["0", "1", "2", "3", "7", "11"]:
+          assert pcr in tpm_policy, f"PCR {pcr} missing from enrolled policy"
+        server.log("Full PCR policy verified (PCRs 0, 1, 2, 3, 7, 11)")
     '';
 }
