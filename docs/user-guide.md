@@ -167,7 +167,7 @@ Computing expected PCR 11...
 ✓ Expected PCR 11 written to ESP: 00e9c94ef58cd0c569e2872b451fee0e30b322dffb38cf79415c9f478807dddf
 ```
 
-This step must be run **after** signing, since signing changes the UKI and therefore its PCR 11 value. If omitted, runtime PCR 11 verification (`read-firmware-pcrs --verify-pcr11`) will not be available.
+This step must be run **after** signing, since signing changes the UKI and therefore its PCR 11 value. If omitted, `report-pcrs` will fail at runtime because it cannot verify PCR 11.
 
 ## Configure Attestation Server
 
@@ -402,21 +402,14 @@ Copying them to a remote persistent storage medium is left to the user at this t
 
 ## Inspect PCR State {#inspect-pcrs}
 
-The `read-firmware-pcrs` tool is available on the running system to inspect and verify TPM Platform Configuration Register (PCR) values. It reads PCRs from the TPM sysfs and outputs a keylime-compatible `tpm_policy` JSON.
+TPM Platform Configuration Register (PCR) values can be read directly from sysfs:
 
 ```shell-session
-$ read-firmware-pcrs
-{"0": ["abc123..."], "1": ["def456..."], "2": ["..."], "3": ["..."], "7": ["..."]}
+$ cat /sys/class/tpm/tpm0/pcr-sha256/7
+abc123...
 ```
 
-To also verify PCR 11 against the expected value baked into the ESP:
-
-```shell-session
-$ read-firmware-pcrs --verify-pcr11
-{"0": ["..."], "1": ["..."], "2": ["..."], "3": ["..."], "7": ["..."], "11": ["..."]}
-```
-
-The tool also supports `--save` to persist a PCR baseline and `--diff` to compare against a previously saved baseline, which is useful after firmware updates.
+On boot, the `report-pcrs` service automatically reads firmware PCRs (0–3, 7) and PCR 11, verifies PCR 11 against the expected value on the ESP, and reports the full policy to the auto-enrollment server. No manual PCR inspection is normally needed.
 
 ## Credential Storage {#credential-storage}
 
