@@ -63,7 +63,7 @@ in
     pkgs.efitools
     pkgs.tpm2-tools
     enroll-secure-boot
-    pcrPolicy.read-firmware-pcrs
+    pcrPolicy.report-pcrs
   ];
 
   # Expose the expected PCR 11 hash as a build output.
@@ -73,7 +73,7 @@ in
   # (store → UKI → expectedPcr11 → store). Instead it is written to
   # the ESP by configure-disk-image set-pcr11 (post-build).
   #
-  # read-firmware-pcrs --verify-pcr11 reads it from /boot/expected-pcr11
+  # report-pcrs reads it from /boot/expected-pcr11
   # at runtime to compare against the running TPM state.
   system.build.expectedPcr11 = expectedPcr11;
 

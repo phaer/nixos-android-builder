@@ -173,7 +173,7 @@ let
       '';
 
   # Persist agent AK to /boot after the file appears so it survives reboots.
-  # Triggered by keylime-persist-agent.path (PathExists watch).
+  # Triggered by keylime-agent-data.path (PathExists watch).
   persistAgent = pkgs.writeShellScript "keylime-persist-agent" ''
     set -euo pipefail
     src=/var/lib/keylime/agent_data.json
@@ -273,23 +273,46 @@ in
       };
     };
 
-    # Watch for agent_data.json and persist it to /boot once it appears.
-    systemd.paths.keylime-persist-agent = {
-      description = "Watch for Keylime agent data to persist";
+    # Watch for agent_data.json (written after registration) and
+    # trigger dependent services via keylime-agent-data.target.
+    systemd.paths.keylime-agent-data = {
+      description = "Watch for Keylime agent data file";
       wantedBy = [ "multi-user.target" ];
       pathConfig = {
         PathExists = "/var/lib/keylime/agent_data.json";
-        Unit = "keylime-persist-agent.service";
+        Unit = "keylime-agent-data.target";
       };
     };
 
+    systemd.targets.keylime-agent-data = {
+      description = "Keylime agent data available";
+    };
+
+    # Persist agent AK to /boot so the UUID survives reboots.
     systemd.services.keylime-persist-agent = {
       description = "Persist Keylime agent AK to /boot";
       after = [ "boot.mount" ];
+      wantedBy = [ "keylime-agent-data.target" ];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = "${persistAgent}";
+      };
+    };
+
+    # Report TPM PCR values to the auto-enrollment server so the
+    # daemon can enroll this agent with the full TPM policy.
+    # Reads the agent UUID from agent_data.json (ek_hash field),
+    # waiting for the keylime agent to write it after registration.
+    systemd.services.keylime-report-pcrs = {
+      description = "Report TPM PCRs to auto-enrollment server";
+      wantedBy = [ "keylime-agent-data.target" ];
+      unitConfig.ConditionPathExists = "/dev/tpm0";
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.lib.getExe (pkgs.callPackage ../packages/pcr-policy { }).report-pcrs}";
+        Restart = "on-failure";
+        RestartSec = "10s";
       };
     };
   };
