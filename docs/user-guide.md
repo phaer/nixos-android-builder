@@ -167,7 +167,7 @@ Computing expected PCR 11...
 ✓ Expected PCR 11 written to ESP: 00e9c94ef58cd0c569e2872b451fee0e30b322dffb38cf79415c9f478807dddf
 ```
 
-This step must be run **after** signing, since signing changes the UKI and therefore its PCR 11 value. If omitted, runtime PCR 11 verification (`read-firmware-pcrs --verify-pcr11`) will not be available.
+This step must be run **after** signing, since signing changes the UKI and therefore its PCR 11 value. If omitted, `report-pcrs` will fail at runtime because it cannot verify PCR 11.
 
 ## Configure Attestation Server
 
@@ -191,6 +191,58 @@ $ nix run .#configure-disk-image -- set-attestation-server \
 If this step is skipped, the keylime agent will fail to start on boot. The agent reads `/boot/attestation-server.json` at startup to learn the registrar address, verifier URL, and CA certificate.
 
 After this step, `android-builder_25.11pre-git.raw` in the repository's top-level directory is ready to be flashed to a block device in the next step!
+
+## Auto-Enrollment {#auto-enrollment}
+
+If the attestation server runs the auto-enrollment daemon, agents are enrolled automatically on first boot — no manual `keylime_tenant` step is needed.  The full enrollment flow is:
+
+~~~mermaid
+---
+config:
+  theme: neutral
+---
+sequenceDiagram
+    participant B as Build Host
+    participant S as Attestation Server
+    participant A as Agent
+
+    B->>B: nix build, sign, set-pcr11,<br/>set-attestation-server
+    B->>A: Flash image to disk
+
+    A->>A: Boot — agent starts
+    A->>S: Agent registers (EK-derived UUID)
+    A->>S: report-pcrs POSTs full PCR policy
+
+    loop Every poll interval
+        S->>S: Daemon matches registrar<br/>entries with PCR reports
+    end
+
+    S->>S: keylime_tenant -c add<br/>(PCRs 0,1,2,3,7,11)
+
+    S->>A: Verifier requests TPM quote
+    A->>S: Agent provides quote
+    S->>S: All PCRs match ✓
+~~~
+
+The daemon is enabled on the attestation server via:
+
+```nix
+services.keylime.autoEnroll.enable = true;
+```
+
+Configuration options live under `services.keylime.autoEnroll`:
+
+| Option           | Default      | Description                                        |
+|------------------|--------------|----------------------------------------------------|
+| `enable`         | `false`      | Enable the auto-enrollment daemon.                 |
+| `enrollPort`     | `8893`       | HTTPS port for the PCR report endpoint.            |
+| `pollInterval`   | `10`         | Seconds between polling the registrar.             |
+
+When updating an image on a machine whose TPM EK hasn't changed (same UUID), the old enrollment must be deleted before the agent can re-enroll with the new PCR policy:
+
+```shell-session
+$ keylime_tenant -c delete -u <agent-uuid> -v <verifier-ip> -vp 8881
+```
 
 ## Flash the Image
 
@@ -402,21 +454,23 @@ Copying them to a remote persistent storage medium is left to the user at this t
 
 ## Inspect PCR State {#inspect-pcrs}
 
-The `read-firmware-pcrs` tool is available on the running system to inspect and verify TPM Platform Configuration Register (PCR) values. It reads PCRs from the TPM sysfs and outputs a keylime-compatible `tpm_policy` JSON.
+TPM Platform Configuration Register (PCR) values can be read directly from sysfs:
+
+```shell-session
+$ cat /sys/class/tpm/tpm0/pcr-sha256/7
+abc123...
+```
+
+On boot, the `report-pcrs` service automatically reads firmware PCRs (0–3, 7) and PCR 11, verifies PCR 11 against the expected value on the ESP, and enrolls on the keylime server by sending the PCRs to the auto-enrollment service. No manual PCR inspection is normally needed.
+
+For debugging, `read-firmware-pcrs` is also available to inspect PCR values interactively:
 
 ```shell-session
 $ read-firmware-pcrs
 {"0": ["abc123..."], "1": ["def456..."], "2": ["..."], "3": ["..."], "7": ["..."]}
-```
-
-To also verify PCR 11 against the expected value baked into the ESP:
-
-```shell-session
 $ read-firmware-pcrs --verify-pcr11
 {"0": ["..."], "1": ["..."], "2": ["..."], "3": ["..."], "7": ["..."], "11": ["..."]}
 ```
-
-The tool also supports `--save` to persist a PCR baseline and `--diff` to compare against a previously saved baseline, which is useful after firmware updates.
 
 ## Credential Storage {#credential-storage}
 
@@ -640,11 +694,13 @@ kill vlan (pid 7)
 
 Note that the test are only run again if inputs did change since the last run.
 
-There's additional VM tests in the repository that cover the disk installer and keylime attestation:
+There's additional VM tests in the repository that cover the disk installer, keylime attestation, and auto-enrollment:
 
 ``` shell-session
-$ nix build -L .#checks.x86_64-linux.installer .#checks.x86_64-linux.installerInteractive .#checks.x86_64-linux.keylime
+$ nix build -L .#checks.x86_64-linux.installer .#checks.x86_64-linux.installerInteractive .#checks.x86_64-linux.keylime .#checks.x86_64-linux.keylime-auto-enroll
 ```
+
+The `keylime-auto-enroll` test exercises the full auto-enrollment flow: agent registration, PCR reporting, daemon-driven enrollment with the full PCR policy (0, 1, 2, 3, 7, 11), and attestation persistence across 5 reboots.
 
 # Usage in a Virtual Machine {#virtual-machine}
 
@@ -743,6 +799,28 @@ $ ls -la /bin/bash /lib/ld-linux-x86-64.so.2
 
 This is expected behavior - the `/var/lib/build` partition is ephemeral by design. To persist outputs, enable artifact storage: set `nixosAndroidBuilder.artifactStorage.enable = true` in `configuration.nix`.
 
+
+## Auto-Enrollment Issues
+
+**Problem: Agent registers but is not enrolled**
+
+Check the daemon logs (`journalctl -u keylime-auto-enroll`) for enrollment errors.  The daemon waits for both registration AND a PCR report before enrolling.  Common causes:
+
+- The `report-pcrs` service failed — check agent logs (`journalctl -u keylime-report-pcrs`).
+- mTLS certificate issues (expired, wrong CA).
+- Port 8893 not reachable from the agent.
+
+**Problem: `report-pcrs` fails with "PCR 11 mismatch"**
+
+The agent's live PCR 11 does not match the expected value on the ESP.  Ensure `set-pcr11` was run after signing the image.
+
+**Problem: Agent is enrolled but fails attestation**
+
+The TPM quote does not match the enrolled policy.  This can happen after a firmware update or BIOS settings change that alters firmware PCRs.  Delete the enrollment and let the agent re-enroll:
+
+```shell-session
+$ keylime_tenant -c delete -u <agent-uuid> -v <verifier-ip> -vp 8881
+```
 
 ## VM Testing Issues
 
