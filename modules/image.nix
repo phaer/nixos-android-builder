@@ -61,19 +61,27 @@
           ];
           neededForBoot = false;
         };
-        "/nix/store" = {
-          overlay = {
-            lowerdir = [ "/nix/.ro-store" ];
-            upperdir = "/nix/.rw-store/upper";
-            workdir = "/nix/.rw-store/work";
-          };
-        };
-        "/nix/.ro-store" = {
+        "/nix/store" =
+          if config.nixosAndroidBuilder.debug then
+            {
+              overlay = {
+                lowerdir = [ "/nix/.ro-store" ];
+                upperdir = "/nix/.rw-store/upper";
+                workdir = "/nix/.rw-store/work";
+              };
+            }
+          else
+            {
+              device = "/usr/nix/store";
+              options = [ "bind" ];
+              neededForBoot = true;
+            };
+        "/nix/.ro-store" = lib.mkIf config.nixosAndroidBuilder.debug {
           device = "/usr/nix/store";
           options = [ "bind" ];
           neededForBoot = true;
         };
-        "/nix/.rw-store" = {
+        "/nix/.rw-store" = lib.mkIf config.nixosAndroidBuilder.debug {
           device = "none";
           fsType = "tmpfs";
           options = [
