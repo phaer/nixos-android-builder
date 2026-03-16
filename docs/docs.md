@@ -20,7 +20,7 @@ We created a modular proof‑of‑concept based on NixOS that fulfills most of t
 * **aarch64 support** could be added if needed. Only `x86_64` with `UEFI` is implemented at the moment.
 * **artifact uploads**: build artifacts are currently not automatically uploaded anywhere, but stay on the build machine.
   Integration of a Trusted Platform Module (TPM) could be useful here, to ease authentication to private repositories as well as destinations for artifact upload.
-* **measured boot & attestation**: PCR 11 (UKI) is pre-calculated at build time and verified at runtime via `read-firmware-pcrs`. The keylime agent is enabled by default (using TPM EK-derived identity). Remaining work: an attestation-gated step in the unattended pipeline, firmware PCR baseline capture/enrollment tooling for real hardware, network policy for attestation traffic, and replacing the `accept-all` measured boot policy with real UEFI event log validation.
+* **measured boot & attestation**: PCR 11 (UKI) is pre-calculated at build time and verified at runtime. Firmware PCRs (0–3, 7) and PCR 11 are automatically reported to the attestation server via `report-pcrs` for full-policy auto-enrollment. The keylime agent is enabled by default (using TPM EK-derived identity). Remaining work: an attestation-gated step in the unattended pipeline, network policy for attestation traffic, and replacing the `accept-all` measured boot policy with real UEFI event log validation.
 * **credential storage**: TPM-encrypted credentials (via `systemd-creds`) are currently bound to PCR 7 (Secure Boot policy) only, not PCR 11 (UKI). Since the Secure Boot signing keys are created specifically for this project, only images signed with our key can produce a matching PCR 7 — so the practical risk is low. Binding to PCR 11 as well would prevent a *different* image signed with the same key from decrypting credentials, at the cost of invalidating all stored credentials on every image update. A `systemd-measure sign` based approach could provide PCR 11 binding without this drawback.
 * **higher-level configuration**: Adapting the build environment to the needs of custom AOSP distributions might need extra work. Depending on the nature of those
   customizations, a good understanding of `nix` might be needed. We will ease those as far as possible, as we learn more about users customization needs.
@@ -223,6 +223,54 @@ The keylime server components are provided by the `services.keylime` NixOS modul
 - **Verifier** (`services.keylime.verifier.enable`) – performs attestation checks against registered agents using a configurable TPM policy.
 - **Tenant** configuration (`services.keylime.tenant.settings`) – for enrolling agents with `keylime_tenant`.
 
+### Auto-Enrollment {#auto-enrollment}
+
+The auto-enrollment daemon (`services.keylime.autoEnroll`) automates agent enrollment with the verifier.  Without it, each new agent must be manually enrolled by an operator who has access to both the agent machine (to read firmware PCR values) and the attestation server (to run `keylime_tenant -c add`).
+
+With auto-enrollment enabled, the agent registers, reports its PCR values, and the daemon enrolls it with the full TPM policy — no manual intervention required.
+
+~~~mermaid
+---
+config:
+  theme: neutral
+---
+graph TB
+    subgraph server["Attestation Server"]
+        registrar["Registrar\n:8891"]
+        verifier["Verifier\n:8881"]
+        daemon["Auto-Enroll\nDaemon\n:8893"]
+
+        daemon -- "polls for\nnew agents" --> registrar
+        daemon -- "checks enrolled\nagents" --> verifier
+        daemon -- "keylime_tenant\n-c add" --> verifier
+    end
+
+    subgraph agent["Agent (physical machine)"]
+        keylime_agent["keylime_push_model_agent"]
+        report_pcrs["report-pcrs"]
+    end
+
+    keylime_agent -- "registers\n(UUID = hash_ek)" --> registrar
+    report_pcrs -- "POST /v1/report_pcrs\n(full PCR policy)" --> daemon
+    verifier -- "attests\n(TPM quote)" --> keylime_agent
+~~~
+
+The daemon runs on the attestation server alongside the registrar and verifier.  It:
+
+1. Listens on an HTTPS endpoint (port 8893) for PCR reports from agents.
+2. Periodically polls the registrar for registered agent UUIDs.
+3. When an agent is both registered AND has submitted its PCR report, enrolls it with the verifier using the full policy.
+
+On the agent side, `report-pcrs` runs as a oneshot systemd service after the keylime agent registers.  It reads all PCR values from the TPM, verifies PCR 11 against the expected value on the ESP, and POSTs the policy to the daemon.
+
+#### Trust Model
+
+Firmware PCRs are accepted on a **trust-on-first-use (TOFU)** basis: the agent self-reports its PCR values before the first attestation.  This is acceptable because:
+
+- PCR 11 is verified locally against the build-time expected value before reporting — the agent must be running the correct image.
+- After enrollment, the verifier validates all PCR values against the TPM quote on every attestation cycle — any false report is caught immediately.
+- Once enrolled with the full policy, the agent cannot downgrade the policy — only an admin with verifier mTLS credentials can modify it.
+
 ### PCR Policy
 
 Attestation verifies the following Platform Configuration Registers (PCRs) by default:
@@ -238,7 +286,8 @@ PCRs 0–3 and 7 are firmware-dependent and can only be read from the live TPM. 
 
 Two tools are included for PCR management:
 
-- `read-firmware-pcrs` – reads PCR values from the TPM sysfs (`/sys/class/tpm/tpm0/pcr-sha256/`) and emits a keylime `tpm_policy` JSON. Supports `--verify-pcr11` to include PCR 11 after verifying it against the expected value, `--save` to persist a baseline, and `--diff` to compare against a previously saved baseline.
+- `report-pcrs` – reads firmware PCR values (0–3, 7) and PCR 11 from the TPM sysfs, verifies PCR 11 against the expected value on the ESP, and enrolls on the keylime server by sending the PCRs to the auto-enrollment service. Runs automatically as a oneshot service after the keylime agent registers.
+- `read-firmware-pcrs` – reads PCR values from the TPM sysfs and outputs a keylime `tpm_policy` JSON. Supports `--verify-pcr11` to include PCR 11 after verifying it against the expected value, `--save` to persist a baseline, and `--diff` to compare against a previously saved baseline. Useful for debugging and manual inspection.
 - `calculate-pcr11` – offline tool for use on a local workstation that computes the expected PCR 11 value from a UKI file by extracting its PE sections and running `systemd-measure calculate` with the `sysinit:ready` phase.
 
 ## Credential Storage {#credential-storage}
@@ -329,7 +378,7 @@ Usage is documented in [user-guide.pdf](user-guide.pdf). `configure-disk-image` 
 
 - **(6)** The `UKI` is copied to a temporary file, signed, and copied back into the `esp` again.
 - **(7)** Secure Boot update bundles (`*.auth` files) are copied to the `esp` to ensure that `ensure-secure-boot-enrollment.service` can find them during boot.
-- **(8)** The expected PCR 11 value is pre-calculated from the signed UKI and written to the ESP as `/boot/expected-pcr11`. At runtime, `read-firmware-pcrs --verify-pcr11` compares the live TPM PCR 11 against this value.
+- **(8)** The expected PCR 11 value is pre-calculated from the signed UKI and written to the ESP as `/boot/expected-pcr11`. At runtime, `report-pcrs` verifies the live TPM PCR 11 against this value before reporting the full policy to the auto-enrollment server.
 - **(9)** We finally have a signed image, ready to flash & boot on a target machine.
 
 

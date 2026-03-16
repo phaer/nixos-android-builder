@@ -112,7 +112,7 @@
           keylime-agent
           ;
         inherit (secureBootScripts) create-signing-keys;
-        inherit (pcrPolicy) calculate-pcr11 read-firmware-pcrs;
+        inherit (pcrPolicy) calculate-pcr11 report-pcrs read-firmware-pcrs;
         configure-disk-image = diskInstaller.configure;
         default = image;
       };
@@ -121,12 +121,14 @@
         modules = [
           ./system-manager/tpm2.nix
           ./system-manager/keylime.nix
+          ./system-manager/keylime-auto-enroll.nix
           {
             nixpkgs.hostPlatform = system;
             services.keylime = {
               enable = true;
               registrar.enable = true;
               verifier.enable = true;
+              autoEnroll.enable = true;
             };
           }
         ];
