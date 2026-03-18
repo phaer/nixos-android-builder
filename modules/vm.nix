@@ -10,7 +10,6 @@ let
 
   secureBootScripts = hostPkgs.callPackage ../packages/secure-boot-scripts { };
   disk-installer = hostPkgs.callPackage ../packages/disk-installer { };
-  pcrPolicy = hostPkgs.callPackage ../packages/pcr-policy { };
 in
 {
   config = {
@@ -82,11 +81,6 @@ in
 
               ${lib.getExe disk-installer.configure} set-storage \
                 --target "/dev/vdb" \
-                --device "${cfg.diskImage}"
-
-              echo >&2 "Injecting expected PCR 11 hash onto ESP"
-              ${lib.getExe disk-installer.configure} set-pcr11 \
-                --expected-pcr11 "${config.system.build.expectedPcr11}" \
                 --device "${cfg.diskImage}"
 
               # Configure attestation server from local attestation-server.json

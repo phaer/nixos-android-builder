@@ -94,7 +94,6 @@
           packages = with secureBootScripts; [
             create-signing-keys
             diskInstaller.configure
-            pcrPolicy.calculate-pcr11
             docs.build-docs
             docs.watch-docs
             pkgs.pam_u2f
@@ -112,7 +111,7 @@
           keylime-agent
           ;
         inherit (secureBootScripts) create-signing-keys;
-        inherit (pcrPolicy) calculate-pcr11 report-pcrs read-firmware-pcrs;
+        inherit (pcrPolicy) report-pcrs read-firmware-pcrs;
         configure-disk-image = diskInstaller.configure;
         default = image;
       };
