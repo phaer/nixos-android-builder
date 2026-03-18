@@ -1,14 +1,11 @@
 """Read firmware PCR values from the TPM and emit a keylime tpm_policy JSON.
 
+Reads firmware PCRs (0–3, 7) and PCR 11 from the TPM and outputs
+them as a keylime-compatible tpm_policy JSON object.
+
 These PCRs are populated by UEFI firmware and cannot be pre-calculated
 at build time — they depend on the specific hardware, firmware version,
 BIOS settings, and Secure Boot key enrollment.
-
-When --verify-pcr11 is given, the script also reads PCR 11 from the
-TPM and compares it against the expected value baked into the image
-at build time (see the secure-boot NixOS module).  If they match,
-PCR 11 is included in the output policy.  If not, the script exits
-with an error.
 
 The --save flag writes the current PCR baseline to a JSON file for
 later comparison.  The --diff flag compares the current PCR values
@@ -22,7 +19,6 @@ from pathlib import Path
 
 FIRMWARE_PCRS = [0, 1, 2, 3, 7]
 TPM_SYSFS = Path("/sys/class/tpm/tpm0/pcr-sha256")
-EXPECTED_PCR11 = Path("/boot/expected-pcr11")
 DEFAULT_BASELINE = Path("/var/lib/keylime/pcr-baseline.json")
 
 
@@ -42,8 +38,8 @@ def read_pcr(pcr: int) -> str:
         sys.exit(1)
 
 
-def read_policy(verify_pcr11: bool) -> dict:
-    """Read all firmware PCRs, optionally including PCR 11."""
+def read_policy() -> dict:
+    """Read all firmware PCRs and PCR 11."""
     policy = {}
     for pcr in FIRMWARE_PCRS:
         digest = read_pcr(pcr)
@@ -57,31 +53,7 @@ def read_policy(verify_pcr11: bool) -> dict:
             sys.exit(1)
         policy[str(pcr)] = [digest]
 
-    if verify_pcr11:
-        if not EXPECTED_PCR11.exists():
-            print(
-                "Error: --verify-pcr11 requires"
-                f" {EXPECTED_PCR11} to exist.\n"
-                "Run: configure-disk-image set-pcr11"
-                " --device <image>",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
-        expected = EXPECTED_PCR11.read_text().strip().lower()
-        actual = read_pcr(11)
-
-        if actual != expected:
-            print(
-                "Error: PCR 11 mismatch!\n"
-                f"  expected: {expected}\n"
-                f"  actual:   {actual}",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
-        policy["11"] = [actual]
-
+    policy["11"] = [read_pcr(11)]
     return policy
 
 
@@ -147,15 +119,6 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--verify-pcr11",
-        action="store_true",
-        help=(
-            "Read PCR 11, verify it matches the expected"
-            " value baked into the image, and include it"
-            " in the output."
-        ),
-    )
-    parser.add_argument(
         "--output",
         metavar="FILE",
         help="Write JSON to FILE instead of stdout.",
@@ -183,7 +146,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    policy = read_policy(args.verify_pcr11)
+    policy = read_policy()
 
     if args.save:
         save_baseline(policy, Path(args.save))

@@ -1,9 +1,8 @@
 """Report TPM PCR values to the auto-enrollment server.
 
-Reads firmware PCRs (0-3, 7) and PCR 11 from the TPM, verifies
-PCR 11 against the expected value on the ESP, then POSTs the full
-policy to the auto-enrollment HTTPS endpoint on the attestation
-server.
+Reads firmware PCRs (0-3, 7) and PCR 11 from the TPM, then POSTs
+the full policy to the auto-enrollment HTTPS endpoint on the
+attestation server.
 
 The agent UUID is read from the keylime agent's ``agent_data.json``
 file, which stores the EK hash (== the UUID in ``hash_ek`` mode)
@@ -25,7 +24,6 @@ from pathlib import Path
 
 FIRMWARE_PCRS = [0, 1, 2, 3, 7]
 TPM_SYSFS = Path("/sys/class/tpm/tpm0/pcr-sha256")
-EXPECTED_PCR11 = Path("/boot/expected-pcr11")
 ATTESTATION_SERVER = Path("/boot/attestation-server.json")
 AGENT_DATA = Path("/var/lib/keylime/agent_data.json")
 
@@ -41,7 +39,7 @@ def read_pcr(pcr: int) -> str:
 
 
 def read_policy() -> dict:
-    """Read firmware PCRs and verified PCR 11."""
+    """Read firmware PCRs and PCR 11."""
     policy: dict = {}
 
     for pcr in FIRMWARE_PCRS:
@@ -55,27 +53,7 @@ def read_policy() -> dict:
             sys.exit(1)
         policy[str(pcr)] = [digest]
 
-    if not EXPECTED_PCR11.exists():
-        print(
-            f"Error: {EXPECTED_PCR11} not found.\n"
-            "Run: configure-disk-image set-pcr11 --device <image>",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    expected = EXPECTED_PCR11.read_text().strip().lower()
-    actual = read_pcr(11)
-
-    if actual != expected:
-        print(
-            "Error: PCR 11 mismatch!\n"
-            f"  expected: {expected}\n"
-            f"  actual:   {actual}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    policy["11"] = [actual]
+    policy["11"] = [read_pcr(11)]
     return policy
 
 

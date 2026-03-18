@@ -1,6 +1,5 @@
 {
   lib,
-  callPackage,
   writers,
   writeShellApplication,
   jq,
@@ -9,9 +8,6 @@
   sbsigntool,
   parted,
 }:
-let
-  pcrPolicy = callPackage ../pcr-policy { };
-in
 {
 
   module = import ./installer.nix;
@@ -27,7 +23,6 @@ in
           util-linux
           mtools
           sbsigntool
-          pcrPolicy.calculate-pcr11
         ]
       }"
     ];

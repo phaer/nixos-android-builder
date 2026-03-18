@@ -228,7 +228,7 @@ in
 
       with subtest("Agent can be added for attestation with PCR policy"):
         tpm_policy = json.loads(
-          agent.succeed("read-firmware-pcrs --verify-pcr11")
+          agent.succeed("read-firmware-pcrs")
         )
 
         policy = json.dumps({"7": tpm_policy["7"], "11": tpm_policy["11"]})

@@ -155,20 +155,6 @@ Copying keystore files for auto-enrollment...
 ✓ Keystore files copied to ESP
 ```
 
-To write the expected PCR 11 hash (UKI measurement) to the image, run:
-
-```shell-session
-$ nix run .#configure-disk-image -- set-pcr11 --device android-builder_25.11pre-git.raw
-```
-
-``` text
-Extracting UKI from image...
-Computing expected PCR 11...
-✓ Expected PCR 11 written to ESP: 00e9c94ef58cd0c569e2872b451fee0e30b322dffb38cf79415c9f478807dddf
-```
-
-This step must be run **after** signing, since signing changes the UKI and therefore its PCR 11 value. If omitted, `report-pcrs` will fail at runtime because it cannot verify PCR 11.
-
 ## Configure Attestation Server
 
 If you are running a keylime attestation server (registrar & verifier), the builder image needs to know how to reach it. `configure-disk-image set-attestation-server` writes the server address and CA certificate to the ESP so the keylime agent can connect on boot.
@@ -206,7 +192,7 @@ sequenceDiagram
     participant S as Attestation Server
     participant A as Agent
 
-    B->>B: nix build, sign, set-pcr11,<br/>set-attestation-server
+    B->>B: nix build, sign,<br/>set-attestation-server
     B->>A: Flash image to disk
 
     A->>A: Boot — agent starts
@@ -461,14 +447,14 @@ $ cat /sys/class/tpm/tpm0/pcr-sha256/7
 abc123...
 ```
 
-On boot, the `report-pcrs` service automatically reads firmware PCRs (0–3, 7) and PCR 11, verifies PCR 11 against the expected value on the ESP, and enrolls on the keylime server by sending the PCRs to the auto-enrollment service. No manual PCR inspection is normally needed.
+On boot, the `report-pcrs` service automatically reads firmware PCRs (0–3, 7) and PCR 11 from the TPM, then sends them to the auto-enrollment service on the attestation server. No manual PCR inspection is normally needed.
 
 For debugging, `read-firmware-pcrs` is also available to inspect PCR values interactively:
 
 ```shell-session
 $ read-firmware-pcrs
 {"0": ["abc123..."], "1": ["def456..."], "2": ["..."], "3": ["..."], "7": ["..."]}
-$ read-firmware-pcrs --verify-pcr11
+$ read-firmware-pcrs
 {"0": ["..."], "1": ["..."], "2": ["..."], "3": ["..."], "7": ["..."], "11": ["..."]}
 ```
 
@@ -603,9 +589,6 @@ Installation target:
 Storage target:
   Interactive menu (user will select artifact storage)
 
-PCR 11 (UKI measurement):
-  ✓ Expected hash: 00e9c94ef58cd0c569e2872b451fee0e30b322dffb38cf79415c9f478807dddf
-
 Attestation server:
   ✓ Server: 10.0.0.1 (registrar:8891, verifier:8881)
   ✓ CA cert: present
@@ -714,12 +697,11 @@ This will:
 
 1. Create a writable copy of the read-only disk image (e.g. `android-builder_25.11pre-git.raw`) in the current directory.
 2. Sign the UKI with a pair of auto-generated test keys (stored in the nix store, so they persist across runs).
-3. Inject the expected PCR 11 hash into the ESP.
-4. Pre-configure artifact storage to use `/dev/vdb` (a second virtual disk is created automatically when `nixosAndroidBuilder.artifactStorage.enable` is set).
-5. If an `attestation-server.json` file exists in the current directory, configure the keylime agent to use it. The file uses the same format as `/boot/attestation-server.json` (see [Configure Attestation Server](#configure-attestation-server) above).
-6. Start a QEMU VM with Secure Boot, a TPM, and a graphical window.
+3. Pre-configure artifact storage to use `/dev/vdb` (a second virtual disk is created automatically when `nixosAndroidBuilder.artifactStorage.enable` is set).
+4. If an `attestation-server.json` file exists in the current directory, configure the keylime agent to use it. The file uses the same format as `/boot/attestation-server.json` (see [Configure Attestation Server](#configure-attestation-server) above).
+5. Start a QEMU VM with Secure Boot, a TPM, and a graphical window.
 
-If the writable disk image already exists from a previous run, steps 1–5 are skipped and the existing image is reused. Delete the `.raw` file to force a fresh image.
+If the writable disk image already exists from a previous run, steps 1–4 are skipped and the existing image is reused. Delete the `.raw` file to force a fresh image.
 
 Use `systemctl poweroff` from within the VM, or close the QEMU window, to stop it.
 
@@ -809,10 +791,6 @@ Check the daemon logs (`journalctl -u keylime-auto-enroll`) for enrollment error
 - The `report-pcrs` service failed — check agent logs (`journalctl -u keylime-report-pcrs`).
 - mTLS certificate issues (expired, wrong CA).
 - Port 8893 not reachable from the agent.
-
-**Problem: `report-pcrs` fails with "PCR 11 mismatch"**
-
-The agent's live PCR 11 does not match the expected value on the ESP.  Ensure `set-pcr11` was run after signing the image.
 
 **Problem: Agent is enrolled but fails attestation**
 
