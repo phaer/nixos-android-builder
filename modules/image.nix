@@ -40,6 +40,16 @@
             "mode=0755"
           ];
         };
+        "/var/lib/credentials" = {
+          device = "/dev/mapper/var_lib_credentials_crypt";
+          fsType = "ext4";
+          neededForBoot = true;
+        };
+        "/var/lib/keylime" = {
+          device = "/dev/mapper/var_lib_keylime_crypt";
+          fsType = "ext4";
+          neededForBoot = true;
+        };
         "/var/lib/build" = {
           device = "/dev/mapper/var_lib_crypt";
           fsType = config.systemd.repart.partitions."40-var-lib-build".Format;
@@ -175,17 +185,37 @@
               Minimize = "best";
             };
           };
-          # NOTE: Mutable partitions (40-var-lib-build, etc.) are NOT defined
-          # here. They are created at first boot by systemd-repart (see runtime
-          # config below). This is intentional: repart only formats and
-          # LUKS-encrypts partitions during creation. Build-time placeholders
-          # would be left unformatted, and adjacent partitions block in-place
-          # growth.
+          # NOTE: 31-var-lib-credentials, 32-var-lib-keylime and 40-var-lib-build
+          # are NOT defined here. They are created at first boot by
+          # systemd-repart (see runtime config below). This is intentional:
+          # repart only formats and LUKS-encrypts partitions during creation.
+          # Build-time placeholders would be left unformatted, and adjacent
+          # partitions block in-place growth.
         };
       };
     };
 
     ## Run-time configuration of systemd-repart on first boot.
+
+    # Persistent, TPM2-bound partitions for credentials and keylime agent state.
+    # These don't exist in the build-time image — systemd-repart creates them
+    # as new partitions on first boot (which triggers formatting + TPM2 LUKS
+    # enrollment). On subsequent boots, repart matches them by type+label and
+    # leaves them untouched (no FactoryReset).
+    systemd.repart.partitions."31-var-lib-credentials" = {
+      Type = "linux-generic";
+      Label = "var-lib-credentials";
+      Format = "ext4";
+      Encrypt = "tpm2";
+      SizeMinBytes = "64M";
+    };
+    systemd.repart.partitions."32-var-lib-keylime" = {
+      Type = "linux-generic";
+      Label = "var-lib-keylime";
+      Format = "ext4";
+      Encrypt = "tpm2";
+      SizeMinBytes = "64M";
+    };
 
     # Ephemeral build partition — factory-reset on every boot.
     systemd.repart.partitions."40-var-lib-build" = {
@@ -199,6 +229,14 @@
       FactoryReset = true;
     };
 
+    boot.initrd.luks.devices."var_lib_credentials_crypt" = {
+      device = "/dev/disk/by-partlabel/var-lib-credentials";
+      crypttabExtraOpts = [ "tpm2-device=auto" ];
+    };
+    boot.initrd.luks.devices."var_lib_keylime_crypt" = {
+      device = "/dev/disk/by-partlabel/var-lib-keylime";
+      crypttabExtraOpts = [ "tpm2-device=auto" ];
+    };
     boot.initrd.luks.devices."var_lib_crypt" = {
       keyFile = "/etc/disk.key";
       device = "/dev/disk/by-partlabel/var-lib-build";
@@ -257,6 +295,8 @@
         services = {
           systemd-repart = {
             before = [
+              "systemd-cryptsetup@var_lib_credentials_crypt.service"
+              "systemd-cryptsetup@var_lib_keylime_crypt.service"
               "systemd-cryptsetup@var_lib_crypt.service"
             ];
             after = [ "systemd-udev-settle.service" ];
