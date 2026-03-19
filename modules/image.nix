@@ -129,8 +129,6 @@
           "-Efragments,ztailpacking"
         ];
 
-        mkfsOptions.ext4 = [ "-Eroot_owner=1000:1000" ];
-
         # OVMF does not work with the default repart sector size of 4096
         sectorSize = 512;
 
@@ -177,30 +175,29 @@
               Minimize = "best";
             };
           };
-          "40-var-lib-build".repartConfig = {
-            Type = "var";
-            Label = "var-lib-build";
-            # We want to start out with a very small partition in the image, and add
-            # the real minimum size to to systemd.repart.partitions below instead,
-            # in order to resize it during boot.
-            SizeMinBytes = "10M";
-          };
+          # NOTE: Mutable partitions (40-var-lib-build, etc.) are NOT defined
+          # here. They are created at first boot by systemd-repart (see runtime
+          # config below). This is intentional: repart only formats and
+          # LUKS-encrypts partitions during creation. Build-time placeholders
+          # would be left unformatted, and adjacent partitions block in-place
+          # growth.
         };
       };
     };
 
     ## Run-time configuration of systemd-repart on first boot.
-    # Reuse settings of the repart-generated image file on first boot
-    systemd.repart.partitions."40-var-lib-build" =
-      config.image.repart.partitions."40-var-lib-build".repartConfig
-      // {
-        Format = "ext4";
-        Encrypt = "key-file";
-        SizeMinBytes = "250G";
-        # Tell systemd-repart to re-format and re-encrypt this partition on each boot
-        # if run with --factory-reset, which we do by default.
-        FactoryReset = true;
-      };
+
+    # Ephemeral build partition — factory-reset on every boot.
+    systemd.repart.partitions."40-var-lib-build" = {
+      Type = "var";
+      Label = "var-lib-build";
+      Format = "ext4";
+      Encrypt = "key-file";
+      SizeMinBytes = "250G";
+      # Tell systemd-repart to re-format and re-encrypt this partition on each boot
+      # if run with --factory-reset, which we do by default.
+      FactoryReset = true;
+    };
 
     boot.initrd.luks.devices."var_lib_crypt" = {
       keyFile = "/etc/disk.key";
@@ -282,10 +279,10 @@
             };
           };
 
-          # Link the read-only nix store to /run/systemd/volatile-root before
-          # systemd-repart runs. systemd-repart normally looks for the block device
-          # backing "/", or this path. So this enables systemd-repart to find the
-          # right device at boot.
+          # Link the ESP to /run/systemd/volatile-root before systemd-repart
+          # runs. Since "/" is tmpfs, repart can't discover the disk on its
+          # own. This symlink points it at a partition that always exists in
+          # the image (the ESP), so repart finds the right disk.
           link-volatile-root = {
             description = "Create volatile-root to tell systemd-repart which disk to use";
             wantedBy = [ "initrd.target" ];
@@ -298,7 +295,7 @@
               Type = "oneshot";
               RemainAfterExit = true;
               ExecStart = "/bin/ln -sf /dev/disk/by-partlabel/${
-                config.image.repart.partitions."40-var-lib-build".repartConfig.Label
+                config.image.repart.partitions."00-esp".repartConfig.Label
               } /run/systemd/volatile-root";
             };
           };
