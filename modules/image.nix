@@ -244,6 +244,25 @@
 
     boot.initrd.systemd =
       let
+        # Find the disk we booted from by following the dm-verity device
+        # tree. The verity backing device is cryptographically bound to
+        # this UKI's usrhash — so it uniquely identifies our image's disk,
+        # even if other disks have partitions with the same labels.
+        findBootDisk = pkgs.writeScript "find-boot-disk" ''
+          #!/bin/sh
+          set -e
+          # dm-verity "usr" is set up by systemd-veritysetup-generator from
+          # the usrhash= kernel cmdline. Find the dm block device for "usr",
+          # then walk sysfs from its slave (our store partition) up to the
+          # parent disk.
+          dm_dev=$(dmsetup info -c --noheadings -o blkdevname usr)
+          for slave in /sys/block/"$dm_dev"/slaves/*; do
+            dev_name=$(basename "$slave")
+            disk=$(basename "$(readlink -f "/sys/class/block/$dev_name/..")")
+            ln -sf "/dev/$disk" /run/systemd/volatile-root
+            break
+          done
+        '';
         waitForDisk = pkgs.writeScript "wait-for-disk" ''
           #!/bin/sh
           set -e
@@ -266,6 +285,7 @@
         };
         # We need to list our scripts here, otherwise store paths won't be in initrd
         storePaths = [
+          findBootDisk
           waitForDisk
           generateDiskKey
         ];
@@ -319,13 +339,16 @@
             };
           };
 
-          # Link the ESP to /run/systemd/volatile-root before systemd-repart
-          # runs. Since "/" is tmpfs, repart can't discover the disk on its
-          # own. This symlink points it at a partition that always exists in
-          # the image (the ESP), so repart finds the right disk.
+          # Tell systemd-repart which disk to operate on. Since "/" is
+          # tmpfs, repart can't discover it on its own. We follow the
+          # dm-verity backing device (cryptographically bound to this
+          # image's usrhash) to find the correct disk — even if other
+          # disks have partitions with the same labels.
           link-volatile-root = {
             description = "Create volatile-root to tell systemd-repart which disk to use";
             wantedBy = [ "initrd.target" ];
+            after = [ "veritysetup.target" ];
+            requires = [ "veritysetup.target" ];
             before = [ "systemd-repart.service" ];
             requiredBy = [ "systemd-repart.service" ];
             unitConfig = {
@@ -334,9 +357,7 @@
             serviceConfig = {
               Type = "oneshot";
               RemainAfterExit = true;
-              ExecStart = "/bin/ln -sf /dev/disk/by-partlabel/${
-                config.image.repart.partitions."00-esp".repartConfig.Label
-              } /run/systemd/volatile-root";
+              ExecStart = findBootDisk;
             };
           };
         };
