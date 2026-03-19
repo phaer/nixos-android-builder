@@ -7,29 +7,20 @@
     {
       imports = [
         ../modules/credential-storage.nix
-        ../modules/artifact-storage.nix
       ];
-
-      # artifact-storage references build.sourceDir; provide it without
-      # pulling in the full android-build-env module.
-      options.nixosAndroidBuilder.build.sourceDir = lib.mkOption {
-        type = lib.types.path;
-        default = "/var/lib/build/source";
-      };
 
       config = {
         virtualisation.tpm.enable = true;
 
-        nixosAndroidBuilder.artifactStorage.enable = true;
         nixosAndroidBuilder.credentialStorage.enable = true;
 
-        # Use a tmpfs instead of a real second disk
-        fileSystems."/var/lib/artifacts" = lib.mkForce {
+        # Use a tmpfs to simulate the dedicated credentials partition
+        fileSystems."/var/lib/credentials" = lib.mkForce {
           device = "none";
           fsType = "tmpfs";
           options = [
             "size=64m"
-            "mode=0755"
+            "mode=0700"
           ];
         };
       };
@@ -38,8 +29,6 @@
   testScript = ''
     machine.start()
     machine.wait_for_unit("multi-user.target")
-
-    machine.succeed("mkdir -p /var/lib/artifacts/credentials")
 
     with subtest("credential-store is available"):
         machine.succeed("credential-store list || true")
@@ -71,7 +60,7 @@
         machine.fail("echo 'bad' | credential-store add '-dash'")
 
     with subtest("encrypted file is not plaintext"):
-        content = machine.succeed("cat /var/lib/artifacts/credentials/file-token")
+        content = machine.succeed("cat /var/lib/credentials/file-token")
         assert "file-secret" not in content, "Credential stored in plaintext!"
   '';
 }
