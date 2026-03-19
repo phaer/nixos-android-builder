@@ -1,8 +1,8 @@
-# Store systemd credentials persistently on the artifacts disk
+# Store systemd credentials on a persistent, TPM2-bound LUKS partition
 #
-# This module creates a `credentials` subdirectory on the artifacts partition
-# and bind-mounts it to /etc/credstore.encrypted/ so systemd services can
-# load encrypted credentials from persistent storage.
+# This module bind-mounts the credential directory to
+# /run/credstore.encrypted/ so systemd services can load encrypted
+# credentials from persistent storage.
 #
 # Credentials should be encrypted with `systemd-creds encrypt` using the
 # machine's TPM.
@@ -14,11 +14,10 @@
 }:
 let
   cfg = config.nixosAndroidBuilder.credentialStorage;
-  artifactCfg = config.nixosAndroidBuilder.artifactStorage;
 in
 {
   options.nixosAndroidBuilder.credentialStorage = {
-    enable = lib.mkEnableOption "persistent credential storage on the artifacts disk";
+    enable = lib.mkEnableOption "persistent credential storage on a TPM2-bound LUKS partition";
 
     encryptionFlags = lib.mkOption {
       description = "Flags to pass to systemd-creds encrypt. See man (1) systemd-creds";
@@ -31,11 +30,12 @@ in
 
     credentialDir = lib.mkOption {
       description = ''
-        Directory where credentials are stored on the artifacts disk.
-        This will be bind-mounted to /run/credstore.encrypted/
+        Directory where credentials are stored.
+        This is the mount point of the dedicated credentials partition
+        and will be bind-mounted to /run/credstore.encrypted/
       '';
       type = lib.types.path;
-      default = "${artifactCfg.artifactDir}/credentials";
+      default = "/var/lib/credentials";
     };
 
     mountPoint = lib.mkOption {
@@ -48,7 +48,7 @@ in
     };
   };
 
-  config = lib.mkIf (cfg.enable && artifactCfg.enable) {
+  config = lib.mkIf cfg.enable {
     systemd.tmpfiles.rules = [
       "d ${cfg.credentialDir} 0700 root root - -"
     ];
@@ -56,10 +56,7 @@ in
     fileSystems."${cfg.mountPoint}" = {
       device = cfg.credentialDir;
       fsType = "none";
-      options = [
-        "bind"
-        "x-systemd.requires=${artifactCfg.artifactDir}.mount"
-      ];
+      options = [ "bind" ];
     };
 
     security.polkit.extraConfig = ''

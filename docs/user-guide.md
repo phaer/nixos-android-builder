@@ -481,7 +481,7 @@ $ credential-store add api-token ~/token.txt
 
 Credential names must start with a letter or digit and may only contain letters, digits, dots, hyphens, and underscores.
 
-Stored credentials are encrypted with the machine's TPM, bound to PCR 7 (Secure Boot policy). They are persisted on the artifact storage disk at `/var/lib/artifacts/credentials/` and bind-mounted to `/run/credstore.encrypted/`, which is automatically searched by systemd when services use `LoadCredentialEncrypted=`.
+Stored credentials are encrypted with the machine's TPM, bound to PCR 7 (Secure Boot policy). They are kept on a dedicated TPM2-bound LUKS partition at `/var/lib/credentials/` and bind-mounted to `/run/credstore.encrypted/`, which is automatically searched by systemd when services use `LoadCredentialEncrypted=`.
 
 The encryption parameters can be customized via `nixosAndroidBuilder.credentialStorage.encryptionFlags` - for example, to also bind to PCR 11 (the specific UKI):
 

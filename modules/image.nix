@@ -40,9 +40,19 @@
             "mode=0755"
           ];
         };
+        "/var/lib/credentials" = {
+          device = "/dev/mapper/var_lib_credentials_crypt";
+          fsType = "ext4";
+          neededForBoot = true;
+        };
+        "/var/lib/keylime" = {
+          device = "/dev/mapper/var_lib_keylime_crypt";
+          fsType = "ext4";
+          neededForBoot = true;
+        };
         "/var/lib/build" = {
           device = "/dev/mapper/var_lib_crypt";
-          fsType = config.systemd.repart.partitions."30-var-lib-build".Format;
+          fsType = config.systemd.repart.partitions."40-var-lib-build".Format;
           neededForBoot = true;
         };
         "/boot" = {
@@ -129,8 +139,6 @@
           "-Efragments,ztailpacking"
         ];
 
-        mkfsOptions.ext4 = [ "-Eroot_owner=1000:1000" ];
-
         # OVMF does not work with the default repart sector size of 4096
         sectorSize = 512;
 
@@ -177,31 +185,58 @@
               Minimize = "best";
             };
           };
-          "30-var-lib-build".repartConfig = {
-            Type = "var";
-            Label = "var-lib-build";
-            # We want to start out with a very small partition in the image, and add
-            # the real minimum size to to systemd.repart.partitions below instead,
-            # in order to resize it during boot.
-            SizeMinBytes = "10M";
-          };
+          # NOTE: 31-var-lib-credentials, 32-var-lib-keylime and 40-var-lib-build
+          # are NOT defined here. They are created at first boot by
+          # systemd-repart (see runtime config below). This is intentional:
+          # repart only formats and LUKS-encrypts partitions during creation.
+          # Build-time placeholders would be left unformatted, and adjacent
+          # partitions block in-place growth.
         };
       };
     };
 
     ## Run-time configuration of systemd-repart on first boot.
-    # Reuse settings of the repart-generated image file on first boot
-    systemd.repart.partitions."30-var-lib-build" =
-      config.image.repart.partitions."30-var-lib-build".repartConfig
-      // {
-        Format = "ext4";
-        Encrypt = "key-file";
-        SizeMinBytes = "250G";
-        # Tell systemd-repart to re-format and re-encrypt this partition on each boot
-        # if run with --factory-reset, which we do by default.
-        FactoryReset = true;
-      };
 
+    # Persistent, TPM2-bound partitions for credentials and keylime agent state.
+    # These don't exist in the build-time image — systemd-repart creates them
+    # as new partitions on first boot (which triggers formatting + TPM2 LUKS
+    # enrollment). On subsequent boots, repart matches them by type+label and
+    # leaves them untouched (no FactoryReset).
+    systemd.repart.partitions."31-var-lib-credentials" = {
+      Type = "linux-generic";
+      Label = "var-lib-credentials";
+      Format = "ext4";
+      Encrypt = "tpm2";
+      SizeMinBytes = "64M";
+    };
+    systemd.repart.partitions."32-var-lib-keylime" = {
+      Type = "linux-generic";
+      Label = "var-lib-keylime";
+      Format = "ext4";
+      Encrypt = "tpm2";
+      SizeMinBytes = "64M";
+    };
+
+    # Ephemeral build partition — factory-reset on every boot.
+    systemd.repart.partitions."40-var-lib-build" = {
+      Type = "var";
+      Label = "var-lib-build";
+      Format = "ext4";
+      Encrypt = "key-file";
+      SizeMinBytes = "250G";
+      # Tell systemd-repart to re-format and re-encrypt this partition on each boot
+      # if run with --factory-reset, which we do by default.
+      FactoryReset = true;
+    };
+
+    boot.initrd.luks.devices."var_lib_credentials_crypt" = {
+      device = "/dev/disk/by-partlabel/var-lib-credentials";
+      crypttabExtraOpts = [ "tpm2-device=auto" ];
+    };
+    boot.initrd.luks.devices."var_lib_keylime_crypt" = {
+      device = "/dev/disk/by-partlabel/var-lib-keylime";
+      crypttabExtraOpts = [ "tpm2-device=auto" ];
+    };
     boot.initrd.luks.devices."var_lib_crypt" = {
       keyFile = "/etc/disk.key";
       device = "/dev/disk/by-partlabel/var-lib-build";
@@ -209,6 +244,25 @@
 
     boot.initrd.systemd =
       let
+        # Find the disk we booted from by following the dm-verity device
+        # tree. The verity backing device is cryptographically bound to
+        # this UKI's usrhash — so it uniquely identifies our image's disk,
+        # even if other disks have partitions with the same labels.
+        findBootDisk = pkgs.writeScript "find-boot-disk" ''
+          #!/bin/sh
+          set -e
+          # dm-verity "usr" is set up by systemd-veritysetup-generator from
+          # the usrhash= kernel cmdline. Find the dm block device for "usr",
+          # then walk sysfs from its slave (our store partition) up to the
+          # parent disk.
+          dm_dev=$(dmsetup info -c --noheadings -o blkdevname usr)
+          for slave in /sys/block/"$dm_dev"/slaves/*; do
+            dev_name=$(basename "$slave")
+            disk=$(basename "$(readlink -f "/sys/class/block/$dev_name/..")")
+            ln -sf "/dev/$disk" /run/systemd/volatile-root
+            break
+          done
+        '';
         waitForDisk = pkgs.writeScript "wait-for-disk" ''
           #!/bin/sh
           set -e
@@ -231,6 +285,7 @@
         };
         # We need to list our scripts here, otherwise store paths won't be in initrd
         storePaths = [
+          findBootDisk
           waitForDisk
           generateDiskKey
         ];
@@ -260,6 +315,8 @@
         services = {
           systemd-repart = {
             before = [
+              "systemd-cryptsetup@var_lib_credentials_crypt.service"
+              "systemd-cryptsetup@var_lib_keylime_crypt.service"
               "systemd-cryptsetup@var_lib_crypt.service"
             ];
             after = [ "systemd-udev-settle.service" ];
@@ -282,13 +339,16 @@
             };
           };
 
-          # Link the read-only nix store to /run/systemd/volatile-root before
-          # systemd-repart runs. systemd-repart normally looks for the block device
-          # backing "/", or this path. So this enables systemd-repart to find the
-          # right device at boot.
+          # Tell systemd-repart which disk to operate on. Since "/" is
+          # tmpfs, repart can't discover it on its own. We follow the
+          # dm-verity backing device (cryptographically bound to this
+          # image's usrhash) to find the correct disk — even if other
+          # disks have partitions with the same labels.
           link-volatile-root = {
             description = "Create volatile-root to tell systemd-repart which disk to use";
             wantedBy = [ "initrd.target" ];
+            after = [ "veritysetup.target" ];
+            requires = [ "veritysetup.target" ];
             before = [ "systemd-repart.service" ];
             requiredBy = [ "systemd-repart.service" ];
             unitConfig = {
@@ -297,9 +357,7 @@
             serviceConfig = {
               Type = "oneshot";
               RemainAfterExit = true;
-              ExecStart = "/bin/ln -sf /dev/disk/by-partlabel/${
-                config.image.repart.partitions."30-var-lib-build".repartConfig.Label
-              } /run/systemd/volatile-root";
+              ExecStart = findBootDisk;
             };
           };
         };

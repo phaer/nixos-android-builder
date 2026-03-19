@@ -32,8 +32,8 @@ We created a modular proof‑of‑concept based on NixOS that fulfills most of t
 * **[`nixpkgs`](https://github.com/nixos/nixpkgs)** - the software repository that enables reproducible builds of up‑to‑date open‑source packages.
 * **[`qemu`](https://qemu.org)** - used to run virtual machines during interactive, as well as automated testing. Both help to decrease testing & verification cycles during development & customization.
 * **[`systemd`](https://systemd.io)** - orchestrates both upstream and custom components while managing credentials and persistent state.
-* **[`systemd-repart`](https://www.freedesktop.org/software/systemd/man/latest/systemd-repart.html)** - prepares signable read‑only disk images for the builder and resizes and re‑encrypts the state partition at each boot.
-* **[Linux Unified Key Setup (`LUKS`)](https://gitlab.com/cryptsetup/cryptsetup/blob/master/README.md)** - encrypts the state partition with an ephemerally generated key on each boot.
+* **[`systemd-repart`](https://www.freedesktop.org/software/systemd/man/latest/systemd-repart.html)** - prepares signable read‑only disk images for the builder and creates encrypted partitions at boot.
+* **[Linux Unified Key Setup (`LUKS`)](https://gitlab.com/cryptsetup/cryptsetup/blob/master/README.md)** - encrypts mutable partitions. The ephemeral build partition uses a random key per boot; persistent partitions for credentials and keylime state are TPM2-bound.
 * **[`Keylime`](https://keylime.dev/)** - TPM-based remote attestation framework. The Rust agent runs on the builder; a Python registrar and verifier run on the attestation server.
 * Various **build requirements** for Android, such as Python 3 and OpenJDK. The complete list is in the `packages` section of `android-build-env.nix`.
 
@@ -54,7 +54,7 @@ This approach guarantees that the same inputs always generate the same output, m
 Users with `nix` installed can clone this repository, download all dependencies and build a signed disk image, ready to flash & boot on the build machine, in a few simple steps outlined in [README.md](../README.md).
 
 The resulting disk image boots on generic `x86_64` hardware with `UEFI` as well as Secure Boot, and provides an isolated build environment.
-It contains scripts for secure boot enrollment, a verified filesystem, and an ephemeral, encrypted state partition that holds build artifacts that cannot fit into memory.
+It contains scripts for secure boot enrollment, a verified filesystem, persistent TPM2-bound encrypted partitions for credentials and keylime agent state, and an ephemeral encrypted partition for build artifacts.
 
 [^reproducible]: *Reproducible* in functionality. The final disk images are not yet expected to be *fully* bit-by-bit reproducible. That could be done, but would require a long-tail of removing additional sources of indeterminism, such as as date & time of build. See [reproducible.nixos.org](https://reproducible.nixos.org/)
 
@@ -68,7 +68,7 @@ Under the hood, the image itself is built by `systemd-repart`, using NixOS modul
 `systemd-repart` is called twice during build-time:
 
 1. While building `system.build.intermediateImage`:
-  A first image is built, it contains the `store` partition, populated with our NixOS closure as well as minimal `var-lib-build` partition.
+  A first image is built, it contains the `store` partition, populated with our NixOS closure.
   `boot` and `store-verity` remain empty during this step.
 
 2. While building `system.build.finalImage`:
@@ -77,29 +77,40 @@ Under the hood, the image itself is built by `systemd-repart`, using NixOS modul
 
 3. The image then needs to be signed with a script outside a `nix` build process (to avoid leaking keys into the world-readable `/nix/store`. No `systemd-repart` is involved in this step. Instead we use `mtools` to read the `UKI` from the image, sign it and - together with Secure Boot update bundles, write it back to `boot` inside the image.
 
-4. Finally, `systemd-repart` is called once more during run-time, in early boot at the start of `initrd`: The minimal `var-lib-build` partition, created in the first step above, is resized and encrypted with a new random key on each boot. That
-key is generated just before `systemd-repart` in our custom `generate-disk-key.service`.
+4. Finally, `systemd-repart` is called once more during run-time, in early boot at the start of `initrd`: All mutable partitions are created from scratch on first boot. The ephemeral build partition is factory-reset and re-encrypted with a new random key on each boot.
+The key is generated just before `systemd-repart` in our custom `generate-disk-key.service`.
 
 ### Disk Layout
+
+The build-time image contains only immutable partitions:
 
 | Partition           | Label          | Format           | Mountpoint |
 |---------------------+----------------+------------------+------------|
 | **00‑esp**          | `boot`         | `vfat`           | `/boot`    |
-| **10‑store‑verity** | `store-verity` | `dm-verity hash` | `n/a`       |
+| **10‑store‑verity** | `store-verity` | `dm-verity hash` | `n/a`      |
 | **20‑store**        | `store`        | `erofs`          | `/usr`     |
-| **30‑var‑lib-build**      | `var-lib-build`      | `ext4`           | `/var/lib/build` |
+
+At first boot, `systemd-repart` creates additional mutable partitions:
+
+| Partition                | Label               | Format           | Mountpoint           | Lifecycle |
+|--------------------------+----------------------+------------------+----------------------+-----------|
+| **31‑var‑lib‑credentials** | `var-lib-credentials` | `LUKS+ext4` (TPM2) | `/var/lib/credentials` | Persistent |
+| **32‑var‑lib‑keylime**   | `var-lib-keylime`    | `LUKS+ext4` (TPM2) | `/var/lib/keylime`   | Persistent |
+| **40‑var‑lib‑build**     | `var-lib-build`      | `LUKS+ext4` (random key) | `/var/lib/build` | Ephemeral |
 
 - **boot** – Holds the signed Unified Kernel Image (`UKI`) as an `EFI` application, as well as Secure Boot update bundles for enrollment. The partition itself is unsigned and mounted read‑only during boot.
 - **store-verity** – Stores the `dm‑verity` hash for the `/usr` partition. The hash is passed as `usrhash` in the kernel command line, which is signed as part of the `UKI`.
-- **store** – Contains the read-only Nix store,  bind‑mounted into `/nix/store` in the running system. The integrity of `/usr` is verified at runtime using `dm‑verity`.
-- **var-lib-build** – A minimal, ephemeral state partition. See next section below.
+- **store** – Contains the read-only Nix store, bind‑mounted into `/nix/store` in the running system. The integrity of `/usr` is verified at runtime using `dm‑verity`.
+- **var-lib-credentials** – TPM2-bound LUKS partition for `systemd-creds` encrypted credentials. Created on first boot, persists across reboots. Becomes inaccessible if Secure Boot keys change (PCR 7 binding).
+- **var-lib-keylime** – TPM2-bound LUKS partition for keylime agent state (Attestation Key). Created on first boot, persists across reboots.
+- **var-lib-build** – Ephemeral build workspace, see next section.
 
 Notably, the root filesystem (`/`) is, along with an optional writable overlay of the Nix store, kept entirely in RAM (`tmpfs`) and therefore not present in the image.
 There's also no boot loader, because the `UKI` acts as an `EFI` application and is directly loaded by the hosts firmware.
 
 ### Ephemeral State Partition
 
-The `/var/lib/build` partition is deliberately designed to be temporary and encrypted. Each time the system boots, a fresh key is generated and the partition is resized to match the current disk size. This ensures that sensitive build artifacts never persist beyond a single session, reducing the risk of leaking proprietary information or to introduce impurities between different builds.
+The `/var/lib/build` partition is deliberately designed to be temporary and encrypted. Each time the system boots, a fresh key is generated and the partition is factory-reset. This ensures that sensitive build artifacts never persist beyond a single session, reducing the risk of leaking proprietary information or to introduce impurities between different builds.
 
 ### Secure Boot Support
 
@@ -213,7 +224,7 @@ The keylime agent (`services.keylime-agent`) is enabled by default on every buil
 
 At boot, the agent reads `/boot/attestation-server.json` (written to the ESP by `configure-disk-image set-attestation-server`) to learn the registrar IP, verifier URL, and CA certificate. It then registers with the registrar and begins periodic attestation.
 
-The agent's **Attestation Key** (AK) is persisted to `/boot/keylime/` so that re-registrations after reboot use the same key, avoiding rejection by the registrar.
+The agent's **Attestation Key** (AK) is stored in `/var/lib/keylime/`, which is a persistent, TPM2-bound LUKS partition. This ensures re-registrations after reboot use the same key, avoiding rejection by the registrar.
 
 ### Server (Registrar & Verifier)
 
@@ -291,11 +302,11 @@ Two tools are included for PCR management:
 
 ## Credential Storage {#credential-storage}
 
-The `credential-storage.nix` module provides TPM-backed persistent storage for secrets on the target machine. It uses `systemd-creds` to encrypt credentials with the machine's TPM, bound to PCR 7 (Secure Boot policy), and stores them on the artifact storage disk.
+The `credential-storage.nix` module provides TPM-backed persistent storage for secrets on the target machine. It uses `systemd-creds` to encrypt credentials with the machine's TPM, bound to PCR 7 (Secure Boot policy), and stores them on a dedicated LUKS partition that is itself TPM2-bound.
 
 A `credential-store` utility for credentials management is included. See the [user guide](user-guide.pdf) for usage.
 
-Encrypted credentials are kept in `/var/lib/artifacts/credentials/`, which is bind-mounted to `/run/credstore.encrypted/`. This is one of the standard directories that systemd searches when a service uses `LoadCredentialEncrypted=`, so stored credentials can be consumed by systemd services without additional configuration.
+Encrypted credentials are kept in `/var/lib/credentials/`, a persistent TPM2-bound LUKS partition. This directory is bind-mounted to `/run/credstore.encrypted/`, one of the standard directories that systemd searches when a service uses `LoadCredentialEncrypted=`, so stored credentials can be consumed by systemd services without additional configuration.
 
 
 \pagebreak
@@ -354,12 +365,12 @@ Main components are:
 - **(3)** First run of `systemd-repart` (`system.build.intermediateImage`):
   - Starts from a blank disk image.
   - Store paths from the NixOS closure are copied into the newly `store` partition.
-  - `esp`, `store-verity` and `var-lib-build` are created but stay empty for the moment.
+  - `esp` and `store-verity` are created but stay empty for the moment.
 - **(4)** With a filled store partition, `dm-verity` hashes can be calculated.
   So we build a new `UKI`, taking kernel & initrd from the NixOS closure and add the root hash of the `dm-verity` merkle tree to the kernels command line as `usrhash`.
 - **(5)** Second run of `systemd-repart` (`system.build.finalImage`):
   - Starts from the intermediate image from step **(3)**.
-  - The `store` and `var-lib-build` partitions are copied as-is.
+  - The `store` partition is copied as-is.
   - `dm-verity` hashes are written to the `store-verity` partition.
   - The unsigned `UKI` from step **(4)** is copied into the `esp` partition.
   - With that being done, the image is built and contains our entire NixOS closure, including the `fhsenv`, in a `dm-verity`-checked store partition, as well as the `UKI` including `usrhash`.
@@ -397,7 +408,7 @@ flowchart TB
     halt["Display error & halt"]
 
     generate-disk-key["<b>(3)</b> Generate ephemeral encryption key"]
-    systemd-repart["<b>(4)</b> Resize, Format and Encrypt state partition"]
+    systemd-repart["<b>(4)</b> Create/reset partitions (TPM2 + ephemeral)"]
     mount["<b>(5)</b> Mount read-only & state partitions"]
     build-android["<b>(7)</b> `fetch-android` & `build-android` are executed"]
     android-tools["Android Build Tools (`repo`, `lunch`, `ninja`, etc.)"]
@@ -434,16 +445,16 @@ flowchart TB
   - If it is **active** and our image is booting succesfully, we trust the firmware here and continue to boot normally.
   - If it is in **setup** mode, we enroll certificates stored on our ESP. Setting the platform key disables setup mode automatically and reboot the machine right after.
   - If it is **disabled** or in any unknown mode, we halt the machine but don't power it off to keep the error message readable.
-3. Before encrypting the disks, we run `generate-disk-key.service`. A simple script that reads 64 bytes from `/dev/urandom` without ever storing it on disk. All state is encrypted with
-   that key, so that if the host shuts down for whatever reason - including sudden power loss - the encrypted data
+3. Before encrypting the disks, we run `generate-disk-key.service`. A simple script that reads 64 bytes from `/dev/urandom` without ever storing it on disk. The ephemeral build partition is encrypted with
+   that key, so that if the host shuts down for whatever reason - including sudden power loss - the build data
    ends up unusable.
-4. `systemd-repart` searches for the small, empty state partition on its boot media and resizes it before using `LUKS` to
-   encrypt it with the ephemeral key from **(2)**.
+4. `systemd-repart` creates and manages mutable partitions. On first boot, it creates all three: the TPM2-bound credentials and keylime partitions (persistent) and the ephemeral build partition (encrypted with the key from **(3)**). On subsequent boots, the persistent partitions are left untouched while the build partition is factory-reset and re-encrypted with a fresh key.
 5. We proceed to mount required file systems:
    * A read-only `/usr` partition, containing our `/nix/store` and all software in the image, checked by `dm-verity`.
    * Bind-mounts for `/bin` and `/lib` to simulate a conventional, `FHS`-based Linux for the build.
    * An ephemeral `/` file system (`tmpfs`)
-   * `/var/lib/build` from the encrypted partition created in **(3)**.
+   * `/var/lib/build` from the ephemeral encrypted partition.
+   * `/var/lib/credentials` and `/var/lib/keylime` from the TPM2-bound persistent partitions.
 6. With all mounts in place, we are ready to finish the boot process by switching into Stage 2 of NixOS.
 7. With the system fully booted, we can start the build in various ways. In unattended mode (`nixosAndroidBuilder.unattended.enable`), a configurable sequence of steps is executed automatically. In interactive mode, the following scripts are available:
       * `select-branch` presents a dialog to choose from configured branches (auto-selects if only one is configured).

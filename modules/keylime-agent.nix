@@ -32,9 +32,6 @@ let
   runtimeConf = "/run/keylime/agent.conf";
   runtimeCaCert = "/run/keylime/ca-cert.pem";
 
-  # Agent state (AK) persisted here across reboots.
-  persistDir = "/boot/keylime";
-
   # Defaults for the push model agent (keylime_push_model_agent).
   # Only settings read by the push model are included.
   # registrar_ip, verifier_url, and CA cert paths are placeholders —
@@ -97,7 +94,6 @@ let
         import pwd
         import grp
         import re
-        import shutil
         import sys
 
         SRC = "/boot/attestation-server.json"
@@ -154,37 +150,7 @@ let
         os.chmod(RUNTIME_CONF, 0o440)
 
         print(f"Configured: registrar={ip}:{port} verifier=https://{ip}:{vport}")
-
-        # Restore persisted AK from /boot. /var/lib is ephemeral, so without
-        # this the agent creates a new AK on every boot and the registrar
-        # rejects re-registration.
-        PERSIST = "${persistDir}"
-        WORK = "/var/lib/keylime"
-        if os.path.isdir(PERSIST):
-            for name in os.listdir(PERSIST):
-                src = os.path.join(PERSIST, name)
-                dst = os.path.join(WORK, name)
-                if os.path.isfile(src):
-                    shutil.copy2(src, dst)
-                    os.chown(dst, uid, gid)
-            print(f"Restored agent state from {PERSIST}")
-        else:
-            print(f"No persisted state at {PERSIST}")
       '';
-
-  # Persist agent AK to /boot after the file appears so it survives reboots.
-  # Triggered by keylime-agent-data.path (PathExists watch).
-  persistAgent = pkgs.writeShellScript "keylime-persist-agent" ''
-    set -euo pipefail
-    src=/var/lib/keylime/agent_data.json
-    dst=${persistDir}
-    [ -f "$src" ] || { echo "$src not found, skipping"; exit 0; }
-    ${pkgs.util-linux}/bin/mount -o remount,rw /boot
-    mkdir -p "$dst"
-    cp "$src" "$dst"/
-    ${pkgs.util-linux}/bin/mount -o remount,ro /boot
-    echo "Persisted agent AK to $dst"
-  '';
 
 in
 {
@@ -236,7 +202,8 @@ in
     users.groups.keylime = { };
 
     systemd.tmpfiles.rules = [
-      "d /var/lib/keylime 0750 keylime keylime -"
+      # /var/lib/keylime is a persistent LUKS partition; fix ownership after mount
+      "z /var/lib/keylime 0750 keylime keylime - -"
       "d /run/keylime 0750 keylime keylime -"
     ];
 
@@ -286,18 +253,6 @@ in
 
     systemd.targets.keylime-agent-data = {
       description = "Keylime agent data available";
-    };
-
-    # Persist agent AK to /boot so the UUID survives reboots.
-    systemd.services.keylime-persist-agent = {
-      description = "Persist Keylime agent AK to /boot";
-      after = [ "boot.mount" ];
-      wantedBy = [ "keylime-agent-data.target" ];
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        ExecStart = "${persistAgent}";
-      };
     };
 
     # Report TPM PCR values to the auto-enrollment server so the
