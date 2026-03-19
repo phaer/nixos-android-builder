@@ -42,6 +42,7 @@ in
       useEFIBoot = true;
       mountHostNixStore = false;
       efi.keepVariables = false;
+      tpm.enable = true;
 
       # NixOS overrides filesystems for VMs by default
       fileSystems = lib.mkForce { };
