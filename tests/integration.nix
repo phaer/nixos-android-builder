@@ -78,6 +78,33 @@
             "Secure Boot: enabled (user)", stdout,
             "Secure Boot is NOT active")
       '';
+
+      testPersistence = ''
+        with subtest("Partition persistence"):
+          with subtest("Write sentinel files before reboot"):
+            machine.succeed("echo 'build-data' > /var/lib/build/sentinel")
+            machine.succeed("echo 'keylime-data' > /var/lib/keylime/sentinel")
+            machine.succeed("echo 'cred-data' > /var/lib/credentials/sentinel")
+
+            # Verify all three are readable
+            machine.succeed("cat /var/lib/build/sentinel")
+            machine.succeed("cat /var/lib/keylime/sentinel")
+            machine.succeed("cat /var/lib/credentials/sentinel")
+
+          machine.reboot()
+          machine.wait_for_unit("default.target")
+
+          with subtest("/var/lib/build is ephemeral (wiped on reboot)"):
+            machine.fail("test -f /var/lib/build/sentinel")
+
+          with subtest("/var/lib/keylime persists across reboot"):
+            output = machine.succeed("cat /var/lib/keylime/sentinel").strip()
+            assert output == "keylime-data", f"Expected 'keylime-data', got '{output}'"
+
+          with subtest("/var/lib/credentials persists across reboot"):
+            output = machine.succeed("cat /var/lib/credentials/sentinel").strip()
+            assert output == "cred-data", f"Expected 'cred-data', got '{output}'"
+      '';
     in
     ''
       import os
@@ -96,6 +123,7 @@
       ${testSecureBoot}
       ${testVerity}
       ${testFHSEnv}
+      ${testPersistence}
       machine.shutdown()
     '';
 }
