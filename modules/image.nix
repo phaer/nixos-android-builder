@@ -42,7 +42,7 @@
         };
         "/var/lib/build" = {
           device = "/dev/mapper/var_lib_crypt";
-          fsType = config.systemd.repart.partitions."30-var-lib-build".Format;
+          fsType = config.systemd.repart.partitions."40-var-lib-build".Format;
           neededForBoot = true;
         };
         "/boot" = {
@@ -177,7 +177,7 @@
               Minimize = "best";
             };
           };
-          "30-var-lib-build".repartConfig = {
+          "40-var-lib-build".repartConfig = {
             Type = "var";
             Label = "var-lib-build";
             # We want to start out with a very small partition in the image, and add
@@ -191,8 +191,8 @@
 
     ## Run-time configuration of systemd-repart on first boot.
     # Reuse settings of the repart-generated image file on first boot
-    systemd.repart.partitions."30-var-lib-build" =
-      config.image.repart.partitions."30-var-lib-build".repartConfig
+    systemd.repart.partitions."40-var-lib-build" =
+      config.image.repart.partitions."40-var-lib-build".repartConfig
       // {
         Format = "ext4";
         Encrypt = "key-file";
@@ -298,7 +298,7 @@
               Type = "oneshot";
               RemainAfterExit = true;
               ExecStart = "/bin/ln -sf /dev/disk/by-partlabel/${
-                config.image.repart.partitions."30-var-lib-build".repartConfig.Label
+                config.image.repart.partitions."40-var-lib-build".repartConfig.Label
               } /run/systemd/volatile-root";
             };
           };

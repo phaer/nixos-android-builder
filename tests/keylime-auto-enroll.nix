@@ -103,7 +103,7 @@ in
         memorySize = 2 * 1024;
         cores = 2;
       };
-      systemd.repart.partitions."30-var-lib-build".SizeMinBytes = lib.mkVMOverride "1G";
+      systemd.repart.partitions."40-var-lib-build".SizeMinBytes = lib.mkVMOverride "1G";
 
       nixosAndroidBuilder.unattended.enable = lib.mkForce false;
 
