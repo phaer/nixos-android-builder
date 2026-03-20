@@ -20,7 +20,7 @@ We created a modular proof‑of‑concept based on NixOS that fulfills most of t
 * **aarch64 support** could be added if needed. Only `x86_64` with `UEFI` is implemented at the moment.
 * **artifact uploads**: build artifacts are currently not automatically uploaded anywhere, but stay on the build machine.
   Integration of a Trusted Platform Module (TPM) could be useful here, to ease authentication to private repositories as well as destinations for artifact upload.
-* **measured boot & attestation**: The verifier uses keylime's measured boot attestation (MBA) with a custom `uki` policy to validate the UEFI event log — covering Secure Boot keys, firmware, shim/GRUB/kernel hashes, initrd, and kernel command line (PCRs 0–9, 14). PCR 11 (UKI boot phases, measured by systemd) is attested via a raw digest policy. The `report-mb-refstate` agent service generates the measured boot reference state from the UEFI event log and reports it for auto-enrollment. Remaining work: an attestation-gated step in the unattended pipeline and network policy for attestation traffic.
+* **measured boot & attestation**: The verifier uses keylime's measured boot attestation (MBA) with a custom `uki` policy to validate the UEFI event log — covering SCRTM, firmware blobs, Secure Boot keys, and the UKI application digest. The `report-measured-boot-state` agent service generates the measured boot reference state from the UEFI event log and reports it for auto-enrollment. Remaining work: an attestation-gated step in the unattended pipeline and network policy for attestation traffic.
 * **credential storage**: TPM-encrypted credentials (via `systemd-creds`) are currently bound to PCR 7 (Secure Boot policy) only, not PCR 11 (UKI). Since the Secure Boot signing keys are created specifically for this project, only images signed with our key can produce a matching PCR 7 — so the practical risk is low. Binding to PCR 11 as well would prevent a *different* image signed with the same key from decrypting credentials, at the cost of invalidating all stored credentials on every image update. A `systemd-measure sign` based approach could provide PCR 11 binding without this drawback.
 * **higher-level configuration**: Adapting the build environment to the needs of custom AOSP distributions might need extra work. Depending on the nature of those
   customizations, a good understanding of `nix` might be needed. We will ease those as far as possible, as we learn more about users customization needs.
@@ -270,15 +270,14 @@ The daemon runs on the attestation server alongside the registrar and verifier. 
 
 1. Listens on an HTTPS endpoint (port 8893) for measured boot reports from agents.
 2. Periodically polls the registrar for registered agent UUIDs.
-3. When an agent is both registered AND has submitted its report, enrolls it with the verifier using a measured boot reference state (for PCRs 0–9, 14) and a raw TPM policy for PCR 11.
+3. When an agent is both registered AND has submitted its report, enrolls it with the verifier using a measured boot reference state validated by the `uki` policy.
 
 On the agent side, `report-mb-refstate` runs as a oneshot systemd service after the keylime agent registers.  It generates a measured boot reference state from the UEFI event log (via `create-uki-refstate`) and POSTs it to the daemon.
 
 #### Trust Model
 
-The measured boot reference state is accepted on a **trust-on-first-use (TOFU)** basis: the agent self-reports its event log and PCR 11 value before the first attestation.  This is acceptable because:
+The measured boot reference state is accepted on a **trust-on-first-use (TOFU)** basis: the agent self-reports its event log before the first attestation.  This is acceptable because:
 
-- PCR 11 (UKI measurement) is included in the reported policy, ensuring the verifier attests the specific image booted on the agent.
 - After enrollment, the verifier replays the UEFI event log against the reference state and validates the TPM quote on every attestation cycle — any false report is caught immediately.
 - Once enrolled with the full policy, the agent cannot downgrade the policy — only an admin with verifier mTLS credentials can modify it.
 
@@ -517,6 +516,8 @@ flowchart TB
 **repo** – Google's tool for managing Git repositories, used extensively in Android development.
 
 **SBOM** – Software Bill of Materials. A formal inventory of all components and dependencies in a piece of software.
+
+**SCRTM** – Static Root of Trust for Measurement. The initial firmware code that begins the TPM measurement chain at boot, establishing the trust anchor for all subsequent PCR measurements.
 
 **Secure Boot** – A UEFI feature that ensures only cryptographically signed software can be booted.
 

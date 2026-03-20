@@ -52,8 +52,7 @@ python3Packages.buildPythonApplication {
       gnupg
       tpm2-tools
     ]}"
-    # keylime.mba.elparsing.tpm_bootlog_enrich loads libefivar.so.1 via ctypes
-    # for UEFI event log enrichment (device path + GUID decoding).
+    # efivar is needed by keylime for UEFI event log parsing
     "--prefix"
     "LD_LIBRARY_PATH"
     ":"

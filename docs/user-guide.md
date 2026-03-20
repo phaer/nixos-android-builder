@@ -197,7 +197,7 @@ sequenceDiagram
 
     A->>A: Boot — agent starts
     A->>S: Agent registers (EK-derived UUID)
-    A->>S: report-mb-refstate POSTs full PCR policy
+    A->>S: report-pcrs POSTs full PCR policy
 
     loop Every poll interval
         S->>S: Daemon matches registrar<br/>entries with PCR reports
@@ -447,13 +447,31 @@ $ cat /sys/class/tpm/tpm0/pcr-sha256/7
 abc123...
 ```
 
-On boot, the `report-mb-refstate` service automatically generates a measured boot reference state from the UEFI event log and sends it to the auto-enrollment service on the attestation server. The verifier uses keylime's measured boot attestation with a custom `uki` policy to validate the event log — pinning Secure Boot keys, firmware, and the UKI application digest while accepting expected variability in BIOS settings and boot order. No manual PCR inspection is normally needed.
+On boot, the `report-pcrs` service automatically generates a measured boot reference state from the UEFI event log and reads PCR 11 from the TPM, then sends both to the auto-enrollment service on the attestation server. The verifier uses keylime's measured boot attestation to validate the UEFI event log (covering PCRs 0–9, 14) and a raw digest policy for PCR 11 (UKI boot phases). This means firmware configuration changes like boot order or BIOS settings are handled gracefully — the event log policy accepts expected variability while pinning security-critical components (Secure Boot keys, kernel, initrd). No manual PCR inspection is normally needed.
 
-For debugging, `read-firmware-pcrs` is also available to inspect raw PCR values interactively:
+For debugging, two tools are available:
+
+`create-uki-refstate` generates the measured boot reference state from the UEFI event log — the same data sent to the verifier during enrollment. This is useful to inspect what the policy will validate:
+
+```shell-session
+$ create-uki-refstate -e /sys/kernel/security/tpm0/binary_bios_measurements -o /tmp/refstate.json
+$ cat /tmp/refstate.json | python3 -m json.tool
+{
+  "scrtm_and_bios": [...],
+  "pk": [...],
+  "kek": [...],
+  "db": [...],
+  "dbx": [],
+  "uki_digest": {"sha256": "0x..."}
+}
+```
+
+`read-firmware-pcrs` shows raw PCR values from the TPM, useful for comparing digests or checking if a specific PCR changed:
 
 ```shell-session
 $ read-firmware-pcrs
 {"0": ["..."], "1": ["..."], "2": ["..."], "3": ["..."], "7": ["..."], "11": ["..."]}
+$ read-firmware-pcrs --diff  # compare against saved baseline
 ```
 
 ## Credential Storage {#credential-storage}
@@ -786,7 +804,7 @@ This is expected behavior - the `/var/lib/build` partition is ephemeral by desig
 
 Check the daemon logs (`journalctl -u keylime-auto-enroll`) for enrollment errors.  The daemon waits for both registration AND a PCR report before enrolling.  Common causes:
 
-- The `report-mb-refstate` service failed — check agent logs (`journalctl -u keylime-report-mb-refstate`).
+- The `report-pcrs` service failed — check agent logs (`journalctl -u keylime-report-pcrs`).
 - mTLS certificate issues (expired, wrong CA).
 - Port 8893 not reachable from the agent.
 
