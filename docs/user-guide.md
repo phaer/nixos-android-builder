@@ -197,7 +197,7 @@ sequenceDiagram
 
     A->>A: Boot — agent starts
     A->>S: Agent registers (EK-derived UUID)
-    A->>S: report-pcrs POSTs full PCR policy
+    A->>S: report-mb-refstate POSTs full PCR policy
 
     loop Every poll interval
         S->>S: Daemon matches registrar<br/>entries with PCR reports
@@ -447,13 +447,11 @@ $ cat /sys/class/tpm/tpm0/pcr-sha256/7
 abc123...
 ```
 
-On boot, the `report-pcrs` service automatically reads firmware PCRs (0–3, 7) and PCR 11 from the TPM, then sends them to the auto-enrollment service on the attestation server. No manual PCR inspection is normally needed.
+On boot, the `report-mb-refstate` service automatically generates a measured boot reference state from the UEFI event log and sends it to the auto-enrollment service on the attestation server. The verifier uses keylime's measured boot attestation with a custom `uki` policy to validate the event log — pinning Secure Boot keys, firmware, and the UKI application digest while accepting expected variability in BIOS settings and boot order. No manual PCR inspection is normally needed.
 
-For debugging, `read-firmware-pcrs` is also available to inspect PCR values interactively:
+For debugging, `read-firmware-pcrs` is also available to inspect raw PCR values interactively:
 
 ```shell-session
-$ read-firmware-pcrs
-{"0": ["abc123..."], "1": ["def456..."], "2": ["..."], "3": ["..."], "7": ["..."]}
 $ read-firmware-pcrs
 {"0": ["..."], "1": ["..."], "2": ["..."], "3": ["..."], "7": ["..."], "11": ["..."]}
 ```
@@ -788,7 +786,7 @@ This is expected behavior - the `/var/lib/build` partition is ephemeral by desig
 
 Check the daemon logs (`journalctl -u keylime-auto-enroll`) for enrollment errors.  The daemon waits for both registration AND a PCR report before enrolling.  Common causes:
 
-- The `report-pcrs` service failed — check agent logs (`journalctl -u keylime-report-pcrs`).
+- The `report-mb-refstate` service failed — check agent logs (`journalctl -u keylime-report-mb-refstate`).
 - mTLS certificate issues (expired, wrong CA).
 - Port 8893 not reachable from the agent.
 

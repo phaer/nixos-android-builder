@@ -112,7 +112,8 @@ in
         pkgs.openssl
         pkgs.tpm2-tools
         pkgs.curl
-        pcrPolicy.report-pcrs
+        pcrPolicy.report-mb-refstate
+        (pkgs.callPackage ../packages/keylime-uki-policy { }).create-uki-refstate
       ];
 
       systemd.tmpfiles.rules = [
@@ -129,8 +130,8 @@ in
 
       # Don't start automatically — start after CA cert is provisioned
       systemd.services.keylime-agent.wantedBy = lib.mkForce [ ];
-      # Don't auto-start report-pcrs — we trigger it manually after agent starts
-      systemd.services.keylime-report-pcrs.wantedBy = lib.mkForce [ ];
+      # Don't auto-start — we trigger it manually after agent starts
+      systemd.services.keylime-report-mb-refstate.wantedBy = lib.mkForce [ ];
     };
 
   testScript =
@@ -232,15 +233,12 @@ in
         assert agent_uuid, "Agent did not register within 30s"
         agent.log(f"Agent UUID: {agent_uuid}")
 
-        # Report PCRs to the enrollment server.
-        # report-pcrs reads the UUID from agent_data.json's
-        # ek_hash field (populated after registration).
-        agent.succeed(
-          f"KEYLIME_ENROLL_URL=https://{server_ip}:8893"
-          " report-pcrs"
-        )
+        # Report measured boot state to the enrollment server.
+        # Reads UUID from agent_data.json and server address
+        # from /boot/attestation-server.json.
+        agent.succeed("report-mb-refstate")
 
-      with subtest("Verifier attests the auto-enrolled agent with full policy"):
+      with subtest("Verifier attests the auto-enrolled agent with measured boot policy"):
         server.wait_until_succeeds(
           "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
           f" https://127.0.0.1:8881/v2.5/agents/{agent_uuid}"
@@ -249,18 +247,20 @@ in
         )
         server.log("Agent successfully auto-enrolled and attested!")
 
-        # Verify the policy includes firmware PCRs (not just PCR 11)
+        # Verify the enrolled policy uses measured boot + PCR 11
         cvstatus = json.loads(server.succeed(
           "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
           f" https://127.0.0.1:8881/v2.5/agents/{agent_uuid}"
         ))
-        tpm_policy = cvstatus.get("results", {}).get("tpm_policy", {})
-        server.log(f"TPM policy: {json.dumps(tpm_policy)}")
+        results = cvstatus.get("results", {})
+        tpm_policy_raw = results.get("tpm_policy", "{}")
+        tpm_policy = json.loads(tpm_policy_raw) if isinstance(tpm_policy_raw, str) else tpm_policy_raw
+        server.log(f"TPM policy keys: {list(tpm_policy.keys())}")
 
-        # Must have firmware PCRs AND PCR 11
+        # Only the mask should be present — no individual PCR entries
         for pcr in ["0", "1", "2", "3", "7", "11"]:
-          assert pcr in tpm_policy, f"PCR {pcr} missing from enrolled policy"
-        server.log("Full PCR policy verified (PCRs 0, 1, 2, 3, 7, 11)")
+          assert pcr not in tpm_policy, f"PCR {pcr} should not be in tpm_policy (covered by mb_policy)"
+        server.log("Policy verified: all PCRs covered by mb_policy")
 
       for i in range(1, 4):
         with subtest(f"Attestation persists after reboot {i}/3"):
