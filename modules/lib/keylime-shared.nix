@@ -4,6 +4,8 @@
 { lib, pkgs }:
 
 let
+  ukiPolicy = pkgs.callPackage ../../packages/keylime-uki-policy { };
+
   # Keylime's config.getlist() uses ast.literal_eval and expects Python list
   # literals (e.g. '["value"]') for certain options.
   mkValueString =
@@ -142,8 +144,8 @@ rec {
     request_timeout = "60.0";
     quote_interval = 2;
     max_upload_size = 104857600;
-    measured_boot_policy_name = "example";
-    measured_boot_imports = "[]";
+    measured_boot_policy_name = "uki";
+    measured_boot_imports = ''["uki_policy"]'';
     measured_boot_evaluate = "once";
     severity_labels = ''["info", "notice", "warning", "error", "critical", "alert", "emergency"]'';
     severity_policy = ''[{"event_id": ".*", "severity_label" : "emergency"}]'';
@@ -386,6 +388,7 @@ rec {
         wants = [ "network-online.target" ];
         requires = extraAfter.verifier or [ ];
         inherit wantedBy;
+        environment.PYTHONPATH = "${ukiPolicy.policyPath}";
         serviceConfig = commonServiceConfig // {
           ExecStart = "${cfg.package}/bin/keylime_verifier";
         };
