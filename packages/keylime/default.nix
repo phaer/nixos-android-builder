@@ -4,6 +4,7 @@
   fetchFromGitHub,
   gnupg,
   tpm2-tools,
+  efivar,
 }:
 let
   version = "7.14.1";
@@ -51,6 +52,12 @@ python3Packages.buildPythonApplication {
       gnupg
       tpm2-tools
     ]}"
+    # keylime.mba.elparsing.tpm_bootlog_enrich loads libefivar.so.1 via ctypes
+    # for UEFI event log enrichment (device path + GUID decoding).
+    "--prefix"
+    "LD_LIBRARY_PATH"
+    ":"
+    "${lib.getLib efivar}/lib"
   ];
 
   doCheck = false;
