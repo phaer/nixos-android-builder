@@ -1,10 +1,13 @@
 """Auto-enrollment daemon for Keylime agents.
 
-Runs an HTTPS server that accepts PCR policy reports from agents and
+Runs an HTTPS server that accepts measured boot reports from agents and
 polls the registrar for newly registered agents.  When an agent is
-both registered in the registrar *and* has submitted its PCR policy,
-it is automatically enrolled with the verifier using the full TPM
-policy (firmware PCRs + PCR 11).
+both registered in the registrar *and* has submitted its report,
+it is automatically enrolled with the verifier using:
+
+- A measured boot reference state (``--mb_refstate``) derived from the
+  agent's UEFI event log, validated by the ``uki`` policy (covering
+  SCRTM, firmware blobs, Secure Boot keys, and the UKI digest).
 
 Environment variables:
     KEYLIME_REGISTRAR_IP    Registrar address (default: 127.0.0.1)
@@ -13,7 +16,7 @@ Environment variables:
     KEYLIME_VERIFIER_PORT   Verifier port (default: 8881)
     KEYLIME_TLS_DIR         Directory containing mTLS certs
     KEYLIME_POLL_INTERVAL   Seconds between polls (default: 10)
-    KEYLIME_ENROLL_PORT     HTTPS port for PCR report endpoint (default: 8893)
+    KEYLIME_ENROLL_PORT     HTTPS port for report endpoint (default: 8893)
     KEYLIME_LOG_LEVEL       DEBUG, INFO, WARNING, ERROR (default: INFO)
 """
 
@@ -24,6 +27,7 @@ import signal
 import ssl
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.request
@@ -94,29 +98,33 @@ def api_post(url: str, body: dict) -> dict:
         return json.loads(resp.read())
 
 
-pcr_reports: dict[str, dict] = {}
-pcr_reports_lock = threading.Lock()
+# Stores {uuid: {"mb_refstate": dict}}
+agent_reports: dict[str, dict] = {}
+agent_reports_lock = threading.Lock()
 
 
-def validate_pcr_report(report: dict) -> str | None:
-    """Validate format of a PCR policy report from an agent.
+def validate_report(report: dict) -> str | None:
+    """Validate format of a measured boot report from an agent.
+
+    Expected format::
+
+        {
+            "uuid": "<agent-uuid>",
+            "mb_refstate": { ... }
+        }
 
     Returns an error message string, or None if valid.
     """
     if not isinstance(report, dict):
         return "report must be a JSON object"
 
-    if not report:
-        return "report is empty"
+    uuid = report.get("uuid")
+    if not uuid or not isinstance(uuid, str):
+        return "missing or invalid 'uuid'"
 
-    for pcr_id, values in report.items():
-        if not isinstance(values, list) or len(values) != 1:
-            return f"PCR {pcr_id}: must be a list with one hex digest"
-        if len(values[0]) != 64:
-            return (
-                f"PCR {pcr_id}: expected 64 hex chars,"
-                f" got {len(values[0])}"
-            )
+    mb_refstate = report.get("mb_refstate")
+    if not isinstance(mb_refstate, dict) or not mb_refstate:
+        return "missing or invalid 'mb_refstate'"
 
     return None
 
@@ -139,31 +147,23 @@ class EnrollHandler(BaseHTTPRequestHandler):
             self.send_error(400, "Invalid JSON")
             return
 
-        uuid = body.get("uuid")
-        policy = body.get("policy")
-
-        if not uuid or not isinstance(uuid, str):
-            self.send_error(400, "Missing or invalid 'uuid'")
-            return
-        if not policy or not isinstance(policy, dict):
-            self.send_error(400, "Missing or invalid 'policy'")
-            return
-
-        error = validate_pcr_report(policy)
+        error = validate_report(body)
         if error:
-            log.warning(
-                "Rejected PCR report from %s: %s", uuid, error,
-            )
+            log.warning("Rejected report: %s", error)
             self.send_error(400, error)
             return
 
-        with pcr_reports_lock:
-            pcr_reports[uuid] = policy
+        uuid = body["uuid"]
+        with agent_reports_lock:
+            agent_reports[uuid] = {
+                "mb_refstate": body["mb_refstate"],
+            }
 
         log.info(
-            "Accepted PCR report from %s (PCRs: %s)",
+            "Accepted measured boot report from %s"
+            " (refstate keys: %s)",
             uuid,
-            ", ".join(sorted(policy.keys(), key=int)),
+            ", ".join(sorted(body["mb_refstate"].keys())),
         )
 
         self.send_response(200)
@@ -173,7 +173,7 @@ class EnrollHandler(BaseHTTPRequestHandler):
 
 
 def start_https_server() -> HTTPServer:
-    """Start the HTTPS server for receiving PCR reports."""
+    """Start the HTTPS server for receiving reports."""
     server = HTTPServer(("0.0.0.0", ENROLL_PORT), EnrollHandler)
 
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -215,30 +215,55 @@ def get_enrolled_uuids() -> set[str]:
         return set()
 
 
-def enroll_agent(uuid: str, policy: dict) -> bool:
-    """Enroll an agent with the verifier using keylime_tenant."""
-    pcr_list = ", ".join(sorted(policy.keys(), key=int))
-    log.info("Enrolling agent %s with policy (PCRs: %s)", uuid, pcr_list)
+def enroll_agent(uuid: str, report: dict) -> bool:
+    """Enroll an agent with the verifier.
 
-    cmd = [
-        "keylime_tenant",
-        "--push-model",
-        "-c", "add",
-        "-t", "0.0.0.0",
-        "-u", uuid,
-        "-r", REGISTRAR_IP,
-        "-rp", REGISTRAR_PORT,
-        "-v", VERIFIER_IP,
-        "-vp", VERIFIER_PORT,
-        "--tpm_policy", json.dumps(policy),
-    ]
+    Uses ``--mb_refstate`` for the measured boot event log policy.
+    PCR 11 is covered by the measured boot quote (keylime includes
+    it in MEASUREDBOOT_PCRS automatically).
+    """
+    mb_refstate = report["mb_refstate"]
 
-    log.debug("Running: %s", " ".join(cmd))
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
+    log.info(
+        "Enrolling agent %s (mb_refstate keys: %s)",
+        uuid,
+        ", ".join(sorted(mb_refstate.keys())),
     )
+
+    # Write refstate to a temp file — keylime_tenant reads from a path.
+    refstate_file = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False,
+        ) as f:
+            json.dump(mb_refstate, f)
+            refstate_file = f.name
+
+        cmd = [
+            "keylime_tenant",
+            "--push-model",
+            "-c", "add",
+            "-t", "0.0.0.0",
+            "-u", uuid,
+            "-r", REGISTRAR_IP,
+            "-rp", REGISTRAR_PORT,
+            "-v", VERIFIER_IP,
+            "-vp", VERIFIER_PORT,
+            "--mb_refstate", refstate_file,
+        ]
+
+        log.debug("Running: %s", " ".join(cmd))
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+        )
+    finally:
+        if refstate_file:
+            try:
+                os.unlink(refstate_file)
+            except OSError:
+                pass
 
     if result.returncode == 0:
         log.info("Successfully enrolled agent %s", uuid)
@@ -295,31 +320,31 @@ def main() -> None:
             enrolled = get_enrolled_uuids()
             new_agents = registered - enrolled
 
-            with pcr_reports_lock:
-                reported = set(pcr_reports.keys())
+            with agent_reports_lock:
+                reported = set(agent_reports.keys())
 
             # Only enroll agents that have both registered AND
-            # submitted their PCR report.
+            # submitted their measured boot report.
             ready = new_agents & reported
 
             if new_agents - reported:
                 waiting = new_agents - reported
                 log.debug(
-                    "Waiting for PCR reports from: %s",
+                    "Waiting for reports from: %s",
                     ", ".join(sorted(waiting)),
                 )
 
             for uuid in sorted(ready):
-                with pcr_reports_lock:
-                    policy = pcr_reports[uuid]
+                with agent_reports_lock:
+                    report = agent_reports[uuid]
 
-                enroll_agent(uuid, policy)
+                enroll_agent(uuid, report)
                 time.sleep(1)
 
-            with pcr_reports_lock:
-                for uuid in list(pcr_reports):
+            with agent_reports_lock:
+                for uuid in list(agent_reports):
                     if uuid in enrolled:
-                        del pcr_reports[uuid]
+                        del agent_reports[uuid]
 
         except Exception:
             log.exception("Unexpected error in poll loop")

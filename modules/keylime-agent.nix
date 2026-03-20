@@ -9,6 +9,8 @@ let
   cfg = config.services.keylime-agent;
 
   keylimeAgentPkg = pkgs.callPackage ../packages/keylime-agent { };
+  keylimePkg = pkgs.callPackage ../packages/keylime { };
+  ukiPolicy = pkgs.callPackage ../packages/keylime-uki-policy { };
 
   # The Rust keylime-agent uses TOML, so string values must be quoted.
   mkValueString =
@@ -255,17 +257,18 @@ in
       description = "Keylime agent data available";
     };
 
-    # Report TPM PCR values to the auto-enrollment server so the
-    # daemon can enroll this agent with the full TPM policy.
-    # Reads the agent UUID from agent_data.json (ek_hash field),
-    # waiting for the keylime agent to write it after registration.
-    systemd.services.keylime-report-pcrs = {
-      description = "Report TPM PCRs to auto-enrollment server";
+    # Report measured boot reference state to the auto-enrollment
+    # server.  Generates the MB refstate from the UEFI event log
+    # via create-uki-refstate and POSTs it to the enrollment endpoint.
+    systemd.services.keylime-report-mb-refstate = {
+      description = "Report measured boot state to auto-enrollment server";
       wantedBy = [ "keylime-agent-data.target" ];
       unitConfig.ConditionPathExists = "/dev/tpm0";
+      # create-uki-refstate needs tpm2_eventlog
+      path = [ ukiPolicy.create-uki-refstate ];
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${pkgs.lib.getExe (pkgs.callPackage ../packages/pcr-policy { }).report-pcrs}";
+        ExecStart = "${pkgs.lib.getExe (pkgs.callPackage ../packages/pcr-policy { }).report-mb-refstate}";
         Restart = "on-failure";
         RestartSec = "10s";
       };

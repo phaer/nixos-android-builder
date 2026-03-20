@@ -53,7 +53,7 @@ in
     pkgs.efitools
     pkgs.tpm2-tools
     enroll-secure-boot
-    pcrPolicy.report-pcrs
+    pcrPolicy.report-mb-refstate
     pcrPolicy.read-firmware-pcrs
   ];
 

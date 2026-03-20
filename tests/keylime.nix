@@ -97,6 +97,7 @@ in
         pkgs.coreutils
         pkgs.openssl
         pkgs.tpm2-tools
+        (pkgs.callPackage ../packages/keylime-uki-policy { }).create-uki-refstate
       ];
 
       systemd.tmpfiles.rules = [
@@ -226,16 +227,21 @@ in
         assert agent_uuid, "Agent did not register within 30s"
         agent.log(f"Agent EK-derived UUID: {agent_uuid}")
 
-      with subtest("Agent can be added for attestation with PCR policy"):
-        tpm_policy = json.loads(
-          agent.succeed("read-firmware-pcrs")
+      with subtest("Agent can be added for attestation with measured boot policy"):
+        # Generate measured boot reference state from the UEFI event log
+        agent.succeed(
+          "create-uki-refstate"
+          " -e /sys/kernel/security/tpm0/binary_bios_measurements"
+          " -o /tmp/mb-refstate.json"
         )
+        # Copy refstate to server for enrollment
+        mb_refstate = agent.succeed("cat /tmp/mb-refstate.json")
+        server.succeed(f"cat > /tmp/mb-refstate.json << 'REFSTATE_EOF'\n{mb_refstate}\nREFSTATE_EOF")
 
-        policy = json.dumps({"7": tpm_policy["7"], "11": tpm_policy["11"]})
         server.succeed(
           f"keylime_tenant --push-model -c add -t 192.168.1.1 -u {agent_uuid}"
           " -r 127.0.0.1 -rp 8891 -v 127.0.0.1 -vp 8881"
-          f" --tpm_policy '{policy}'"
+          " --mb_refstate /tmp/mb-refstate.json"
         )
 
       with subtest("Verifier attests the agent (reaches Get Quote state)"):
