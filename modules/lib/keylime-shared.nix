@@ -319,6 +319,17 @@ rec {
       '';
     };
 
+    measuredBootPolicyPath = lib.mkOption {
+      type = lib.types.path;
+      default = ukiPolicy.policyPath;
+      description = ''
+        Directory containing the measured boot policy Python module.
+        Added to the verifier's PYTHONPATH. The module must register
+        a policy name matching `measured_boot_policy_name` in
+        verifier.conf.
+      '';
+    };
+
     registrar = {
       enable = lib.mkEnableOption "Keylime registrar service";
       settings = lib.mkOption {
@@ -388,7 +399,7 @@ rec {
         wants = [ "network-online.target" ];
         requires = extraAfter.verifier or [ ];
         inherit wantedBy;
-        environment.PYTHONPATH = "${ukiPolicy.policyPath}";
+        environment.PYTHONPATH = "${cfg.measuredBootPolicyPath}";
         serviceConfig = commonServiceConfig // {
           ExecStart = "${cfg.package}/bin/keylime_verifier";
         };
