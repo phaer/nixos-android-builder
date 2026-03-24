@@ -55,6 +55,7 @@ in
     enroll-secure-boot
     measuredBoot.measure-boot-state
     measuredBoot.report-measured-boot-state
+    measuredBoot.debug-measured-boot-state
   ];
 
   # Enable PCR phase measurements (systemd-pcrextend extends PCR 11 with boot

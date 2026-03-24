@@ -36,4 +36,12 @@ in
     libraries = [ measured-boot-library ];
     makeWrapperArgs = wrapperArgs;
   } (builtins.readFile ./report-measured-boot-state.py);
+
+  # Debug tool: diagnose measured boot state mismatches by replaying
+  # the UEFI event log, comparing PCRs against the TPM, and diffing
+  # refstates.
+  debug-measured-boot-state = writers.writePython3Bin "debug-measured-boot-state" {
+    libraries = [ measured-boot-library ];
+    makeWrapperArgs = wrapperArgs;
+  } (builtins.readFile ./debug-measured-boot-state.py);
 }

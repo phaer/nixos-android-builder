@@ -111,7 +111,7 @@
           keylime-agent
           ;
         inherit (secureBootScripts) create-signing-keys;
-        inherit (measuredBoot) measure-boot-state report-measured-boot-state;
+        inherit (measuredBoot) measure-boot-state report-measured-boot-state debug-measured-boot-state;
         configure-disk-image = diskInstaller.configure;
         default = image;
       };

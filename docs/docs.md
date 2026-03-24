@@ -306,7 +306,7 @@ Benign firmware configuration changes (e.g. boot order, BIOS settings) in PCR 1 
 
 - `measure-boot-state` – parses the binary UEFI event log and outputs a measured boot reference state JSON.  Can be run manually for inspection.
 - `report-measured-boot-state` – generates a measured boot reference state from the UEFI event log and sends it to the auto-enrollment service.  Runs automatically as a oneshot service after the keylime agent registers.
-
+- `debug-measured-boot-state` – diagnoses attestation failures by replaying the UEFI event log, comparing PCR values against the TPM, and diffing the current reference state against an enrolled one.  Supports offline diffing of two refstate files.
 
 
 ## Credential Storage {#credential-storage}

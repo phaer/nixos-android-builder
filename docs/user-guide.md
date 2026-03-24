@@ -466,6 +466,32 @@ $ cat /tmp/refstate.json | python3 -m json.tool
 }
 ```
 
+`debug-measured-boot-state` diagnoses attestation failures by replaying the event log and comparing against the TPM and an enrolled reference state:
+
+```shell-session
+$ debug-measured-boot-state diagnose --refstate enrolled.json
+PCR replay vs TPM:
+  PCR  0: ✓ match
+  PCR  4: ✗ MISMATCH
+    replayed: a1b2c3...
+    tpm:      d4e5f6...
+  PCR  7: ✓ match
+
+Refstate diff:
+  uki_digest: CHANGED
+    old: 0xabc123...
+    new: 0xdef456...
+  scrtm: unchanged
+  pk: unchanged
+  ...
+```
+
+To compare two refstate files offline:
+
+```shell-session
+$ debug-measured-boot-state diff old-refstate.json new-refstate.json
+```
+
 ## Credential Storage {#credential-storage}
 
 The builder includes a TPM-backed credential store for persisting secrets - such as those needed to authenticate to private source repositories or clodu storage to stora build artifacts in - across reboots. Credentials are encrypted with the machine's TPM and can only be decrypted on the same hardware with the same Secure Boot policy.
