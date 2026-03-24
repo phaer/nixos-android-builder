@@ -21,12 +21,12 @@ shim/GRUB chain:
 
 ## Components
 
-- **`uki_policy.py`** — Keylime MBA policy module. Loaded by the
-  verifier via `measured_boot_imports = ["uki_policy"]` with the
+- **`measured_boot_policy.py`** — Keylime MBA policy module. Loaded by the
+  verifier via `measured_boot_imports = ["measured_boot_policy"]` with the
   containing directory on `PYTHONPATH`. Registers as policy name `uki`.
-- **`create_uki_refstate.py`** — CLI tool that parses a binary UEFI
-  event log (via `tpm2_eventlog`) and outputs a reference state JSON.
-  Used by `report-mb-refstate` on the agent side, and can be run manually.
+- **`measure-boot-state`** — CLI tool (in `packages/measured-boot-state/`) that
+  parses a binary UEFI event log and outputs a reference state JSON.
+  Used by `report-measured-boot-state` on the agent side, and can be run manually.
 
 ## Reference state JSON schema
 

@@ -258,11 +258,11 @@ graph TB
 
     subgraph agent["Agent (physical machine)"]
         keylime_agent["keylime_push_model_agent"]
-        report_mb_refstate["report-mb-refstate"]
+        report_measured_boot_state["report-measured-boot-state"]
     end
 
     keylime_agent -- "registers\n(UUID = hash_ek)" --> registrar
-    report_mb_refstate -- "POST /v1/report_pcrs\n(mb_refstate)" --> daemon
+    report_measured_boot_state -- "POST /v1/report_measured_boot_state\n(measured_boot_state)" --> daemon
     verifier -- "attests\n(TPM quote +\nevent log)" --> keylime_agent
 ~~~
 
@@ -272,7 +272,7 @@ The daemon runs on the attestation server alongside the registrar and verifier. 
 2. Periodically polls the registrar for registered agent UUIDs.
 3. When an agent is both registered AND has submitted its report, enrolls it with the verifier using a measured boot reference state validated by the `uki` policy.
 
-On the agent side, `report-mb-refstate` runs as a oneshot systemd service after the keylime agent registers.  It generates a measured boot reference state from the UEFI event log (via `create-uki-refstate`) and POSTs it to the daemon.
+On the agent side, `report-measured-boot-state` runs as a oneshot systemd service after the keylime agent registers.  It generates a measured boot reference state from the UEFI event log and POSTs it to the daemon.
 
 #### Trust Model
 
@@ -283,7 +283,7 @@ The measured boot reference state is accepted on a **trust-on-first-use (TOFU)**
 
 ### Attestation Policy
 
-The verifier uses a custom `uki` measured boot policy (in `packages/keylime-uki-policy/`) tailored to the UKI boot chain (systemd-boot + Unified Kernel Image).  Rather than comparing raw PCR digests, the verifier parses the binary UEFI event log, replays digests to verify consistency with the TPM quote, and evaluates individual events against the policy.
+The verifier uses a custom `uki` measured boot policy (in `packages/keylime-measured-boot-policy/`) tailored to the UKI boot chain (systemd-boot + Unified Kernel Image).  Rather than comparing raw PCR digests, the verifier parses the binary UEFI event log, replays digests to verify consistency with the TPM quote, and evaluates individual events against the policy.
 
 The `uki` policy checks:
 
@@ -298,15 +298,16 @@ The `uki` policy checks:
 
 Keylime's built-in `example` policy expects a shim → GRUB → kernel boot chain and is not compatible with UKI boots.  The custom `uki` policy was written specifically for this boot chain.
 
-A reference state is generated on the agent at enrollment time by `create-uki-refstate`, which parses the binary UEFI event log and extracts: SCRTM and firmware blob digests, Secure Boot keys (PK, KEK, db, dbx), and the UKI application digest.
+A reference state is generated on the agent at enrollment time by `measure-boot-state`, which parses the binary UEFI event log and extracts: SCRTM and firmware blob digests, Secure Boot keys (PK, KEK, db, dbx), and the UKI application digest.
 
 Benign firmware configuration changes (e.g. boot order, BIOS settings) in PCR 1 are handled gracefully by the event log policy, while security-critical components (Secure Boot keys, UKI image) are pinned to specific known-good values.
 
 ### Tools
 
-- `report-mb-refstate` – generates a measured boot reference state from the UEFI event log (via `create-uki-refstate`) and sends it to the auto-enrollment service.  Runs automatically as a oneshot service after the keylime agent registers.
-- `create-uki-refstate` – parses the binary UEFI event log and outputs a UKI reference state JSON.  Used by `report-mb-refstate` and can be run manually for inspection.
-- `read-firmware-pcrs` – reads raw PCR values (0–3, 7, 11) from the TPM sysfs and outputs a keylime `tpm_policy` JSON.  Supports `--save` to persist a baseline and `--diff` to compare against a previously saved baseline.  Useful for debugging.
+- `measure-boot-state` – parses the binary UEFI event log and outputs a measured boot reference state JSON.  Can be run manually for inspection.
+- `report-measured-boot-state` – generates a measured boot reference state from the UEFI event log and sends it to the auto-enrollment service.  Runs automatically as a oneshot service after the keylime agent registers.
+
+
 
 ## Credential Storage {#credential-storage}
 

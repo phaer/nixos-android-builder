@@ -1,0 +1,11 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "measured-boot-library"
+version = "0.1.0"
+dependencies = ["pyyaml"]
+
+[tool.setuptools]
+py-modules = ["measured_boot_state"]

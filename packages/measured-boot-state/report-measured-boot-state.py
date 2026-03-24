@@ -1,8 +1,8 @@
 """Report measured boot state to the auto-enrollment server.
 
 Generates a measured boot reference state from the UEFI
-event log using ``create-uki-refstate`` and POSTs it to the
-auto-enrollment HTTPS endpoint on the attestation server.
+event log using the ``measured_boot_state`` library and POSTs it to
+the auto-enrollment HTTPS endpoint on the attestation server.
 
 The agent UUID is read from the keylime agent's
 ``agent_data.json`` file, which stores the EK hash (== the
@@ -14,64 +14,53 @@ Environment variables:
     KEYLIME_AGENT_UUID      Override UUID
 """
 
+import argparse
 import json
 import os
-import subprocess
 import sys
-import tempfile
 import time
 import urllib.request
 import urllib.error
 import ssl
 from pathlib import Path
 
-TPM_SYSFS = Path("/sys/class/tpm/tpm0/pcr-sha256")
-UEFI_EVENTLOG = Path(
-    "/sys/kernel/security/tpm0/binary_bios_measurements",
+from measured_boot_state import (
+    UEFI_EVENTLOG,
+    create_refstate,
+    parse_eventlog,
 )
+
 ATTESTATION_SERVER = Path("/boot/attestation-server.json")
 AGENT_DATA = Path("/var/lib/keylime/agent_data.json")
 
 
-def generate_mb_refstate() -> dict:
+def generate_measured_boot_state(eventlog: str) -> dict:
     """Generate measured boot reference state."""
-    if not UEFI_EVENTLOG.exists():
+    if not Path(eventlog).exists():
         print(
             "Error: UEFI event log not found at"
-            f" {UEFI_EVENTLOG}",
+            f" {eventlog}",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    with tempfile.NamedTemporaryFile(
-        mode="r", suffix=".json", delete=False,
-    ) as tmp:
-        tmp_path = tmp.name
-
-    try:
-        result = subprocess.run(
-            [
-                "create-uki-refstate",
-                "-e", str(UEFI_EVENTLOG),
-                "-o", tmp_path,
-            ],
-            capture_output=True,
-            text=True,
+    log_data = parse_eventlog(eventlog)
+    if not log_data:
+        print(
+            "Error: failed to parse UEFI event log",
+            file=sys.stderr,
         )
+        sys.exit(1)
 
-        if result.returncode != 0:
-            output = f"{result.stdout} {result.stderr}"
-            print(
-                "Error: create-uki-refstate"
-                f" failed: {output.strip()}",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+    events = log_data.get("events", [])
+    if not events:
+        print(
+            "Error: no events in UEFI event log",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
-        with open(tmp_path) as f:
-            return json.load(f)
-    finally:
-        Path(tmp_path).unlink(missing_ok=True)
+    return create_refstate(events)
 
 
 def get_agent_uuid(timeout: int = 60) -> str:
@@ -146,22 +135,38 @@ def get_enroll_config() -> tuple[str, str]:
 
 
 def main() -> None:
-    mb_refstate = generate_mb_refstate()
+    parser = argparse.ArgumentParser(
+        description=(
+            "Report measured boot reference state"
+            " to the auto-enrollment server"
+        ),
+    )
+    parser.add_argument(
+        "-e", "--eventlog",
+        default=UEFI_EVENTLOG,
+        help=(
+            "Binary UEFI event log"
+            f" (default: {UEFI_EVENTLOG})"
+        ),
+    )
+    args = parser.parse_args()
+
+    measured_boot_state = generate_measured_boot_state(args.eventlog)
     uuid = get_agent_uuid()
     url, ca_cert = get_enroll_config()
 
     print(f"Agent UUID: {uuid}", file=sys.stderr)
     print(
         "MB refstate keys:"
-        f" {', '.join(sorted(mb_refstate.keys()))}",
+        f" {', '.join(sorted(measured_boot_state.keys()))}",
         file=sys.stderr,
     )
     print(f"Enrollment server: {url}", file=sys.stderr)
 
-    endpoint = f"{url}/v1/report_pcrs"
+    endpoint = f"{url}/v1/report_measured_boot_state"
     payload = json.dumps({
         "uuid": uuid,
-        "mb_refstate": mb_refstate,
+        "measured_boot_state": measured_boot_state,
     }).encode()
 
     ctx = ssl.create_default_context(cadata=ca_cert)
