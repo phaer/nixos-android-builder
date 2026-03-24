@@ -6,6 +6,7 @@
   keylimeModule,
   keylimeAgentModule,
   keylimeAgentPackage,
+  keylimePackage,
 }:
 let
   inherit (pkgs) lib;
@@ -45,8 +46,13 @@ let
     ];
   };
   payload = "${nixosWithBackdoor.config.system.build.finalImage}/${nixosWithBackdoor.config.image.filePath}";
+
+  unitTests = import ./unit-tests.nix {
+    inherit pkgs keylimePackage;
+  };
 in
 {
+  inherit (unitTests) libraryTests policyTests;
   integration = pkgs.testers.runNixOSTest {
     imports = [
       ./integration.nix
