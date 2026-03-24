@@ -1,8 +1,8 @@
-# Test: auto-enrollment of keylime agents with full PCR policy.
+# Test: auto-enrollment of keylime agents with measured boot policy.
 #
 # Verifies that the auto-enrollment daemon on the server side
 # automatically enrolls a new agent when it both registers with
-# the registrar AND reports its full TPM PCR values.
+# the registrar AND reports its measured boot reference state.
 {
   keylimeModule,
   keylimeAgentModule,

@@ -1,0 +1,54 @@
+From 7cebbe2dca9da3710a605de9614ec80e4b39bcc7 Mon Sep 17 00:00:00 2001
+From: phaer <phaer@phaer.org>
+Date: Tue, 24 Mar 2026 14:50:42 +0100
+Subject: [PATCH 1/3] elparsing: check tpm2_eventlog exit code instead of
+ stderr
+
+tpm2_eventlog emits warnings on stderr for event types it does not
+fully understand, such as EV_IPL events measured by systemd-stub
+into PCR 11 during UKI (Unified Kernel Image) boots.  These
+warnings are benign and the YAML output on stdout is correct.
+
+Previously, any stderr output was treated as a fatal parse error,
+causing the verifier to reject all measured boot attestations from
+UKI-booted agents.
+
+Check the exit code instead: only treat a non-zero return code as
+a parse failure.  Log stderr as a warning when the command succeeds
+but produces output.
+
+Signed-off-by: phaer <phaer@phaer.org>
+---
+ keylime/mba/elparsing/tpm2_tools_elparser.py | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/keylime/mba/elparsing/tpm2_tools_elparser.py b/keylime/mba/elparsing/tpm2_tools_elparser.py
+index 87c4f39..6086d1b 100644
+--- a/keylime/mba/elparsing/tpm2_tools_elparser.py
++++ b/keylime/mba/elparsing/tpm2_tools_elparser.py
+@@ -83,13 +83,19 @@ def parse_binary_bootlog(log_bin: bytes) -> typing.Tuple[Failure, typing.Optiona
+         log_bin_filename = log_bin_file.name
+         retDict_tpm2 = cmd_exec.run(cmd=["tpm2_eventlog", "--eventlog-version=2", log_bin_filename], raiseOnError=False)
+     log_parsed_strs = retDict_tpm2["retout"]
+-    if len(retDict_tpm2["reterr"]) > 0:
++    if retDict_tpm2["code"] != 0:
+         failure.add_event(
+-            "tpm2_eventlog.warning",
+-            {"context": "tpm2_eventlog exited with warnings", "data": str(retDict_tpm2["reterr"])},
++            "tpm2_eventlog.error",
++            {
++                "context": "tpm2_eventlog exited with non-zero return code",
++                "code": retDict_tpm2["code"],
++                "data": str(retDict_tpm2["reterr"]),
++            },
+             True,
+         )
+         return failure, None
++    if len(retDict_tpm2["reterr"]) > 0:
++        logger.warning("tpm2_eventlog produced warnings: %s", retDict_tpm2["reterr"])
+     log_parsed_data = config.yaml_to_dict(log_parsed_strs, add_newlines=False, logger=logger)
+     if log_parsed_data is None:
+         failure.add_event("yaml", "yaml output of tpm2_eventlog could not be parsed!", True)
+-- 
+2.53.0
+

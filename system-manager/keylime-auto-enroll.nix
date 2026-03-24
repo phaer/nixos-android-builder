@@ -1,8 +1,8 @@
 # Auto-enrollment of new Keylime agents.
 #
-# Runs an HTTPS endpoint that accepts PCR policy reports from agents,
+# Runs an HTTPS endpoint that accepts measured boot reports from agents,
 # and polls the registrar for newly registered agents.  When an agent
-# is both registered AND has submitted its full PCR report, it is
+# is both registered AND has submitted its measured boot report, it is
 # automatically enrolled with the verifier using the complete TPM
 # policy (firmware PCRs 0-3, 7 + PCR 11).
 {
@@ -24,7 +24,7 @@ let
 in
 {
   options.services.keylime.autoEnroll = {
-    enable = lib.mkEnableOption "automatic enrollment of new Keylime agents with full PCR policy";
+    enable = lib.mkEnableOption "automatic enrollment of new Keylime agents with measured boot policy";
 
     pollInterval = lib.mkOption {
       type = lib.types.int;
@@ -35,13 +35,13 @@ in
     enrollPort = lib.mkOption {
       type = lib.types.int;
       default = 8893;
-      description = "HTTPS port for the PCR report endpoint that agents POST to.";
+      description = "HTTPS port for the measured boot report endpoint that agents POST to.";
     };
   };
 
   config = lib.mkIf (cfg.enable && autoEnroll.enable) {
     systemd.services.keylime-auto-enroll = {
-      description = "Auto-enroll new Keylime agents with full PCR policy";
+      description = "Auto-enroll new Keylime agents with measured boot policy";
       after = [
         "keylime-registrar.service"
         "keylime-verifier.service"

@@ -197,10 +197,10 @@ sequenceDiagram
 
     A->>A: Boot — agent starts
     A->>S: Agent registers (EK-derived UUID)
-    A->>S: report-measured-boot-state POSTs full PCR policy
+    A->>S: report-measured-boot-state POSTs measured boot reference state
 
     loop Every poll interval
-        S->>S: Daemon matches registrar<br/>entries with PCR reports
+        S->>S: Daemon matches registrar<br/>entries with measured boot reports
     end
 
     S->>S: keylime_tenant -c add<br/>(PCRs 0,1,2,3,7,11)
@@ -221,10 +221,10 @@ Configuration options live under `services.keylime.autoEnroll`:
 | Option           | Default      | Description                                        |
 |------------------|--------------|----------------------------------------------------|
 | `enable`         | `false`      | Enable the auto-enrollment daemon.                 |
-| `enrollPort`     | `8893`       | HTTPS port for the PCR report endpoint.            |
+| `enrollPort`     | `8893`       | HTTPS port for the measured boot report endpoint.            |
 | `pollInterval`   | `10`         | Seconds between polling the registrar.             |
 
-When updating an image on a machine whose TPM EK hasn't changed (same UUID), the old enrollment must be deleted before the agent can re-enroll with the new PCR policy:
+When updating an image on a machine whose TPM EK hasn't changed (same UUID), the old enrollment must be deleted before the agent can re-enroll with the new measured boot policy:
 
 ```shell-session
 $ keylime_tenant -c delete -u <agent-uuid> -v <verifier-ip> -vp 8881
@@ -717,7 +717,7 @@ There's additional VM tests in the repository that cover the disk installer, key
 $ nix build -L .#checks.x86_64-linux.installer .#checks.x86_64-linux.installerInteractive .#checks.x86_64-linux.keylime .#checks.x86_64-linux.keylime-auto-enroll
 ```
 
-The `keylime-auto-enroll` test exercises the full auto-enrollment flow: agent registration, PCR reporting, daemon-driven enrollment with the full PCR policy (0, 1, 2, 3, 7, 11), and attestation persistence across 5 reboots.
+The `keylime-auto-enroll` test exercises the full auto-enrollment flow: agent registration, measured boot reporting, daemon-driven enrollment with the measured boot reference state (0, 1, 2, 3, 7, 11), and attestation persistence across 5 reboots.
 
 # Usage in a Virtual Machine {#virtual-machine}
 
@@ -820,7 +820,7 @@ This is expected behavior - the `/var/lib/build` partition is ephemeral by desig
 
 **Problem: Agent registers but is not enrolled**
 
-Check the daemon logs (`journalctl -u keylime-auto-enroll`) for enrollment errors.  The daemon waits for both registration AND a PCR report before enrolling.  Common causes:
+Check the daemon logs (`journalctl -u keylime-auto-enroll`) for enrollment errors.  The daemon waits for both registration AND a measured boot report before enrolling.  Common causes:
 
 - The `report-measured-boot-state` service failed — check agent logs (`journalctl -u keylime-report-measured-boot-state`).
 - mTLS certificate issues (expired, wrong CA).
