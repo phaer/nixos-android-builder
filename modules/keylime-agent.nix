@@ -10,7 +10,6 @@ let
 
   keylimeAgentPkg = pkgs.callPackage ../packages/keylime-agent { };
   keylimePkg = pkgs.callPackage ../packages/keylime { };
-  ukiPolicy = pkgs.callPackage ../packages/keylime-uki-policy { };
 
   # The Rust keylime-agent uses TOML, so string values must be quoted.
   mkValueString =
@@ -258,17 +257,18 @@ in
     };
 
     # Report measured boot reference state to the auto-enrollment
-    # server.  Generates the MB refstate from the UEFI event log
-    # via create-uki-refstate and POSTs it to the enrollment endpoint.
-    systemd.services.keylime-report-mb-refstate = {
+    # server.  Generates the state from the UEFI event log via the
+    # measured_boot_state library and POSTs it to the enrollment
+    # endpoint.
+    systemd.services.keylime-report-measured-boot-state = {
       description = "Report measured boot state to auto-enrollment server";
       wantedBy = [ "keylime-agent-data.target" ];
       unitConfig.ConditionPathExists = "/dev/tpm0";
-      # create-uki-refstate needs tpm2_eventlog
-      path = [ ukiPolicy.create-uki-refstate ];
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${pkgs.lib.getExe (pkgs.callPackage ../packages/pcr-policy { }).report-mb-refstate}";
+        ExecStart = "${pkgs.lib.getExe
+          (pkgs.callPackage ../packages/measured-boot-state { }).report-measured-boot-state
+        }";
         Restart = "on-failure";
         RestartSec = "10s";
       };

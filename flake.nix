@@ -80,7 +80,7 @@
 
       keylime = pkgs.callPackage ./packages/keylime { };
       keylime-agent = pkgs.callPackage ./packages/keylime-agent { };
-      pcrPolicy = pkgs.callPackage ./packages/pcr-policy { };
+      measuredBoot = pkgs.callPackage ./packages/measured-boot-state { };
 
     in
     {
@@ -111,7 +111,7 @@
           keylime-agent
           ;
         inherit (secureBootScripts) create-signing-keys;
-        inherit (pcrPolicy) report-mb-refstate read-firmware-pcrs;
+        inherit (measuredBoot) measure-boot-state report-measured-boot-state;
         configure-disk-image = diskInstaller.configure;
         default = image;
       };

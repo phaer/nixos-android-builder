@@ -97,7 +97,7 @@ in
         pkgs.coreutils
         pkgs.openssl
         pkgs.tpm2-tools
-        (pkgs.callPackage ../packages/keylime-uki-policy { }).create-uki-refstate
+        (pkgs.callPackage ../packages/measured-boot-state { }).measure-boot-state
       ];
 
       systemd.tmpfiles.rules = [
@@ -230,18 +230,18 @@ in
       with subtest("Agent can be added for attestation with measured boot policy"):
         # Generate measured boot reference state from the UEFI event log
         agent.succeed(
-          "create-uki-refstate"
+          "measure-boot-state"
           " -e /sys/kernel/security/tpm0/binary_bios_measurements"
-          " -o /tmp/mb-refstate.json"
+          " -o /tmp/measured-boot-state.json"
         )
         # Copy refstate to server for enrollment
-        mb_refstate = agent.succeed("cat /tmp/mb-refstate.json")
-        server.succeed(f"cat > /tmp/mb-refstate.json << 'REFSTATE_EOF'\n{mb_refstate}\nREFSTATE_EOF")
+        measured_boot_state = agent.succeed("cat /tmp/measured-boot-state.json")
+        server.succeed(f"cat > /tmp/measured-boot-state.json << 'REFSTATE_EOF'\n{measured_boot_state}\nREFSTATE_EOF")
 
         server.succeed(
           f"keylime_tenant --push-model -c add -t 192.168.1.1 -u {agent_uuid}"
           " -r 127.0.0.1 -rp 8891 -v 127.0.0.1 -vp 8881"
-          " --mb_refstate /tmp/mb-refstate.json"
+          " --mb_refstate /tmp/measured-boot-state.json"
         )
 
       with subtest("Verifier attests the agent (reaches Get Quote state)"):

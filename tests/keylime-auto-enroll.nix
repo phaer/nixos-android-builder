@@ -29,7 +29,7 @@ let
     ];
   } (builtins.readFile ../system-manager/keylime-auto-enroll.py);
 
-  pcrPolicy = pkgs.callPackage ../packages/pcr-policy { };
+  measuredBoot = pkgs.callPackage ../packages/measured-boot-state { };
 in
 {
   name = "keylime-auto-enroll";
@@ -112,8 +112,8 @@ in
         pkgs.openssl
         pkgs.tpm2-tools
         pkgs.curl
-        pcrPolicy.report-mb-refstate
-        (pkgs.callPackage ../packages/keylime-uki-policy { }).create-uki-refstate
+        measuredBoot.report-measured-boot-state
+        (pkgs.callPackage ../packages/measured-boot-state { }).measure-boot-state
       ];
 
       systemd.tmpfiles.rules = [
@@ -131,7 +131,7 @@ in
       # Don't start automatically — start after CA cert is provisioned
       systemd.services.keylime-agent.wantedBy = lib.mkForce [ ];
       # Don't auto-start — we trigger it manually after agent starts
-      systemd.services.keylime-report-mb-refstate.wantedBy = lib.mkForce [ ];
+      systemd.services.keylime-report-measured-boot-state.wantedBy = lib.mkForce [ ];
     };
 
   testScript =
@@ -236,7 +236,7 @@ in
         # Report measured boot state to the enrollment server.
         # Reads UUID from agent_data.json and server address
         # from /boot/attestation-server.json.
-        agent.succeed("report-mb-refstate")
+        agent.succeed("report-measured-boot-state")
 
       with subtest("Verifier attests the auto-enrolled agent with measured boot policy"):
         server.wait_until_succeeds(
@@ -259,8 +259,8 @@ in
 
         # Only the mask should be present — no individual PCR entries
         for pcr in ["0", "1", "2", "3", "7", "11"]:
-          assert pcr not in tpm_policy, f"PCR {pcr} should not be in tpm_policy (covered by mb_policy)"
-        server.log("Policy verified: all PCRs covered by mb_policy")
+          assert pcr not in tpm_policy, f"PCR {pcr} should not be in tpm_policy (covered by measured_boot_policy)"
+        server.log("Policy verified: all PCRs covered by measured_boot_policy")
 
       for i in range(1, 4):
         with subtest(f"Attestation persists after reboot {i}/3"):

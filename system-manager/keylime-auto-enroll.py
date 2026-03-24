@@ -98,7 +98,7 @@ def api_post(url: str, body: dict) -> dict:
         return json.loads(resp.read())
 
 
-# Stores {uuid: {"mb_refstate": dict}}
+# Stores {uuid: {"measured_boot_state": dict}}
 agent_reports: dict[str, dict] = {}
 agent_reports_lock = threading.Lock()
 
@@ -110,7 +110,7 @@ def validate_report(report: dict) -> str | None:
 
         {
             "uuid": "<agent-uuid>",
-            "mb_refstate": { ... }
+            "measured_boot_state": { ... }
         }
 
     Returns an error message string, or None if valid.
@@ -122,21 +122,21 @@ def validate_report(report: dict) -> str | None:
     if not uuid or not isinstance(uuid, str):
         return "missing or invalid 'uuid'"
 
-    mb_refstate = report.get("mb_refstate")
-    if not isinstance(mb_refstate, dict) or not mb_refstate:
-        return "missing or invalid 'mb_refstate'"
+    measured_boot_state = report.get("measured_boot_state")
+    if not isinstance(measured_boot_state, dict) or not measured_boot_state:
+        return "missing or invalid 'measured_boot_state'"
 
     return None
 
 
 class EnrollHandler(BaseHTTPRequestHandler):
-    """Handle POST /v1/report_pcrs from agents."""
+    """Handle POST /v1/report_measured_boot_state from agents."""
 
     def log_message(self, fmt, *args):
         log.info("HTTP %s", fmt % args)
 
     def do_POST(self):  # noqa: N802
-        if self.path != "/v1/report_pcrs":
+        if self.path != "/v1/report_measured_boot_state":
             self.send_error(404)
             return
 
@@ -156,14 +156,14 @@ class EnrollHandler(BaseHTTPRequestHandler):
         uuid = body["uuid"]
         with agent_reports_lock:
             agent_reports[uuid] = {
-                "mb_refstate": body["mb_refstate"],
+                "measured_boot_state": body["measured_boot_state"],
             }
 
         log.info(
             "Accepted measured boot report from %s"
             " (refstate keys: %s)",
             uuid,
-            ", ".join(sorted(body["mb_refstate"].keys())),
+            ", ".join(sorted(body["measured_boot_state"].keys())),
         )
 
         self.send_response(200)
@@ -222,12 +222,12 @@ def enroll_agent(uuid: str, report: dict) -> bool:
     PCR 11 is covered by the measured boot quote (keylime includes
     it in MEASUREDBOOT_PCRS automatically).
     """
-    mb_refstate = report["mb_refstate"]
+    measured_boot_state = report["measured_boot_state"]
 
     log.info(
-        "Enrolling agent %s (mb_refstate keys: %s)",
+        "Enrolling agent %s (measured_boot_state keys: %s)",
         uuid,
-        ", ".join(sorted(mb_refstate.keys())),
+        ", ".join(sorted(measured_boot_state.keys())),
     )
 
     # Write refstate to a temp file — keylime_tenant reads from a path.
@@ -236,7 +236,7 @@ def enroll_agent(uuid: str, report: dict) -> bool:
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False,
         ) as f:
-            json.dump(mb_refstate, f)
+            json.dump(measured_boot_state, f)
             refstate_file = f.name
 
         cmd = [

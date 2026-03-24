@@ -27,7 +27,7 @@ This policy validates:
 - PCR 11: UKI PE section measurements from systemd-stub
   (pinned).
 
-Reference state format (``uki_refstate``)::
+Reference state format (``measured_boot_state``)::
 
     {
         "scrtm_and_bios": [{

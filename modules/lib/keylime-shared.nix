@@ -4,7 +4,7 @@
 { lib, pkgs }:
 
 let
-  ukiPolicy = pkgs.callPackage ../../packages/keylime-uki-policy { };
+  measuredBootPolicy = pkgs.callPackage ../../packages/keylime-measured-boot-policy { };
 
   # Keylime's config.getlist() uses ast.literal_eval and expects Python list
   # literals (e.g. '["value"]') for certain options.
@@ -145,7 +145,7 @@ rec {
     quote_interval = 2;
     max_upload_size = 104857600;
     measured_boot_policy_name = "uki";
-    measured_boot_imports = ''["uki_policy"]'';
+    measured_boot_imports = ''["measured_boot_policy"]'';
     measured_boot_evaluate = "once";
     severity_labels = ''["info", "notice", "warning", "error", "critical", "alert", "emergency"]'';
     severity_policy = ''[{"event_id": ".*", "severity_label" : "emergency"}]'';
@@ -321,7 +321,7 @@ rec {
 
     measuredBootPolicyPath = lib.mkOption {
       type = lib.types.path;
-      default = ukiPolicy.policyPath;
+      default = measuredBootPolicy.policyPath;
       description = ''
         Directory containing the measured boot policy Python module.
         Added to the verifier's PYTHONPATH. The module must register
