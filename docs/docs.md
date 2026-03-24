@@ -236,9 +236,9 @@ The keylime server components are provided by the `services.keylime` NixOS modul
 
 ### Auto-Enrollment {#auto-enrollment}
 
-The auto-enrollment daemon (`services.keylime.autoEnroll`) automates agent enrollment with the verifier.  Without it, each new agent must be manually enrolled by an operator who has access to both the agent machine (to read firmware PCR values) and the attestation server (to run `keylime_tenant -c add`).
+The auto-enrollment daemon (`services.keylime.autoEnroll`) automates agent enrollment with the verifier.  Without it, each new agent must be manually enrolled by an operator who has access to both the agent machine (to read the measured boot state) and the attestation server (to run `keylime_tenant -c add`).
 
-With auto-enrollment enabled, the agent registers, reports its PCR values, and the daemon enrolls it with the full TPM policy — no manual intervention required.
+With auto-enrollment enabled, the agent registers, reports its measured boot state, and the daemon enrolls it with the full TPM policy — no manual intervention required.
 
 ~~~mermaid
 ---

@@ -1,0 +1,58 @@
+From 54fd3d495c1f3f43c14212c860dc23563e55b934 Mon Sep 17 00:00:00 2001
+From: phaer <phaer@phaer.org>
+Date: Tue, 24 Mar 2026 22:02:42 +0100
+Subject: [PATCH 3/3] tpm_engine: bypass ORM cache for uefi_ref_state
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The uefi_ref_state property reads the measured boot refstate via
+the SQLAlchemy ORM relationship (agent.mb_policy.mb_policy).
+When the refstate is updated via DELETE-CREATE (as keylime_tenant
+does), the new MBPolicy row may reuse the same ID, causing
+SQLAlchemy's identity map to return the stale cached object.
+
+This is the same bug that was already fixed for ima_policy with
+a direct SQL query that bypasses the ORM cache.  Apply the same
+pattern to uefi_ref_state.
+
+Without this fix, updating an agent's mb_refstate (via tenant
+update or delete+add) has no effect — the verifier keeps
+evaluating the old refstate until the process is restarted.
+
+Signed-off-by: phaer <phaer@phaer.org>
+---
+ keylime/verification/tpm_engine.py | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/keylime/verification/tpm_engine.py b/keylime/verification/tpm_engine.py
+index 2243a3d..5c09636 100644
+--- a/keylime/verification/tpm_engine.py
++++ b/keylime/verification/tpm_engine.py
+@@ -879,6 +879,23 @@ class TPMEngine(VerificationEngine):
+ 
+     @property
+     def uefi_ref_state(self) -> Any:
++        # Bypass SQLAlchemy's identity map cache, same as ima_policy.
++        # Policy updates use DELETE-CREATE which may reuse the same
++        # policy ID, causing the identity map to return stale cached
++        # policy objects.
++        if hasattr(self, "_fresh_agent") and self._fresh_agent and self._fresh_agent.mb_policy_id:
++            from sqlalchemy import text
++            from keylime.models.base import db_manager
++
++            with db_manager.session_context() as session:
++                result = session.execute(
++                    text("SELECT mb_policy FROM mbpolicies WHERE id = :policy_id"),
++                    {"policy_id": self._fresh_agent.mb_policy_id},
++                ).fetchone()
++
++                if result and result[0]:
++                    return result[0]
++
+         return self.agent.mb_policy.mb_policy
+ 
+     @property
+-- 
+2.53.0
+

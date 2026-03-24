@@ -146,7 +146,7 @@ rec {
     max_upload_size = 104857600;
     measured_boot_policy_name = "uki";
     measured_boot_imports = ''["measured_boot_policy"]'';
-    measured_boot_evaluate = "once";
+    measured_boot_evaluate = "always";
     severity_labels = ''["info", "notice", "warning", "error", "critical", "alert", "emergency"]'';
     severity_policy = ''[{"event_id": ".*", "severity_label" : "emergency"}]'';
     ignore_tomtou_errors = false;
