@@ -57,6 +57,22 @@ shim/GRUB chain:
 | `uki_digest` | PCR 4: `EV_EFI_BOOT_SERVICES_APPLICATION` (non-firmware) | Pinned |
 | `uki_sections` | PCR 11: `EV_IPL` from systemd-stub | Not validated (accepted; PCR 11 is in the TPM quote via keylime's measured boot PCR mask) |
 
+## Testing
+
+Unit tests run without a VM or TPM:
+
+```bash
+nix build .#checks.x86_64-linux.policyTests   # policy (18 tests)
+nix build .#checks.x86_64-linux.libraryTests   # library (21 tests)
+```
+
+The full VM integration test (including a negative attestation check
+with a tampered refstate) is:
+
+```bash
+nix build .#checks.x86_64-linux.keylime
+```
+
 ## What the policy validates
 
 | PCR | Events | Action |
