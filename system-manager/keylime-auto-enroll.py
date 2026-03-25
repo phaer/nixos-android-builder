@@ -341,9 +341,14 @@ def main() -> None:
                 enroll_agent(uuid, report)
                 time.sleep(1)
 
+            # Clean up stale reports: drop reports for agents that
+            # are already enrolled (report no longer needed) or
+            # no longer registered (agent was removed — keeping
+            # the stale report would cause re-enrollment with an
+            # outdated refstate if the agent re-registers).
             with agent_reports_lock:
                 for uuid in list(agent_reports):
-                    if uuid in enrolled:
+                    if uuid in enrolled or uuid not in registered:
                         del agent_reports[uuid]
 
         except Exception:
