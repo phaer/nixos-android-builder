@@ -1,48 +1,49 @@
-From f03bad316b538cf44f31faacd91a7689ff75e938 Mon Sep 17 00:00:00 2001
+From 6d2c375ac0de9ea60684481e59ae627a842b10cf Mon Sep 17 00:00:00 2001
 From: phaer <phaer@phaer.org>
-Date: Tue, 24 Mar 2026 21:43:27 +0100
+Date: Wed, 25 Mar 2026 17:49:34 +0100
 Subject: [PATCH 2/3] tpm: use policy's relevant PCRs for event log
  verification
 
-The hardcoded MEASUREDBOOT_PCRS list includes PCR 11, but systemd
-extends PCR 11 at runtime via systemd-pcrphase (boot phase
-transitions like enter-initrd, ready, etc.).  These runtime
-extensions are not in the UEFI event log, causing a PCR replay
-mismatch for any system using systemd 252+.
+Intersect MEASUREDBOOT_PCRS with the active policy's
+get_relevant_pcrs() set for the PCR replay check. PCRs outside
+the policy's set may have runtime extensions not in the event
+log (e.g. PCR 11 from systemd-pcrphase).
 
-Rather than removing PCR 11 from the global constant (which would
-break traditional boot chains that don't use systemd-pcrphase),
-intersect MEASUREDBOOT_PCRS with the active measured boot policy's
-get_relevant_pcrs() set.  Policies that don't include PCR 11 in
-their relevant set (like UKI policies that know PCR 11 has runtime
-extensions) will skip the PCR 11 replay check while still
-validating PCR 11 events in the event log.
-
-This is backwards compatible: policies that don't override
-get_relevant_pcrs() or return all PCRs will behave as before.
+This is backwards compatible: policies that return all PCRs (or
+an empty set) behave as before.
 
 Signed-off-by: phaer <phaer@phaer.org>
 ---
- keylime/tpm/tpm_main.py | 15 ++++++++++++++-
- 1 file changed, 14 insertions(+), 1 deletion(-)
+ keylime/tpm/tpm_main.py | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
 
 diff --git a/keylime/tpm/tpm_main.py b/keylime/tpm/tpm_main.py
-index 0f68c26..2fb96eb 100644
+index 0f68c26..b8e4300 100644
 --- a/keylime/tpm/tpm_main.py
 +++ b/keylime/tpm/tpm_main.py
-@@ -452,7 +452,20 @@ class Tpm:
+@@ -16,6 +16,7 @@ from keylime.ima import ima
+ from keylime.ima.file_signatures import ImaKeyrings
+ from keylime.ima.types import RuntimePolicyType
+ from keylime.mba import mba
++from keylime.mba.elchecking import policies as mb_policies
+ from keylime.tpm import tpm2_objects, tpm_util
+ from keylime.tpm.errors import (
+     HashAlgorithmMismatch,
+@@ -452,7 +453,22 @@ class Tpm:
                  pass
  
          if not mb_failure and mb_policy is not None and mba.policy_is_valid(mb_policy) and mb_policy_is_nonempty:
 -            for pcr_num in set(config.MEASUREDBOOT_PCRS) & pcr_nums:
-+            # Determine which PCRs to verify against the event log.
-+            # If the active measured boot policy declares relevant PCRs
-+            # (via get_relevant_pcrs()), intersect with the global set
-+            # so that PCRs with runtime extensions (e.g. PCR 11 from
-+            # systemd-pcrphase) are excluded from the replay check.
++            # Intersect MEASUREDBOOT_PCRS (what we can verify against
++            # the event log) with the policy's relevant PCRs (what the
++            # policy cares about).  PCRs outside the policy's set may
++            # have runtime extensions not in the event log (e.g. PCR 11
++            # from systemd-pcrphase).
 +            mb_pcr_set = set(config.MEASUREDBOOT_PCRS)
-+            mb_policy_name = config.get("verifier", "measured_boot_policy_name", fallback="accept-all")
-+            from keylime.mba.elchecking import policies as mb_policies
++            mb_policy_name = config.get(
++                "verifier", "measured_boot_policy_name",
++                fallback="accept-all",
++            )
 +            mb_policy_obj = mb_policies.get_policy(mb_policy_name)
 +            if mb_policy_obj is not None:
 +                policy_pcrs = mb_policy_obj.get_relevant_pcrs()

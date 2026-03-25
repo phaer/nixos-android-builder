@@ -17,14 +17,9 @@ from measured_boot_state import (
     get_uki_digest,
     replay_pcrs,
 )
-
-# --------------- helpers ---------------
-
 DIGEST_AA = "aa" * 32
 DIGEST_BB = "bb" * 32
 DIGEST_CC = "cc" * 32
-
-
 def make_event(
     pcr, event_type, sha256_digest,
     event_data=None,
@@ -42,12 +37,8 @@ def make_event(
     if event_data is not None:
         ev["Event"] = event_data
     return ev
-
-
 def make_separator(pcr):
     return make_event(pcr, "EV_SEPARATOR", "00" * 32)
-
-
 def make_fw_app(pcr, digest, device_path=""):
     """EV_EFI_BOOT_SERVICES_APPLICATION event."""
     return make_event(
@@ -56,10 +47,6 @@ def make_fw_app(pcr, digest, device_path=""):
         digest,
         event_data={"DevicePath": device_path},
     )
-
-
-# --------------- event_to_sha256 ---------------
-
 
 class TestEventToSha256:
     def test_extracts_sha256(self):
@@ -82,10 +69,6 @@ class TestEventToSha256:
     def test_no_digests(self):
         assert event_to_sha256({}) == {}
 
-
-# --------------- get_scrtm ---------------
-
-
 class TestGetScrtm:
     def test_finds_scrtm(self):
         events = [
@@ -99,10 +82,6 @@ class TestGetScrtm:
 
     def test_no_scrtm(self):
         assert get_scrtm([]) == {}
-
-
-# --------------- get_platform_firmware ---------------
-
 
 class TestGetPlatformFirmware:
     def test_collects_blobs(self):
@@ -122,10 +101,6 @@ class TestGetPlatformFirmware:
     def test_empty(self):
         result = get_platform_firmware([])
         assert result == {"platform_firmware": []}
-
-
-# --------------- get_uki_digest ---------------
-
 
 class TestGetUkiDigest:
     def test_single_uki_app(self):
@@ -175,10 +150,6 @@ class TestGetUkiDigest:
     def test_empty(self):
         assert get_uki_digest([]) == {}
 
-
-# --------------- get_keys ---------------
-
-
 class TestGetKeys:
     def test_extracts_keys(self):
         events = [{
@@ -206,10 +177,6 @@ class TestGetKeys:
         result = get_keys(events)
         for key in ("pk", "kek", "db", "dbx"):
             assert result[key] == []
-
-
-# --------------- replay_pcrs ---------------
-
 
 class TestReplayPcrs:
     def test_single_event(self):
@@ -251,10 +218,6 @@ class TestReplayPcrs:
     def test_empty(self):
         assert replay_pcrs([]) == {}
 
-
-# --------------- create_refstate ---------------
-
-
 class TestCreateRefstate:
     def test_has_required_keys(self):
         events = [
@@ -274,10 +237,6 @@ class TestCreateRefstate:
             "dbx", "uki_digest",
         ):
             assert key in rs
-
-
-# --------------- diff_refstates ---------------
-
 
 class TestDiffRefstates:
     def _make_rs(self, uki="aa" * 32):

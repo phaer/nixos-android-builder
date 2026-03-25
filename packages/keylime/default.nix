@@ -66,8 +66,7 @@ python3Packages.buildPythonApplication {
     # Use the policy's get_relevant_pcrs() for event log PCR replay
     # (PCR 11 has runtime extensions from systemd-pcrphase).
     ./0002-tpm-use-policy-s-relevant-PCRs-for-event-log-verific.patch
-    # Bypass ORM cache for uefi_ref_state (same stale-cache bug
-    # already fixed for ima_policy).
+    # Bypass ORM cache for uefi_ref_state.
     ./0003-tpm_engine-bypass-ORM-cache-for-uefi_ref_state.patch
   ];
 

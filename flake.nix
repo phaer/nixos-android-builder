@@ -81,6 +81,7 @@
       keylime = pkgs.callPackage ./packages/keylime { };
       keylime-agent = pkgs.callPackage ./packages/keylime-agent { };
       measuredBoot = pkgs.callPackage ./packages/measured-boot-state { };
+      attestation-ctl = pkgs.callPackage ./packages/attestation-ctl { };
 
     in
     {
@@ -92,6 +93,7 @@
       devShells.${system} = {
         default = pkgs.mkShell {
           packages = with secureBootScripts; [
+            attestation-ctl
             create-signing-keys
             diskInstaller.configure
             docs.build-docs
@@ -111,6 +113,7 @@
           keylime-agent
           ;
         inherit (secureBootScripts) create-signing-keys;
+        inherit attestation-ctl;
         inherit (measuredBoot) measure-boot-state report-measured-boot-state debug-measured-boot-state;
         configure-disk-image = diskInstaller.configure;
         default = image;

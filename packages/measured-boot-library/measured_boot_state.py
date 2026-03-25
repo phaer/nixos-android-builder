@@ -20,7 +20,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
-# Default paths for live systems.
 UEFI_EVENTLOG = (
     "/sys/kernel/security/tpm0/binary_bios_measurements"
 )
