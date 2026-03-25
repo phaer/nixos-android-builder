@@ -454,7 +454,7 @@ For debugging, two tools are available:
 `measure-boot-state` generates the measured boot reference state from the UEFI event log — the same data sent to the verifier during enrollment. This is useful to inspect what the policy will validate:
 
 ```shell-session
-$ measure-boot-state -e /sys/kernel/security/tpm0/binary_bios_measurements -o /tmp/refstate.json
+$ measure-boot-state -o /tmp/refstate.json
 $ cat /tmp/refstate.json | python3 -m json.tool
 {
   "scrtm_and_bios": [...],

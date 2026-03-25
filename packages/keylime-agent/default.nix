@@ -35,7 +35,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
 
   # Use the privileged fd for UEFI event log evidence instead of
   # re-opening by path (which fails after run_as privilege drop).
-  patches = [ ./0001-use-privileged-fd-for-uefi-log.patch ];
+  patches = [ ./0001-push-model-cache-UEFI-event-log-bytes-at-startup.patch ];
 
   doCheck = false;
 

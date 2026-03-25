@@ -66,13 +66,6 @@ def print_pcr_comparison(
     return all_match
 
 
-def _trunc(s: str, n: int = 24) -> str:
-    """Truncate a hex string for display."""
-    if len(s) > n:
-        return s[:n] + "..."
-    return s
-
-
 def print_refstate_diff(diff: dict) -> bool:
     """Print a structured refstate diff.
 
@@ -101,9 +94,9 @@ def print_refstate_diff(diff: dict) -> bool:
                     f" -> {change['new_count']})"
                 )
                 for d in change["removed"]:
-                    print(f"    - {_trunc(d)}")
+                    print(f"    - {d}")
                 for d in change["added"]:
-                    print(f"    + {_trunc(d)}")
+                    print(f"    + {d}")
             else:
                 # Signature list
                 added = change["added"]
@@ -123,18 +116,14 @@ def print_refstate_diff(diff: dict) -> bool:
                 )
                 for s in removed:
                     owner = s["SignatureOwner"]
-                    data = _trunc(
-                        s["SignatureData"], 20,
-                    )
+                    data = s["SignatureData"]
                     print(
                         f"    - Owner={owner}"
                         f" Data={data}"
                     )
                 for s in added:
                     owner = s["SignatureOwner"]
-                    data = _trunc(
-                        s["SignatureData"], 20,
-                    )
+                    data = s["SignatureData"]
                     print(
                         f"    + Owner={owner}"
                         f" Data={data}"

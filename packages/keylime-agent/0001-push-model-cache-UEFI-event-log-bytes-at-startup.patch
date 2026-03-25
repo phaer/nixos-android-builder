@@ -1,64 +1,48 @@
-From ac4979107870869e4963237cf7340cb0bf5c6bbd Mon Sep 17 00:00:00 2001
+From 0694e580d21c15b10f454dd48ab8adeeccd6bdaa Mon Sep 17 00:00:00 2001
 From: phaer <phaer@phaer.org>
-Date: Tue, 24 Mar 2026 20:33:42 +0100
+Date: Wed, 25 Mar 2026 17:52:27 +0100
 Subject: [PATCH] push-model: cache UEFI event log bytes at startup
-MIME-Version: 1.0
-Content-Type: text/plain; charset=UTF-8
-Content-Transfer-Encoding: 8bit
 
-generate_uefi_log_evidence() re-opened the UEFI event log by path
-via UefiLogHandler::read_raw_base64(), ignoring the file descriptor
-that privileged_resources already opened before dropping privileges.
-After run_as drops to keylime:tss, the re-open fails with
-PermissionDenied because securityfs files are 0440 root:root.
-
-Cache the raw event log bytes in PrivilegedResources at startup
-(while still running as root).  The UEFI boot event log is static
-— it only contains firmware and bootloader measurements — so a
-one-time read is correct.  Pass the cached bytes through
-collect_evidences() to generate_uefi_log_evidence(), falling back
-to the path-based open for backwards compatibility.
-
-This also avoids issues with kernel seq_file seek semantics on
-securityfs, where seek(0) + re-read on an existing fd may not
-return the same content.
+generate_uefi_log_evidence() re-opened the securityfs event log
+by path, failing with PermissionDenied after run_as drops
+privileges. Cache the raw bytes in PrivilegedResources at startup
+and pass them through collect_evidences(). The UEFI event log
+only contains boot-time events (up to ExitBootServices) so the
+cache is always valid.
 
 Signed-off-by: phaer <phaer@phaer.org>
 ---
- .../src/privileged_resources.rs               | 36 +++++++++++++++++++
+ .../src/privileged_resources.rs               | 32 +++++++++++++++++++
  keylime-push-model-agent/src/struct_filler.rs |  1 +
- keylime/src/context_info.rs                   | 19 +++++++---
- 3 files changed, 52 insertions(+), 4 deletions(-)
+ keylime/src/context_info.rs                   | 14 +++++---
+ 3 files changed, 43 insertions(+), 4 deletions(-)
 
 diff --git a/keylime-push-model-agent/src/privileged_resources.rs b/keylime-push-model-agent/src/privileged_resources.rs
-index d938391..b310173 100644
+index d938391..257d62b 100644
 --- a/keylime-push-model-agent/src/privileged_resources.rs
 +++ b/keylime-push-model-agent/src/privileged_resources.rs
-@@ -49,6 +49,15 @@ pub struct PrivilegedResources {
+@@ -48,7 +48,16 @@ pub struct PrivilegedResources {
+     /// This file requires root access to `/sys/kernel/security/tpm0/`.
      /// If the file doesn't exist or can't be opened, this will be None
      /// and measured boot attestation will be unavailable.
++    /// Still used by `UefiLogHandler::from_file()` for event parsing.
      pub measuredboot_ml_file: Option<Mutex<File>>,
 +
-+    /// Cached raw bytes of the measured boot (UEFI) event log.
-+    ///
-+    /// Read once with root privileges at startup.  The UEFI boot event
-+    /// log is static (only contains firmware/bootloader events), so a
-+    /// one-time read is sufficient.  This avoids re-opening the
-+    /// securityfs file after privilege drop (which would fail with
-+    /// PermissionDenied) and avoids seek issues with kernel seq_file.
++    /// Cached raw bytes of the measured boot (UEFI) event log, read
++    /// once at startup with root privileges.  The UEFI event log only
++    /// contains boot-time events (up to ExitBootServices) so the
++    /// cached content is always valid for this boot.  Used by
++    /// `generate_uefi_log_evidence()` to avoid re-opening the
++    /// securityfs file after privilege drop.
 +    pub measuredboot_ml_bytes: Option<Vec<u8>>,
  }
  
  impl PrivilegedResources {
-@@ -135,10 +144,37 @@ impl PrivilegedResources {
+@@ -135,10 +144,33 @@ impl PrivilegedResources {
              None
          };
  
-+        // Cache the UEFI event log bytes while we still have root
-+        // privileges.  The boot event log is static, so a one-time
-+        // read is sufficient.  This avoids re-opening the securityfs
-+        // file after privilege drop and avoids seek issues with
-+        // kernel seq_file on subsequent reads.
++        // Cache the UEFI event log bytes while still running as root.
 +        let measuredboot_ml_bytes = if measuredboot_ml_path.exists() {
 +            match std::fs::read(measuredboot_ml_path) {
 +                Ok(bytes) => {
@@ -101,10 +85,10 @@ index fce5cb3..5f52c7b 100644
              .await
          {
 diff --git a/keylime/src/context_info.rs b/keylime/src/context_info.rs
-index fd69d1d..c130d3c 100644
+index fd69d1d..a76340c 100644
 --- a/keylime/src/context_info.rs
 +++ b/keylime/src/context_info.rs
-@@ -682,10 +682,17 @@ impl ContextInfo {
+@@ -682,10 +682,12 @@ impl ContextInfo {
      pub async fn generate_uefi_log_evidence(
          &mut self,
          log_path: Option<&str>,
@@ -114,18 +98,13 @@ index fd69d1d..c130d3c 100644
 -            // Read raw bytes directly without parsing/reconstructing
 -            // to match pull-model agent behavior
 +        let content = if let Some(bytes) = cached_uefi_bytes {
-+            // Use bytes cached at startup with root privileges.
-+            // The UEFI boot event log is static, so the cached
-+            // content is always current for this boot.
 +            use base64::Engine;
 +            base64::engine::general_purpose::STANDARD.encode(bytes)
 +        } else if let Some(uefi_log_path) = log_path {
-+            // Fallback: open the file by path (works when running
-+            // as root or when the file is readable).
              UefiLogHandler::read_raw_base64(uefi_log_path).map_err(|e| {
                  ContextInfoError::Keylime(format!(
                      "Failed to read UEFI log: {e:?}",
-@@ -706,6 +713,7 @@ impl ContextInfo {
+@@ -706,6 +708,7 @@ impl ContextInfo {
          evidence_requests: &[EvidenceRequest],
          ima_ml: Option<&std::sync::Mutex<crate::ima::MeasurementList>>,
          ima_file: Option<&std::sync::Mutex<std::fs::File>>,
@@ -133,7 +112,7 @@ index fd69d1d..c130d3c 100644
      ) -> Result<Vec<EvidenceData>, ContextInfoError> {
          let mut evidence_results = Vec::new();
  
-@@ -747,7 +755,10 @@ impl ContextInfo {
+@@ -747,7 +750,10 @@ impl ContextInfo {
                  }
                  EvidenceRequest::UefiLog { log_path, .. } => {
                      let evidence = self

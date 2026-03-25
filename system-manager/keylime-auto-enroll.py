@@ -219,8 +219,10 @@ def enroll_agent(uuid: str, report: dict) -> bool:
     """Enroll an agent with the verifier.
 
     Uses ``--mb_refstate`` for the measured boot event log policy.
-    PCR 11 is covered by the measured boot quote (keylime includes
-    it in MEASUREDBOOT_PCRS automatically).
+    PCR 11 is included in the measured boot quote automatically
+    (via MEASUREDBOOT_PCRS).  The uki policy excludes it from
+    event log replay since systemd-pcrphase adds runtime
+    extensions, but the PCR value is still quoted and verified.
     """
     measured_boot_state = report["measured_boot_state"]
 

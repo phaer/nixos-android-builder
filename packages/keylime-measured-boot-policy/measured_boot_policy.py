@@ -1,45 +1,9 @@
 """Keylime measured boot policy for UKI (Unified Kernel Image) boot.
 
-A UKI boot chain via systemd-boot differs from the traditional
-shim/GRUB chain that keylime's built-in ``example`` policy
-expects:
-
-- PCR 4 has a single EV_EFI_BOOT_SERVICES_APPLICATION (the UKI),
-  not the shim -> GRUB -> kernel sequence.
-- PCR 8/9 have no EV_IPL events for kernel cmdline or initrd.
-  Instead, systemd-stub measures UKI PE sections (.linux,
-  .initrd, .cmdline, .osrel, .uname, .sbat) into PCR 11 as
-  EV_IPL events.
-- PCR 9 has EV_EVENT_TAG events for initrd data measured by
-  systemd-stub.
-
-This policy validates:
-
-- PCR 0: SCRTM version and firmware blob digests (pinned).
-- PCR 1: Boot variables, platform config, handoff tables
-  (accepted -- expected to vary with BIOS settings).
-- PCR 2: Boot services drivers (accepted).
-- PCR 4: The UKI application digest (pinned).
-- PCR 5: GPT table, EFI actions (accepted).
-- PCR 7: Secure Boot keys -- PK, KEK, db, dbx (pinned).
-  Authority events (accepted).
-- PCR 9: EV_EVENT_TAG from systemd-stub (accepted).
-- PCR 11: UKI PE section measurements from systemd-stub
-  (pinned).
-
-Reference state format (``measured_boot_state``)::
-
-    {
-        "scrtm_and_bios": [{
-            "scrtm": {"sha256": "0x..."},
-            "platform_firmware": [{"sha256": "0x..."}, ...]
-        }],
-        "pk": [{"SignatureOwner": "...", "SignatureData": "0x..."}],
-        "kek": [...],
-        "db": [...],
-        "dbx": [...],
-        "uki_digest": {"sha256": "0x..."}
-    }
+Registers a ``uki`` policy that validates SCRTM, firmware blobs,
+Secure Boot keys, and the UKI application digest from the UEFI
+event log.  See ``README.md`` in this directory for the full
+policy description, reference state schema, and testing instructions.
 """
 
 import re
