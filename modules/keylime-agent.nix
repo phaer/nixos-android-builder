@@ -9,6 +9,7 @@ let
   cfg = config.services.keylime-agent;
 
   keylimeAgentPkg = pkgs.callPackage ../packages/keylime-agent { };
+  keylimePkg = pkgs.callPackage ../packages/keylime { };
 
   # The Rust keylime-agent uses TOML, so string values must be quoted.
   mkValueString =
@@ -255,17 +256,19 @@ in
       description = "Keylime agent data available";
     };
 
-    # Report TPM PCR values to the auto-enrollment server so the
-    # daemon can enroll this agent with the full TPM policy.
-    # Reads the agent UUID from agent_data.json (ek_hash field),
-    # waiting for the keylime agent to write it after registration.
-    systemd.services.keylime-report-pcrs = {
-      description = "Report TPM PCRs to auto-enrollment server";
+    # Report measured boot reference state to the auto-enrollment
+    # server.  Generates the state from the UEFI event log via the
+    # measured_boot_state library and POSTs it to the enrollment
+    # endpoint.
+    systemd.services.keylime-report-measured-boot-state = {
+      description = "Report measured boot state to auto-enrollment server";
       wantedBy = [ "keylime-agent-data.target" ];
       unitConfig.ConditionPathExists = "/dev/tpm0";
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${pkgs.lib.getExe (pkgs.callPackage ../packages/pcr-policy { }).report-pcrs}";
+        ExecStart = "${pkgs.lib.getExe
+          (pkgs.callPackage ../packages/measured-boot-state { }).report-measured-boot-state
+        }";
         Restart = "on-failure";
         RestartSec = "10s";
       };

@@ -20,7 +20,7 @@ We created a modular proof‑of‑concept based on NixOS that fulfills most of t
 * **aarch64 support** could be added if needed. Only `x86_64` with `UEFI` is implemented at the moment.
 * **artifact uploads**: build artifacts are currently not automatically uploaded anywhere, but stay on the build machine.
   Integration of a Trusted Platform Module (TPM) could be useful here, to ease authentication to private repositories as well as destinations for artifact upload.
-* **measured boot & attestation**: Firmware PCRs (0–3, 7) and PCR 11 (UKI measurement) are automatically reported to the attestation server via `report-pcrs` for full-policy auto-enrollment. The keylime agent is enabled by default (using TPM EK-derived identity). Remaining work: an attestation-gated step in the unattended pipeline, network policy for attestation traffic, and replacing the `accept-all` measured boot policy with real UEFI event log validation.
+* **measured boot & attestation**: The verifier uses keylime's measured boot attestation (MBA) with a custom `uki` policy to validate the UEFI event log — covering Static Root of Trust for Measurement (SCRTM), firmware blobs, Secure Boot keys, and the UKI application digest. The `report-measured-boot-state` agent service generates the measured boot reference state from the UEFI event log and reports it for auto-enrollment.
 * **credential storage**: TPM-encrypted credentials (via `systemd-creds`) are currently bound to PCR 7 (Secure Boot policy) only, not PCR 11 (UKI). Since the Secure Boot signing keys are created specifically for this project, only images signed with our key can produce a matching PCR 7 — so the practical risk is low. Binding to PCR 11 as well would prevent a *different* image signed with the same key from decrypting credentials, at the cost of invalidating all stored credentials on every image update. A `systemd-measure sign` based approach could provide PCR 11 binding without this drawback.
 * **higher-level configuration**: Adapting the build environment to the needs of custom AOSP distributions might need extra work. Depending on the nature of those
   customizations, a good understanding of `nix` might be needed. We will ease those as far as possible, as we learn more about users customization needs.
@@ -236,9 +236,9 @@ The keylime server components are provided by the `services.keylime` NixOS modul
 
 ### Auto-Enrollment {#auto-enrollment}
 
-The auto-enrollment daemon (`services.keylime.autoEnroll`) automates agent enrollment with the verifier.  Without it, each new agent must be manually enrolled by an operator who has access to both the agent machine (to read firmware PCR values) and the attestation server (to run `keylime_tenant -c add`).
+The auto-enrollment daemon (`services.keylime.autoEnroll`) automates agent enrollment with the verifier.  Without it, each new agent must be manually enrolled by an operator who has access to both the agent machine (to read the measured boot state) and the attestation server (to run `keylime_tenant -c add`).
 
-With auto-enrollment enabled, the agent registers, reports its PCR values, and the daemon enrolls it with the full TPM policy — no manual intervention required.
+With auto-enrollment enabled, the agent registers, reports its measured boot state, and the daemon enrolls it with the full TPM policy — no manual intervention required.
 
 ~~~mermaid
 ---
@@ -258,47 +258,56 @@ graph TB
 
     subgraph agent["Agent (physical machine)"]
         keylime_agent["keylime_push_model_agent"]
-        report_pcrs["report-pcrs"]
+        report_measured_boot_state["report-measured-boot-state"]
     end
 
     keylime_agent -- "registers\n(UUID = hash_ek)" --> registrar
-    report_pcrs -- "POST /v1/report_pcrs\n(full PCR policy)" --> daemon
-    verifier -- "attests\n(TPM quote)" --> keylime_agent
+    report_measured_boot_state -- "POST /v1/report_measured_boot_state\n(measured_boot_state)" --> daemon
+    verifier -- "attests\n(TPM quote +\nevent log)" --> keylime_agent
 ~~~
 
 The daemon runs on the attestation server alongside the registrar and verifier.  It:
 
-1. Listens on an HTTPS endpoint (port 8893) for PCR reports from agents.
+1. Listens on an HTTPS endpoint (port 8893) for measured boot reports from agents.
 2. Periodically polls the registrar for registered agent UUIDs.
-3. When an agent is both registered AND has submitted its PCR report, enrolls it with the verifier using the full policy.
+3. When an agent is both registered AND has submitted its report, enrolls it with the verifier using a measured boot reference state validated by the `uki` policy.
 
-On the agent side, `report-pcrs` runs as a oneshot systemd service after the keylime agent registers.  It reads all PCR values (firmware PCRs 0–3, 7 and PCR 11) from the TPM and POSTs the policy to the daemon.
+On the agent side, `report-measured-boot-state` runs as a oneshot systemd service after the keylime agent registers.  It generates a measured boot reference state from the UEFI event log and POSTs it to the daemon.
 
 #### Trust Model
 
-Firmware PCRs are accepted on a **trust-on-first-use (TOFU)** basis: the agent self-reports its PCR values before the first attestation.  This is acceptable because:
+The measured boot reference state is accepted on a **trust-on-first-use (TOFU)** basis: the agent self-reports its event log before the first attestation.  This is acceptable because:
 
-- PCR 11 (UKI measurement) is included in the reported policy, ensuring the verifier attests the specific image booted on the agent.
-- After enrollment, the verifier validates all PCR values against the TPM quote on every attestation cycle — any false report is caught immediately.
+- After enrollment, the verifier replays the UEFI event log against the reference state and validates the TPM quote on every attestation cycle — any false report is caught immediately.
 - Once enrolled with the full policy, the agent cannot downgrade the policy — only an admin with verifier mTLS credentials can modify it.
 
-### PCR Policy
+### Attestation Policy
 
-Attestation verifies the following Platform Configuration Registers (PCRs) by default:
+The verifier uses a custom `uki` measured boot policy (in `packages/keylime-measured-boot-policy/`) tailored to the UKI boot chain (systemd-boot + Unified Kernel Image).  Rather than comparing raw PCR digests, the verifier parses the binary UEFI event log, replays digests to verify consistency with the TPM quote, and evaluates individual events against the policy.
 
-- **PCR 0** – UEFI firmware code
-- **PCR 1** – UEFI firmware configuration
-- **PCR 2** – Option ROMs / external firmware
-- **PCR 3** – Option ROM configuration
-- **PCR 7** – Secure Boot state (keys, policy, boot variables)
-- **PCR 11** – UKI components and boot phases
+The `uki` policy checks:
 
-PCRs 0–3 and 7 are firmware-dependent and can only be read from the live TPM. PCR 11 is measured by systemd at boot from the UKI components and boot phase strings.
+- **PCR 0** – SCRTM version and firmware blob digests (pinned to specific hashes)
+- **PCR 1** – Boot variables, platform config flags, handoff tables (accepted — expected to vary with BIOS settings and boot order)
+- **PCR 2** – Boot services drivers (accepted)
+- **PCR 4** – UKI application digest (pinned — a single `EV_EFI_BOOT_SERVICES_APPLICATION`, unlike shim/GRUB chains)
+- **PCR 5** – GPT partition table, EFI actions (accepted)
+- **PCR 7** – Secure Boot keys: PK, KEK, db, dbx (pinned to specific key lists)
+- **PCR 9** – `EV_EVENT_TAG` from systemd-stub (accepted)
+- **PCR 11** – UKI PE section measurements from systemd-stub (accepted in the event log; PCR 11 is also included in the TPM quote via keylime's measured boot PCR mask)
 
-Two tools are included for PCR management:
+Keylime's built-in `example` policy expects a shim → GRUB → kernel boot chain and is not compatible with UKI boots.  The custom `uki` policy was written specifically for this boot chain.
 
-- `report-pcrs` – reads firmware PCR values (0–3, 7) and PCR 11 from the TPM sysfs and sends them to the auto-enrollment service on the attestation server. Runs automatically as a oneshot service after the keylime agent registers.
-- `read-firmware-pcrs` – reads PCR values (0–3, 7, 11) from the TPM sysfs and outputs a keylime `tpm_policy` JSON. Supports `--save` to persist a baseline and `--diff` to compare against a previously saved baseline. Useful for debugging and manual inspection.
+A reference state is generated on the agent at enrollment time by `measure-boot-state`, which parses the binary UEFI event log and extracts: SCRTM and firmware blob digests, Secure Boot keys (PK, KEK, db, dbx), and the UKI application digest.
+
+Benign firmware configuration changes (e.g. boot order, BIOS settings) in PCR 1 are handled gracefully by the event log policy, while security-critical components (Secure Boot keys, UKI image) are pinned to specific known-good values.
+
+### Tools
+
+- `measure-boot-state` – parses the binary UEFI event log and outputs a measured boot reference state JSON.  Can be run manually for inspection.
+- `report-measured-boot-state` – generates a measured boot reference state from the UEFI event log and sends it to the auto-enrollment service.  Runs automatically as a oneshot service after the keylime agent registers.
+- `debug-measured-boot-state` – diagnoses attestation failures by replaying the UEFI event log, comparing PCR values against the TPM, and diffing the current reference state against an enrolled one.  Supports offline diffing of two refstate files.
+
 
 ## Credential Storage {#credential-storage}
 
@@ -508,6 +517,8 @@ flowchart TB
 **repo** – Google's tool for managing Git repositories, used extensively in Android development.
 
 **SBOM** – Software Bill of Materials. A formal inventory of all components and dependencies in a piece of software.
+
+**SCRTM** – Static Root of Trust for Measurement. The initial firmware code that begins the TPM measurement chain at boot, establishing the trust anchor for all subsequent PCR measurements.
 
 **Secure Boot** – A UEFI feature that ensures only cryptographically signed software can be booted.
 

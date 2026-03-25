@@ -97,6 +97,7 @@ in
         pkgs.coreutils
         pkgs.openssl
         pkgs.tpm2-tools
+        (pkgs.callPackage ../packages/measured-boot-state { }).measure-boot-state
       ];
 
       systemd.tmpfiles.rules = [
@@ -226,16 +227,21 @@ in
         assert agent_uuid, "Agent did not register within 30s"
         agent.log(f"Agent EK-derived UUID: {agent_uuid}")
 
-      with subtest("Agent can be added for attestation with PCR policy"):
-        tpm_policy = json.loads(
-          agent.succeed("read-firmware-pcrs")
+      with subtest("Agent can be added for attestation with measured boot policy"):
+        # Generate measured boot reference state from the UEFI event log
+        agent.succeed(
+          "measure-boot-state"
+          " -e /sys/kernel/security/tpm0/binary_bios_measurements"
+          " -o /tmp/measured-boot-state.json"
         )
+        # Copy refstate to server for enrollment
+        measured_boot_state = agent.succeed("cat /tmp/measured-boot-state.json")
+        server.succeed(f"cat > /tmp/measured-boot-state.json << 'REFSTATE_EOF'\n{measured_boot_state}\nREFSTATE_EOF")
 
-        policy = json.dumps({"7": tpm_policy["7"], "11": tpm_policy["11"]})
         server.succeed(
           f"keylime_tenant --push-model -c add -t 192.168.1.1 -u {agent_uuid}"
           " -r 127.0.0.1 -rp 8891 -v 127.0.0.1 -vp 8881"
-          f" --tpm_policy '{policy}'"
+          " --mb_refstate /tmp/measured-boot-state.json"
         )
 
       with subtest("Verifier attests the agent (reaches Get Quote state)"):
@@ -244,5 +250,35 @@ in
           " && grep -qE '\"operational_state\": \"(Get Quote|Provide V)\"' /tmp/cvstatus.out",
           timeout=60,
         )
+
+      with subtest("Tampered refstate is rejected (wrong UKI digest)"):
+        # Tamper the UKI digest in the refstate
+        tampered_state = json.loads(measured_boot_state)
+        tampered_state["uki_digest"] = {"sha256": "0x" + "00" * 32}
+        tampered_json = json.dumps(tampered_state)
+        server.succeed(f"cat > /tmp/tampered-state.json << 'TAMPERED_EOF'\n{tampered_json}\nTAMPERED_EOF")
+
+        # Delete and re-add with the tampered refstate.  The agent
+        # keeps running — its UEFI event log bytes are cached in
+        # memory, so it can still provide attestation evidence after
+        # the delete.
+        server.succeed(
+          f"keylime_tenant -c delete -u {agent_uuid}"
+          " -v 127.0.0.1 -vp 8881"
+        )
+        server.succeed(
+          f"keylime_tenant --push-model -c add -t 192.168.1.1 -u {agent_uuid}"
+          " -r 127.0.0.1 -rp 8891 -v 127.0.0.1 -vp 8881"
+          " --mb_refstate /tmp/tampered-state.json"
+        )
+
+        # The verifier evaluates the agent's evidence against the
+        # tampered refstate and rejects it due to UKI digest mismatch.
+        server.wait_until_succeeds(
+          "journalctl -u keylime-verifier --no-pager"
+          " | grep -q 'failed verification due to policy violations'",
+          timeout=90,
+        )
+        server.log("Tampered UKI digest correctly rejected")
     '';
 }

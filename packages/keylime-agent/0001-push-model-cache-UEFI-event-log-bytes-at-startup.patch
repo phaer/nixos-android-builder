@@ -1,0 +1,129 @@
+From 0694e580d21c15b10f454dd48ab8adeeccd6bdaa Mon Sep 17 00:00:00 2001
+From: phaer <phaer@phaer.org>
+Date: Wed, 25 Mar 2026 17:52:27 +0100
+Subject: [PATCH] push-model: cache UEFI event log bytes at startup
+
+generate_uefi_log_evidence() re-opened the securityfs event log
+by path, failing with PermissionDenied after run_as drops
+privileges. Cache the raw bytes in PrivilegedResources at startup
+and pass them through collect_evidences(). The UEFI event log
+only contains boot-time events (up to ExitBootServices) so the
+cache is always valid.
+
+Signed-off-by: phaer <phaer@phaer.org>
+---
+ .../src/privileged_resources.rs               | 32 +++++++++++++++++++
+ keylime-push-model-agent/src/struct_filler.rs |  1 +
+ keylime/src/context_info.rs                   | 14 +++++---
+ 3 files changed, 43 insertions(+), 4 deletions(-)
+
+diff --git a/keylime-push-model-agent/src/privileged_resources.rs b/keylime-push-model-agent/src/privileged_resources.rs
+index d938391..257d62b 100644
+--- a/keylime-push-model-agent/src/privileged_resources.rs
++++ b/keylime-push-model-agent/src/privileged_resources.rs
+@@ -48,7 +48,16 @@ pub struct PrivilegedResources {
+     /// This file requires root access to `/sys/kernel/security/tpm0/`.
+     /// If the file doesn't exist or can't be opened, this will be None
+     /// and measured boot attestation will be unavailable.
++    /// Still used by `UefiLogHandler::from_file()` for event parsing.
+     pub measuredboot_ml_file: Option<Mutex<File>>,
++
++    /// Cached raw bytes of the measured boot (UEFI) event log, read
++    /// once at startup with root privileges.  The UEFI event log only
++    /// contains boot-time events (up to ExitBootServices) so the
++    /// cached content is always valid for this boot.  Used by
++    /// `generate_uefi_log_evidence()` to avoid re-opening the
++    /// securityfs file after privilege drop.
++    pub measuredboot_ml_bytes: Option<Vec<u8>>,
+ }
+ 
+ impl PrivilegedResources {
+@@ -135,10 +144,33 @@ impl PrivilegedResources {
+             None
+         };
+ 
++        // Cache the UEFI event log bytes while still running as root.
++        let measuredboot_ml_bytes = if measuredboot_ml_path.exists() {
++            match std::fs::read(measuredboot_ml_path) {
++                Ok(bytes) => {
++                    info!(
++                        "Cached measured boot log ({} bytes)",
++                        bytes.len()
++                    );
++                    Some(bytes)
++                }
++                Err(e) => {
++                    warn!(
++                        "Failed to read measured boot log: {}",
++                        e
++                    );
++                    None
++                }
++            }
++        } else {
++            None
++        };
++
+         Ok(PrivilegedResources {
+             ima_ml_file,
+             ima_ml: Mutex::new(MeasurementList::new()),
+             measuredboot_ml_file,
++            measuredboot_ml_bytes,
+         })
+     }
+ }
+diff --git a/keylime-push-model-agent/src/struct_filler.rs b/keylime-push-model-agent/src/struct_filler.rs
+index fce5cb3..5f52c7b 100644
+--- a/keylime-push-model-agent/src/struct_filler.rs
++++ b/keylime-push-model-agent/src/struct_filler.rs
+@@ -312,6 +312,7 @@ impl<'a> FillerFromHardware<'a> {
+                 &evidence_requests,
+                 Some(&self.privileged_resources.ima_ml),
+                 self.privileged_resources.ima_ml_file.as_ref(),
++                self.privileged_resources.measuredboot_ml_bytes.as_deref(),
+             )
+             .await
+         {
+diff --git a/keylime/src/context_info.rs b/keylime/src/context_info.rs
+index fd69d1d..a76340c 100644
+--- a/keylime/src/context_info.rs
++++ b/keylime/src/context_info.rs
+@@ -682,10 +682,12 @@ impl ContextInfo {
+     pub async fn generate_uefi_log_evidence(
+         &mut self,
+         log_path: Option<&str>,
++        cached_uefi_bytes: Option<&[u8]>,
+     ) -> Result<EvidenceData, ContextInfoError> {
+-        let content = if let Some(uefi_log_path) = log_path {
+-            // Read raw bytes directly without parsing/reconstructing
+-            // to match pull-model agent behavior
++        let content = if let Some(bytes) = cached_uefi_bytes {
++            use base64::Engine;
++            base64::engine::general_purpose::STANDARD.encode(bytes)
++        } else if let Some(uefi_log_path) = log_path {
+             UefiLogHandler::read_raw_base64(uefi_log_path).map_err(|e| {
+                 ContextInfoError::Keylime(format!(
+                     "Failed to read UEFI log: {e:?}",
+@@ -706,6 +708,7 @@ impl ContextInfo {
+         evidence_requests: &[EvidenceRequest],
+         ima_ml: Option<&std::sync::Mutex<crate::ima::MeasurementList>>,
+         ima_file: Option<&std::sync::Mutex<std::fs::File>>,
++        cached_uefi_bytes: Option<&[u8]>,
+     ) -> Result<Vec<EvidenceData>, ContextInfoError> {
+         let mut evidence_results = Vec::new();
+ 
+@@ -747,7 +750,10 @@ impl ContextInfo {
+                 }
+                 EvidenceRequest::UefiLog { log_path, .. } => {
+                     let evidence = self
+-                        .generate_uefi_log_evidence(log_path.as_deref())
++                        .generate_uefi_log_evidence(
++                            log_path.as_deref(),
++                            cached_uefi_bytes,
++                        )
+                         .await?;
+                     evidence_results.push(evidence);
+                 }
+-- 
+2.53.0
+

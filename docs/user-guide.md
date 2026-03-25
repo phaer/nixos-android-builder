@@ -197,10 +197,10 @@ sequenceDiagram
 
     A->>A: Boot — agent starts
     A->>S: Agent registers (EK-derived UUID)
-    A->>S: report-pcrs POSTs full PCR policy
+    A->>S: report-measured-boot-state POSTs measured boot reference state
 
     loop Every poll interval
-        S->>S: Daemon matches registrar<br/>entries with PCR reports
+        S->>S: Daemon matches registrar<br/>entries with measured boot reports
     end
 
     S->>S: keylime_tenant -c add<br/>(PCRs 0,1,2,3,7,11)
@@ -221,10 +221,10 @@ Configuration options live under `services.keylime.autoEnroll`:
 | Option           | Default      | Description                                        |
 |------------------|--------------|----------------------------------------------------|
 | `enable`         | `false`      | Enable the auto-enrollment daemon.                 |
-| `enrollPort`     | `8893`       | HTTPS port for the PCR report endpoint.            |
+| `enrollPort`     | `8893`       | HTTPS port for the measured boot report endpoint.            |
 | `pollInterval`   | `10`         | Seconds between polling the registrar.             |
 
-When updating an image on a machine whose TPM EK hasn't changed (same UUID), the old enrollment must be deleted before the agent can re-enroll with the new PCR policy:
+When updating an image on a machine whose TPM EK hasn't changed (same UUID), the old enrollment must be deleted before the agent can re-enroll with the new measured boot policy:
 
 ```shell-session
 $ keylime_tenant -c delete -u <agent-uuid> -v <verifier-ip> -vp 8881
@@ -447,15 +447,49 @@ $ cat /sys/class/tpm/tpm0/pcr-sha256/7
 abc123...
 ```
 
-On boot, the `report-pcrs` service automatically reads firmware PCRs (0–3, 7) and PCR 11 from the TPM, then sends them to the auto-enrollment service on the attestation server. No manual PCR inspection is normally needed.
+On boot, the `report-measured-boot-state` service automatically generates a measured boot reference state from the UEFI event log and sends it to the auto-enrollment service on the attestation server. The verifier uses keylime's measured boot attestation with a custom `uki` policy to validate the event log — pinning Secure Boot keys, firmware, and the UKI application digest while accepting expected variability in BIOS settings and boot order. No manual PCR inspection is normally needed.
 
-For debugging, `read-firmware-pcrs` is also available to inspect PCR values interactively:
+For debugging, two tools are available:
+
+`measure-boot-state` generates the measured boot reference state from the UEFI event log — the same data sent to the verifier during enrollment. This is useful to inspect what the policy will validate:
 
 ```shell-session
-$ read-firmware-pcrs
-{"0": ["abc123..."], "1": ["def456..."], "2": ["..."], "3": ["..."], "7": ["..."]}
-$ read-firmware-pcrs
-{"0": ["..."], "1": ["..."], "2": ["..."], "3": ["..."], "7": ["..."], "11": ["..."]}
+$ measure-boot-state -o /tmp/refstate.json
+$ cat /tmp/refstate.json | python3 -m json.tool
+{
+  "scrtm_and_bios": [...],
+  "pk": [...],
+  "kek": [...],
+  "db": [...],
+  "dbx": [],
+  "uki_digest": {"sha256": "0x..."}
+}
+```
+
+`debug-measured-boot-state` diagnoses attestation failures by replaying the event log and comparing against the TPM and an enrolled reference state:
+
+```shell-session
+$ debug-measured-boot-state diagnose --refstate enrolled.json
+PCR replay vs TPM:
+  PCR  0: ✓ match
+  PCR  4: ✗ MISMATCH
+    replayed: a1b2c3...
+    tpm:      d4e5f6...
+  PCR  7: ✓ match
+
+Refstate diff:
+  uki_digest: CHANGED
+    old: 0xabc123...
+    new: 0xdef456...
+  scrtm: unchanged
+  pk: unchanged
+  ...
+```
+
+To compare two refstate files offline:
+
+```shell-session
+$ debug-measured-boot-state diff old-refstate.json new-refstate.json
 ```
 
 ## Credential Storage {#credential-storage}
@@ -683,7 +717,7 @@ There's additional VM tests in the repository that cover the disk installer, key
 $ nix build -L .#checks.x86_64-linux.installer .#checks.x86_64-linux.installerInteractive .#checks.x86_64-linux.keylime .#checks.x86_64-linux.keylime-auto-enroll
 ```
 
-The `keylime-auto-enroll` test exercises the full auto-enrollment flow: agent registration, PCR reporting, daemon-driven enrollment with the full PCR policy (0, 1, 2, 3, 7, 11), and attestation persistence across 5 reboots.
+The `keylime-auto-enroll` test exercises the full auto-enrollment flow: agent registration, measured boot reporting, daemon-driven enrollment with the measured boot reference state (0, 1, 2, 3, 7, 11), and attestation persistence across 5 reboots.
 
 # Usage in a Virtual Machine {#virtual-machine}
 
@@ -786,9 +820,9 @@ This is expected behavior - the `/var/lib/build` partition is ephemeral by desig
 
 **Problem: Agent registers but is not enrolled**
 
-Check the daemon logs (`journalctl -u keylime-auto-enroll`) for enrollment errors.  The daemon waits for both registration AND a PCR report before enrolling.  Common causes:
+Check the daemon logs (`journalctl -u keylime-auto-enroll`) for enrollment errors.  The daemon waits for both registration AND a measured boot report before enrolling.  Common causes:
 
-- The `report-pcrs` service failed — check agent logs (`journalctl -u keylime-report-pcrs`).
+- The `report-measured-boot-state` service failed — check agent logs (`journalctl -u keylime-report-measured-boot-state`).
 - mTLS certificate issues (expired, wrong CA).
 - Port 8893 not reachable from the agent.
 

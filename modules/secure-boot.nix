@@ -5,7 +5,7 @@
   ...
 }:
 let
-  pcrPolicy = pkgs.callPackage ../packages/pcr-policy { };
+  measuredBoot = pkgs.callPackage ../packages/measured-boot-state { };
 
   enroll-secure-boot = pkgs.writeShellScriptBin "enroll-secure-boot" ''
     set -xeu
@@ -53,8 +53,9 @@ in
     pkgs.efitools
     pkgs.tpm2-tools
     enroll-secure-boot
-    pcrPolicy.report-pcrs
-    pcrPolicy.read-firmware-pcrs
+    measuredBoot.measure-boot-state
+    measuredBoot.report-measured-boot-state
+    measuredBoot.debug-measured-boot-state
   ];
 
   # Enable PCR phase measurements (systemd-pcrextend extends PCR 11 with boot

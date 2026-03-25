@@ -4,6 +4,8 @@
 { lib, pkgs }:
 
 let
+  measuredBootPolicy = pkgs.callPackage ../../packages/keylime-measured-boot-policy { };
+
   # Keylime's config.getlist() uses ast.literal_eval and expects Python list
   # literals (e.g. '["value"]') for certain options.
   mkValueString =
@@ -142,9 +144,9 @@ rec {
     request_timeout = "60.0";
     quote_interval = 2;
     max_upload_size = 104857600;
-    measured_boot_policy_name = "accept-all";
-    measured_boot_imports = "[]";
-    measured_boot_evaluate = "once";
+    measured_boot_policy_name = "uki";
+    measured_boot_imports = ''["measured_boot_policy"]'';
+    measured_boot_evaluate = "always";
     severity_labels = ''["info", "notice", "warning", "error", "critical", "alert", "emergency"]'';
     severity_policy = ''[{"event_id": ".*", "severity_label" : "emergency"}]'';
     ignore_tomtou_errors = false;
@@ -195,31 +197,59 @@ rec {
 
   mkLoggingConf =
     cfg:
-    toINI {
-      logging.version = "2.5";
-      loggers.keys = "root,keylime";
-      handlers.keys = "consoleHandler";
-      formatters.keys = "formatter";
-      formatter_formatter = {
-        format = "%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - %(message)s";
-        datefmt = "%Y-%m-%d %H:%M:%S";
-      };
-      logger_root = {
-        level = cfg.logLevel;
-        handlers = "consoleHandler";
-      };
-      handler_consoleHandler = {
-        class = "StreamHandler";
-        level = cfg.logLevel;
-        formatter = "formatter";
-        args = "(sys.stdout,)";
-      };
-      logger_keylime = {
-        level = cfg.logLevel;
-        qualname = "keylime";
-        handlers = "";
-      };
-    };
+    let
+      # Convert a Python logger qualname (e.g. "keylime.web") to a safe INI
+      # section identifier (e.g. "keylime_web") for fileConfig's [logger_*] sections.
+      qualNameToId = name: builtins.replaceStrings [ "." ] [ "_" ] name;
+
+      overrideNames = builtins.attrNames cfg.logLevelOverrides;
+      overrideIds = map qualNameToId overrideNames;
+
+      loggerKeys = [
+        "root"
+        "keylime"
+      ]
+      ++ overrideIds;
+
+      overrideSections = lib.listToAttrs (
+        map (name: {
+          name = "logger_${qualNameToId name}";
+          value = {
+            level = cfg.logLevelOverrides.${name};
+            qualname = name;
+            handlers = "";
+          };
+        }) overrideNames
+      );
+    in
+    toINI (
+      {
+        logging.version = "2.5";
+        loggers.keys = lib.concatStringsSep "," loggerKeys;
+        handlers.keys = "consoleHandler";
+        formatters.keys = "formatter";
+        formatter_formatter = {
+          format = "%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - %(message)s";
+          datefmt = "%Y-%m-%d %H:%M:%S";
+        };
+        logger_root = {
+          level = cfg.logLevel;
+          handlers = "consoleHandler";
+        };
+        handler_consoleHandler = {
+          class = "StreamHandler";
+          level = cfg.logLevel;
+          formatter = "formatter";
+          args = "(sys.stdout,)";
+        };
+        logger_keylime = {
+          level = cfg.logLevel;
+          qualname = "keylime";
+          handlers = "";
+        };
+      }
+      // overrideSections
+    );
 
   mkRegistrarConf =
     cfg:
@@ -262,6 +292,42 @@ rec {
       ];
       default = "INFO";
       description = "Log level for keylime services.";
+    };
+
+    logLevelOverrides = lib.mkOption {
+      type = lib.types.attrsOf (
+        lib.types.enum [
+          "DEBUG"
+          "INFO"
+          "WARNING"
+          "ERROR"
+          "CRITICAL"
+        ]
+      );
+      default = {
+        "keylime.web" = "WARNING";
+        "keylime.authorization.manager" = "WARNING";
+      };
+      description = ''
+        Per-logger log level overrides. Keys are Python logger qualnames
+        (e.g. `keylime.web`), values are log levels.
+
+        By default, the noisy `keylime.web` and
+        `keylime.authorization.manager` loggers are set to WARNING to
+        suppress routine per-request INFO messages. Set to `{ }` to
+        restore the previous behaviour.
+      '';
+    };
+
+    measuredBootPolicyPath = lib.mkOption {
+      type = lib.types.path;
+      default = measuredBootPolicy.policyPath;
+      description = ''
+        Directory containing the measured boot policy Python module.
+        Added to the verifier's PYTHONPATH. The module must register
+        a policy name matching `measured_boot_policy_name` in
+        verifier.conf.
+      '';
     };
 
     registrar = {
@@ -333,6 +399,7 @@ rec {
         wants = [ "network-online.target" ];
         requires = extraAfter.verifier or [ ];
         inherit wantedBy;
+        environment.PYTHONPATH = "${cfg.measuredBootPolicyPath}";
         serviceConfig = commonServiceConfig // {
           ExecStart = "${cfg.package}/bin/keylime_verifier";
         };

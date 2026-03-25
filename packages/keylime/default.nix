@@ -4,6 +4,7 @@
   fetchFromGitHub,
   gnupg,
   tpm2-tools,
+  efivar,
 }:
 let
   version = "7.14.1";
@@ -51,6 +52,22 @@ python3Packages.buildPythonApplication {
       gnupg
       tpm2-tools
     ]}"
+    # efivar is needed by keylime for UEFI event log parsing
+    "--prefix"
+    "LD_LIBRARY_PATH"
+    ":"
+    "${lib.getLib efivar}/lib"
+  ];
+
+  patches = [
+    # Check tpm2_eventlog exit code instead of stderr (benign warnings
+    # from UKI EV_IPL events broke all measured boot attestation).
+    ./0001-elparsing-check-tpm2_eventlog-exit-code-instead-of-s.patch
+    # Use the policy's get_relevant_pcrs() for event log PCR replay
+    # (PCR 11 has runtime extensions from systemd-pcrphase).
+    ./0002-tpm-use-policy-s-relevant-PCRs-for-event-log-verific.patch
+    # Bypass ORM cache for uefi_ref_state.
+    ./0003-tpm_engine-bypass-ORM-cache-for-uefi_ref_state.patch
   ];
 
   doCheck = false;
