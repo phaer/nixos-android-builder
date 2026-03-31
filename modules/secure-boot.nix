@@ -30,13 +30,13 @@ let
     sb_status="$(bootctl 2>/dev/null \
     | awk '/Secure Boot:/ {print $3 " " $4}')"
 
-    if [ "$sb_status" = "disabled (setup)" ]
+    if [ "$sb_status" = "disabled (setup)" ] || [ "$sb_status" = "disabled (audit)" ]
     then
       echo "Secure Boot in Setup Mode, enrolling" | systemd-cat -p info
       ${lib.getExe enroll-secure-boot}
       echo "enrolled. Rebooting..." | systemd-cat -p info
       systemctl --no-block reboot
-    elif [ "$sb_status" = "enabled (user)" ]
+    elif [ "$sb_status" = "enabled (user)" ] || [ "$sb_status" = "enabled (deployed)" ]
     then
       echo "Secure Boot active" | systemd-cat -p info
     else
