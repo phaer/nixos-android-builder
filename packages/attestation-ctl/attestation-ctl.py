@@ -119,6 +119,25 @@ def short_uuid(uuid):
     return uuid[:12] + "…"
 
 
+def _format_last_success(results):
+    """Format the last successful attestation as a
+    relative time string, or return None."""
+    ts = results.get("last_successful_attestation")
+    if not ts:
+        return None
+    import time
+    secs = int(time.time() - ts)
+    if secs < 0:
+        return "just now"
+    if secs < 60:
+        return f"{secs}s ago"
+    if secs < 3600:
+        return f"{secs // 60}m ago"
+    if secs < 86400:
+        return f"{secs // 3600}h ago"
+    return f"{secs // 86400}d ago"
+
+
 def cmd_status(args):
     server, ctx = load_config(args)
 
@@ -130,24 +149,39 @@ def cmd_status(args):
         print("No agents found.")
         return
 
-    print(f"{'UUID':<66} {'REGISTRAR':>10} {'VERIFIER':>10} {'STATUS':>10}")
-    print("─" * 100)
+    print(
+        f"{'UUID':<66} {'REGISTRAR':>10}"
+        f" {'VERIFIER':>10} {'STATUS':>10}"
+        f"  {'LAST OK':>10}  {'#':>4}"
+    )
+    print("─" * 120)
 
     for uuid in all_uuids:
         in_reg = "✓" if uuid in reg_uuids else "—"
         in_ver = "✓" if uuid in ver_uuids else "—"
         status = "—"
+        last_ok = "—"
+        count = "—"
 
         if uuid in ver_uuids:
             info = get_verifier_agent(server, ctx, uuid)
             if info:
                 r = info.get("results", {})
+                last_ok = (
+                    _format_last_success(r) or "never"
+                )
+                c = r.get("attestation_count")
+                count = str(c) if c is not None else "—"
                 status = r.get(
                     "attestation_status",
                     r.get("operational_state", "—"),
                 )
 
-        print(f"{uuid:<66} {in_reg:>10} {in_ver:>10} {status:>10}")
+        print(
+            f"{uuid:<66} {in_reg:>10}"
+            f" {in_ver:>10} {status:>10}"
+            f"  {last_ok:>10}  {count:>4}"
+        )
 
     print()
     print(
