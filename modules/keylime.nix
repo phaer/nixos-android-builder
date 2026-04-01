@@ -2,16 +2,17 @@
   config,
   lib,
   pkgs,
+  customPackages,
   ...
 }:
 
 let
   cfg = config.services.keylime;
   shared = import ./lib/keylime-shared.nix { inherit lib pkgs; };
-  keylimePkg = pkgs.callPackage ../packages/keylime { };
+  inherit (customPackages) keylime;
 in
 {
-  options.services.keylime = shared.mkOptions keylimePkg;
+  options.services.keylime = shared.mkOptions keylime;
 
   config = lib.mkIf cfg.enable {
     security.tpm2 = {

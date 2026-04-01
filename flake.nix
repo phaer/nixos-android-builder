@@ -21,6 +21,9 @@
       pkgs = nixpkgs.legacyPackages.${system};
       lib = nixpkgs.lib;
 
+      customPackages = import ./packages { inherit pkgs; };
+      inherit (customPackages) tpm2-tools keylime keylime-agent measuredBoot attestation-ctl secureBootScripts diskInstaller;
+
       nixosModules = lib.pipe (builtins.readDir ./modules) [
         (lib.filterAttrs (n: v: (lib.hasSuffix ".nix" n) && v == "regular"))
         (lib.mapAttrs' (
@@ -51,6 +54,7 @@
       nixos = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
         imports = imageModules;
+        _module.args = { inherit customPackages; };
       };
       run-vm = nixos.config.system.build.vmWithWritableDisk;
       image = nixos.config.system.build.finalImage;
@@ -68,20 +72,13 @@
       installer = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
         imports = installerModules;
+        _module.args = { inherit customPackages; };
       };
       installer-image = installer.config.system.build.image;
-
-      secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
-      diskInstaller = pkgs.callPackage ./packages/disk-installer { };
 
       docs = pkgs.callPackage ./packages/docs {
         inherit self nixos;
       };
-
-      keylime = pkgs.callPackage ./packages/keylime { };
-      keylime-agent = pkgs.callPackage ./packages/keylime-agent { };
-      measuredBoot = pkgs.callPackage ./packages/measured-boot-state { };
-      attestation-ctl = pkgs.callPackage ./packages/attestation-ctl { };
 
     in
     {
@@ -139,6 +136,7 @@
       checks.${system} = import ./tests/default.nix {
         inherit
           pkgs
+          customPackages
           installerModules
           imageModules
           nixos

@@ -2,14 +2,14 @@
   config,
   lib,
   pkgs,
+  customPackages,
   ...
 }:
 
 let
   cfg = config.services.keylime-agent;
 
-  keylimeAgentPkg = pkgs.callPackage ../packages/keylime-agent { };
-  keylimePkg = pkgs.callPackage ../packages/keylime { };
+  inherit (customPackages) tpm2-tools measuredBoot keylime-agent;
 
   # The Rust keylime-agent uses TOML, so string values must be quoted.
   mkValueString =
@@ -160,7 +160,7 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = keylimeAgentPkg;
+      default = keylime-agent;
       description = "The keylime-agent (Rust) package to use.";
     };
 
@@ -267,7 +267,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         ExecStart = "${pkgs.lib.getExe
-          (pkgs.callPackage ../packages/measured-boot-state { }).report-measured-boot-state
+          measuredBoot.report-measured-boot-state
         }";
         Restart = "on-failure";
         RestartSec = "10s";

@@ -2,12 +2,14 @@
   keylimeModule,
   keylimeAgentModule,
   keylimeAgentPackage,
+  customPackages,
   imageModules,
   lib,
   pkgs,
   ...
 }:
 let
+  inherit (customPackages) tpm2-tools measuredBoot;
   # TLS certificate paths (populated by test script before services start)
   tlsDir = "/var/lib/keylime/tls";
   caCert = "${tlsDir}/ca-cert.pem";
@@ -24,12 +26,13 @@ in
     { pkgs, ... }:
     {
       imports = [ keylimeModule ];
+      _module.args = { inherit customPackages; };
 
       virtualisation.tpm.enable = true;
 
       environment.systemPackages = [
         pkgs.openssl
-        pkgs.tpm2-tools
+        tpm2-tools
       ];
 
       services.keylime = {
@@ -78,6 +81,7 @@ in
     { config, lib, ... }:
     {
       imports = imageModules ++ [ keylimeAgentModule ];
+      _module.args = { inherit customPackages; };
 
       # imageModules sets system.name = "android-builder"; restore the node name
       # so the test driver exposes it as `agent`, not `android_builder`
@@ -96,8 +100,8 @@ in
       environment.systemPackages = [
         pkgs.coreutils
         pkgs.openssl
-        pkgs.tpm2-tools
-        (pkgs.callPackage ../packages/measured-boot-state { }).measure-boot-state
+        tpm2-tools
+        measuredBoot.measure-boot-state
       ];
 
       systemd.tmpfiles.rules = [

@@ -2,10 +2,11 @@
   config,
   pkgs,
   lib,
+  customPackages,
   ...
 }:
 let
-  measuredBoot = pkgs.callPackage ../packages/measured-boot-state { };
+  inherit (customPackages) tpm2-tools measuredBoot;
 
   enroll-secure-boot = pkgs.writeShellScriptBin "enroll-secure-boot" ''
     set -xeu
@@ -51,7 +52,7 @@ in
 {
   environment.systemPackages = [
     pkgs.efitools
-    pkgs.tpm2-tools
+    tpm2-tools
     enroll-secure-boot
     measuredBoot.measure-boot-state
     measuredBoot.report-measured-boot-state

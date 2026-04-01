@@ -1,5 +1,6 @@
 {
   pkgs,
+  customPackages,
   installerModules,
   imageModules,
   nixos,
@@ -59,6 +60,7 @@ in
       noKeylimeAgent
       {
         _module.args = {
+          inherit customPackages;
           imageModules = imageModules;
         };
       }
@@ -98,6 +100,7 @@ in
         _module.args = {
           imageModules = imageModules;
           inherit
+            customPackages
             keylimeModule
             keylimeAgentModule
             keylimeAgentPackage
@@ -114,6 +117,7 @@ in
         _module.args = {
           imageModules = imageModules;
           inherit
+            customPackages
             keylimeModule
             keylimeAgentModule
             keylimeAgentPackage

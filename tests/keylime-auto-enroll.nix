@@ -7,12 +7,14 @@
   keylimeModule,
   keylimeAgentModule,
   keylimeAgentPackage,
+  customPackages,
   imageModules,
   lib,
   pkgs,
   ...
 }:
 let
+  inherit (customPackages) tpm2-tools measuredBoot;
   tlsDir = "/var/lib/keylime/tls";
   caCert = "${tlsDir}/ca-cert.pem";
   caKey = "${tlsDir}/ca-key.pem";
@@ -29,7 +31,6 @@ let
     ];
   } (builtins.readFile ../system-manager/keylime-auto-enroll.py);
 
-  measuredBoot = pkgs.callPackage ../packages/measured-boot-state { };
 in
 {
   name = "keylime-auto-enroll";
@@ -38,6 +39,7 @@ in
     { pkgs, ... }:
     {
       imports = [ keylimeModule ];
+      _module.args = { inherit customPackages; };
 
       virtualisation.tpm.enable = true;
 
@@ -45,7 +47,7 @@ in
 
       environment.systemPackages = [
         pkgs.openssl
-        pkgs.tpm2-tools
+        tpm2-tools
         pkgs.curl
       ];
 
@@ -95,6 +97,7 @@ in
     { config, lib, ... }:
     {
       imports = imageModules ++ [ keylimeAgentModule ];
+      _module.args = { inherit customPackages; };
 
       system.name = lib.mkForce "agent";
 
@@ -110,10 +113,10 @@ in
       environment.systemPackages = [
         pkgs.coreutils
         pkgs.openssl
-        pkgs.tpm2-tools
+        tpm2-tools
         pkgs.curl
         measuredBoot.report-measured-boot-state
-        (pkgs.callPackage ../packages/measured-boot-state { }).measure-boot-state
+        measuredBoot.measure-boot-state
       ];
 
       systemd.tmpfiles.rules = [
