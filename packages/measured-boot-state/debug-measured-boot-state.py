@@ -27,9 +27,11 @@ from pathlib import Path
 from measured_boot_state import (
     UEFI_EVENTLOG,
     TPM_SYSFS,
+    USERSPACE_TPM_LOG,
     create_refstate,
     diff_refstates,
     parse_eventlog,
+    parse_userspace_log,
     read_tpm_pcrs,
     replay_pcrs,
 )
@@ -260,8 +262,19 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
 
     exit_code = 0
 
+    # Parse systemd's userspace TPM measurement log
+    # (runtime PCR extensions not in the UEFI event log)
+    userspace_events = parse_userspace_log(
+        args.userspace_log,
+    )
+    if userspace_events:
+        print(
+            f"Loaded {len(userspace_events)} userspace"
+            f" TPM event(s) from {args.userspace_log}",
+        )
+
     # PCR replay vs TPM
-    replayed = replay_pcrs(events)
+    replayed = replay_pcrs(events, userspace_events)
     tpm = read_tpm_pcrs(args.tpm_sysfs)
     if tpm:
         pcr_ok = print_pcr_comparison(replayed, tpm)
@@ -358,6 +371,14 @@ def main() -> None:
         default=TPM_SYSFS,
         help=f"TPM PCR sysfs path (default: {TPM_SYSFS})",
     )
+    diag.add_argument(
+        "--userspace-log",
+        default=USERSPACE_TPM_LOG,
+        help=(
+            "systemd userspace TPM measurement log"
+            f" (default: {USERSPACE_TPM_LOG})"
+        ),
+    )
 
     # Diff mode
     df = sub.add_parser(
@@ -378,6 +399,7 @@ def main() -> None:
         args.eventlog = UEFI_EVENTLOG
         args.refstate = None
         args.tpm_sysfs = TPM_SYSFS
+        args.userspace_log = USERSPACE_TPM_LOG
         sys.exit(cmd_diagnose(args))
 
 

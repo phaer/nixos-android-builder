@@ -5,6 +5,7 @@ using synthetic event data (no tpm2_eventlog required).
 """
 
 import hashlib
+import json
 import pytest
 
 from measured_boot_state import (
@@ -15,6 +16,7 @@ from measured_boot_state import (
     get_platform_firmware,
     get_scrtm,
     get_uki_digest,
+    parse_userspace_log,
     replay_pcrs,
 )
 DIGEST_AA = "aa" * 32
@@ -178,6 +180,78 @@ class TestGetKeys:
         for key in ("pk", "kek", "db", "dbx"):
             assert result[key] == []
 
+class TestParseUserspaceLog:
+    def test_parses_json_seq(self, tmp_path):
+        log = tmp_path / "tpm2-measure.log"
+        # RFC 7464: each record prefixed with 0x1E
+        record = {
+            "pcr": 9,
+            "digests": [
+                {
+                    "hashAlg": "sha256",
+                    "digest": DIGEST_AA,
+                },
+            ],
+            "content_type": "systemd",
+            "content": {
+                "string": "test",
+            },
+        }
+        log.write_text(
+            f"\x1e{json.dumps(record)}\n"
+        )
+        events = parse_userspace_log(str(log))
+        assert len(events) == 1
+        assert events[0]["PCRIndex"] == 9
+        assert events[0]["Digests"][0][
+            "AlgorithmId"
+        ] == "sha256"
+        assert events[0]["Digests"][0][
+            "Digest"
+        ] == DIGEST_AA
+
+    def test_multiple_records(self, tmp_path):
+        log = tmp_path / "tpm2-measure.log"
+        lines = ""
+        for pcr, digest in [
+            (11, DIGEST_AA), (9, DIGEST_BB),
+        ]:
+            record = {
+                "pcr": pcr,
+                "digests": [{
+                    "hashAlg": "sha256",
+                    "digest": digest,
+                }],
+            }
+            lines += f"\x1e{json.dumps(record)}\n"
+        log.write_text(lines)
+        events = parse_userspace_log(str(log))
+        assert len(events) == 2
+        assert events[0]["PCRIndex"] == 11
+        assert events[1]["PCRIndex"] == 9
+
+    def test_skips_records_without_pcr(self, tmp_path):
+        log = tmp_path / "tpm2-measure.log"
+        record = {
+            "nv_index": 42,
+            "digests": [{
+                "hashAlg": "sha256",
+                "digest": DIGEST_AA,
+            }],
+        }
+        log.write_text(
+            f"\x1e{json.dumps(record)}\n"
+        )
+        events = parse_userspace_log(str(log))
+        assert len(events) == 0
+
+    def test_missing_file(self):
+        events = parse_userspace_log(
+            "/nonexistent/path"
+        )
+        assert events == []
+
+
 class TestReplayPcrs:
     def test_single_event(self):
         events = [
@@ -217,6 +291,48 @@ class TestReplayPcrs:
 
     def test_empty(self):
         assert replay_pcrs([]) == {}
+
+    def test_with_userspace_events(self):
+        """Userspace events extend after UEFI events."""
+        uefi_events = [
+            make_event(
+                9, "EV_EVENT_TAG", DIGEST_AA,
+            ),
+        ]
+        userspace_events = [
+            {
+                "PCRIndex": 9,
+                "Digests": [{
+                    "AlgorithmId": "sha256",
+                    "Digest": DIGEST_BB,
+                }],
+            },
+        ]
+        pcrs = replay_pcrs(uefi_events, userspace_events)
+        step1 = hashlib.sha256(
+            b"\x00" * 32 + bytes.fromhex(DIGEST_AA)
+        ).digest()
+        step2 = hashlib.sha256(
+            step1 + bytes.fromhex(DIGEST_BB)
+        ).hexdigest()
+        assert pcrs[9] == step2
+
+    def test_userspace_only(self):
+        """Userspace-only events still produce values."""
+        userspace_events = [
+            {
+                "PCRIndex": 11,
+                "Digests": [{
+                    "AlgorithmId": "sha256",
+                    "Digest": DIGEST_AA,
+                }],
+            },
+        ]
+        pcrs = replay_pcrs([], userspace_events)
+        expected = hashlib.sha256(
+            b"\x00" * 32 + bytes.fromhex(DIGEST_AA)
+        ).hexdigest()
+        assert pcrs[11] == expected
 
 class TestCreateRefstate:
     def test_has_required_keys(self):

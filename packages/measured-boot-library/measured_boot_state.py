@@ -12,6 +12,7 @@ path decoding), and PyYAML.
 """
 
 import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -24,6 +25,9 @@ UEFI_EVENTLOG = (
     "/sys/kernel/security/tpm0/binary_bios_measurements"
 )
 TPM_SYSFS = "/sys/class/tpm/tpm0/pcr-sha256"
+USERSPACE_TPM_LOG = (
+    "/run/log/systemd/tpm2-measure.log"
+)
 
 
 def parse_eventlog(
@@ -197,8 +201,75 @@ def create_refstate(
 # --- PCR replay ---
 
 
+def parse_userspace_log(
+    path: str = USERSPACE_TPM_LOG,
+) -> List[Dict[str, Any]]:
+    """Parse systemd's userspace TPM measurement log.
+
+    systemd services (``systemd-pcrphase``,
+    ``systemd-tpm2-setup``, etc.) extend PCRs from
+    userspace via the TSS2 library.  These extensions are
+    NOT in the UEFI event log but are recorded in
+    RFC 7464 JSON-seq format at *path*.
+
+    Returns a list of events in the same schema used by
+    ``replay_pcrs``: each dict has ``PCRIndex`` and
+    ``Digests`` (list of ``AlgorithmId`` / ``Digest``
+    pairs).
+    """
+    log_path = Path(path)
+    if not log_path.exists():
+        return []
+
+    events: List[Dict[str, Any]] = []
+    try:
+        text = log_path.read_text()
+    except OSError as e:
+        print(
+            f"Warning: cannot read userspace TPM"
+            f" log {path}: {e}",
+            file=sys.stderr,
+        )
+        return []
+
+    for line in text.splitlines():
+        # RFC 7464: each record is preceded by 0x1E
+        line = line.lstrip("\x1e").strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        pcr = record.get("pcr")
+        if pcr is None:
+            continue
+
+        digests = []
+        for d in record.get("digests", []):
+            alg = d.get("hashAlg")
+            digest_hex = d.get("digest")
+            if alg and digest_hex:
+                digests.append({
+                    "AlgorithmId": alg,
+                    "Digest": digest_hex,
+                })
+
+        if digests:
+            events.append({
+                "PCRIndex": pcr,
+                "Digests": digests,
+            })
+
+    return events
+
+
 def replay_pcrs(
     events: List[Dict[str, Any]],
+    userspace_events: Optional[
+        List[Dict[str, Any]]
+    ] = None,
 ) -> Dict[int, str]:
     """Replay event log to compute expected PCR values.
 
@@ -206,10 +277,20 @@ def replay_pcrs(
     ``new = SHA256(old || event_digest)``, starting from
     32 zero bytes.
 
+    If *userspace_events* is provided (from
+    ``parse_userspace_log``), those extends are applied
+    after the UEFI event log events to account for
+    runtime PCR extensions by systemd services.
+
     Returns a dict mapping PCR index to final hex digest.
     """
     pcrs: Dict[int, bytes] = {}
-    for event in events:
+
+    all_events = list(events)
+    if userspace_events:
+        all_events.extend(userspace_events)
+
+    for event in all_events:
         pcr_idx = event.get("PCRIndex")
         if pcr_idx is None:
             continue
