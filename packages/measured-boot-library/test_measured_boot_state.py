@@ -354,6 +354,43 @@ class TestCreateRefstate:
         ):
             assert key in rs
 
+    def test_no_userspace_digests_by_default(self):
+        events = [
+            make_event(
+                0, "EV_S_CRTM_VERSION", DIGEST_AA,
+            ),
+            make_separator(4),
+            make_fw_app(4, DIGEST_CC),
+        ]
+        rs = create_refstate(events)
+        assert "userspace_digests" not in rs
+
+    def test_includes_userspace_digests(self):
+        events = [
+            make_event(
+                0, "EV_S_CRTM_VERSION", DIGEST_AA,
+            ),
+            make_separator(4),
+            make_fw_app(4, DIGEST_CC),
+        ]
+        userspace_events = [
+            {
+                "PCRIndex": 11,
+                "Digests": [{
+                    "AlgorithmId": "sha256",
+                    "Digest": DIGEST_BB,
+                }],
+            },
+        ]
+        rs = create_refstate(events, userspace_events)
+        assert "userspace_digests" in rs
+        assert len(rs["userspace_digests"]) == 1
+        assert rs["userspace_digests"][0] == {
+            "pcr": 11,
+            "digest": DIGEST_BB,
+            "algorithm": "sha256",
+        }
+
 class TestDiffRefstates:
     def _make_rs(self, uki="aa" * 32):
         return {

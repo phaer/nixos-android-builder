@@ -16,8 +16,10 @@ from typing import Any, Dict, Optional
 
 from measured_boot_state import (
     UEFI_EVENTLOG,
+    USERSPACE_TPM_LOG,
     create_refstate,
     parse_eventlog,
+    parse_userspace_log,
 )
 
 
@@ -39,6 +41,14 @@ def main() -> Optional[Dict[str, Any]]:
         "-o", "--output", default="-",
         help="Output file (default: stdout)",
     )
+    parser.add_argument(
+        "--userspace-log",
+        default=USERSPACE_TPM_LOG,
+        help=(
+            "systemd userspace TPM measurement log"
+            f" (default: {USERSPACE_TPM_LOG})"
+        ),
+    )
     args = parser.parse_args()
 
     log_data = parse_eventlog(args.eventlog)
@@ -50,7 +60,11 @@ def main() -> Optional[Dict[str, Any]]:
         print("No events in event log", file=sys.stderr)
         return None
 
-    refstate = create_refstate(events)
+    userspace_events = parse_userspace_log(
+        args.userspace_log,
+    )
+
+    refstate = create_refstate(events, userspace_events)
 
     if args.output == "-":
         json.dump(refstate, sys.stdout)

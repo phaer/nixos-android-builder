@@ -182,13 +182,17 @@ def get_uki_digest(
 
 def create_refstate(
     events: List[Dict[str, Any]],
+    userspace_events: Optional[
+        List[Dict[str, Any]]
+    ] = None,
 ) -> Dict[str, Any]:
     """Create a UKI measured boot reference state.
 
     Returns a dict with keys: scrtm_and_bios, pk, kek, db,
-    dbx, uki_digest.
+    dbx, uki_digest, and optionally userspace_digests
+    for systemd runtime PCR extensions.
     """
-    return {
+    refstate: Dict[str, Any] = {
         "scrtm_and_bios": [{
             **get_scrtm(events),
             **get_platform_firmware(events),
@@ -196,6 +200,19 @@ def create_refstate(
         **get_keys(events),
         "uki_digest": get_uki_digest(events),
     }
+
+    if userspace_events:
+        refstate["userspace_digests"] = [
+            {
+                "pcr": ev["PCRIndex"],
+                "digest": d["Digest"],
+                "algorithm": d["AlgorithmId"],
+            }
+            for ev in userspace_events
+            for d in ev.get("Digests", [])
+        ]
+
+    return refstate
 
 
 # --- PCR replay ---

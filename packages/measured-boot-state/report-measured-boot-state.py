@@ -26,15 +26,20 @@ from pathlib import Path
 
 from measured_boot_state import (
     UEFI_EVENTLOG,
+    USERSPACE_TPM_LOG,
     create_refstate,
     parse_eventlog,
+    parse_userspace_log,
 )
 
 ATTESTATION_SERVER = Path("/boot/attestation-server.json")
 AGENT_DATA = Path("/var/lib/keylime/agent_data.json")
 
 
-def generate_measured_boot_state(eventlog: str) -> dict:
+def generate_measured_boot_state(
+    eventlog: str,
+    userspace_log: str,
+) -> dict:
     """Generate measured boot reference state."""
     if not Path(eventlog).exists():
         print(
@@ -60,7 +65,17 @@ def generate_measured_boot_state(eventlog: str) -> dict:
         )
         sys.exit(1)
 
-    return create_refstate(events)
+    userspace_events = parse_userspace_log(
+        userspace_log,
+    )
+    if userspace_events:
+        print(
+            f"Loaded {len(userspace_events)} userspace"
+            f" TPM event(s) from {userspace_log}",
+            file=sys.stderr,
+        )
+
+    return create_refstate(events, userspace_events)
 
 
 def get_agent_uuid(timeout: int = 60) -> str:
@@ -149,9 +164,19 @@ def main() -> None:
             f" (default: {UEFI_EVENTLOG})"
         ),
     )
+    parser.add_argument(
+        "--userspace-log",
+        default=USERSPACE_TPM_LOG,
+        help=(
+            "systemd userspace TPM measurement log"
+            f" (default: {USERSPACE_TPM_LOG})"
+        ),
+    )
     args = parser.parse_args()
 
-    measured_boot_state = generate_measured_boot_state(args.eventlog)
+    measured_boot_state = generate_measured_boot_state(
+        args.eventlog, args.userspace_log,
+    )
     uuid = get_agent_uuid()
     url, ca_cert = get_enroll_config()
 
