@@ -319,8 +319,6 @@
               "systemd-cryptsetup@var_lib_keylime_crypt.service"
               "systemd-cryptsetup@var_lib_crypt.service"
             ];
-            after = [ "systemd-udev-settle.service" ];
-            requires = [ "systemd-udev-settle.service" ];
             serviceConfig.ExecStartPost = waitForDisk;
           };
 
