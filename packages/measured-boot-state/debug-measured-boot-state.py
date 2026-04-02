@@ -2,21 +2,25 @@
 
 Diagnoses why attestation fails by replaying the UEFI event log,
 comparing PCR values against the TPM, and diffing the current
-reference state against an enrolled one.
+reference state against a saved or enrolled one.
 
-Modes:
+Usage:
 
-    # Diagnose live system against enrolled refstate
-    debug-measured-boot-state --refstate enrolled.json
+    # Save current refstate (for comparison after reboot)
+    debug-measured-boot-state save
+    debug-measured-boot-state save -o /tmp/refstate.json
+
+    # Diagnose live system (auto-detects saved refstate)
+    debug-measured-boot-state
+
+    # Diagnose against a specific enrolled refstate
+    debug-measured-boot-state diagnose -r enrolled.json
 
     # Diagnose with explicit event log (offline)
-    debug-measured-boot-state --eventlog log.bin --refstate enrolled.json
+    debug-measured-boot-state diagnose -e log.bin -r enrolled.json
 
-    # Diff two refstate files
-    debug-measured-boot-state --diff old.json new.json
-
-    # Just show PCR replay vs TPM (no refstate needed)
-    debug-measured-boot-state
+    # Diff two refstate files (no live system needed)
+    debug-measured-boot-state diagnose old.json new.json
 """
 
 import argparse
@@ -38,6 +42,13 @@ from measured_boot_state import (
 
 # PCRs relevant to the UKI measured boot policy.
 POLICY_PCRS = [0, 1, 2, 3, 4, 5, 7, 9, 11]
+
+# Well-known path for saved refstates on the persistent
+# keylime partition.  Used by 'save' (default output) and
+# 'diagnose' (auto-detect).
+DEFAULT_REFSTATE = (
+    "/var/lib/keylime/saved-refstate.json"
+)
 
 
 def print_pcr_comparison(
@@ -242,8 +253,71 @@ def print_event_summary(
                 )
 
 
+def cmd_save(args: argparse.Namespace) -> int:
+    """Save the current measured boot refstate."""
+    eventlog_path = args.eventlog
+    if not Path(eventlog_path).exists():
+        print(
+            f"Error: event log not found: {eventlog_path}",
+            file=sys.stderr,
+        )
+        return 1
+
+    log_data = parse_eventlog(eventlog_path)
+    if not log_data:
+        return 1
+    events = log_data.get("events", [])
+    if not events:
+        print("No events in event log", file=sys.stderr)
+        return 1
+
+    userspace_events = parse_userspace_log(
+        args.userspace_log,
+    )
+
+    refstate = create_refstate(events, userspace_events)
+
+    output = args.output
+    with open(output, "w") as f:
+        json.dump(refstate, f, indent=2)
+    print(f"Saved refstate to {output}", file=sys.stderr)
+    return 0
+
+
 def cmd_diagnose(args: argparse.Namespace) -> int:
-    """Diagnose event log against TPM and refstate."""
+    """Diagnose event log against TPM and optionally a refstate.
+
+    When two positional refstate files are given, performs a
+    pure offline diff (no event log or TPM needed).
+    """
+    # Pure diff mode: two positional refstate files
+    if args.refstates and len(args.refstates) == 2:
+        old_path, new_path = args.refstates
+        for path in (old_path, new_path):
+            if not Path(path).exists():
+                print(
+                    f"Error: file not found: {path}",
+                    file=sys.stderr,
+                )
+                return 1
+        with open(old_path) as f:
+            old = json.load(f)
+        with open(new_path) as f:
+            new = json.load(f)
+        diff = diff_refstates(old, new)
+        same = print_refstate_diff(diff)
+        return 0 if same else 2
+
+    if args.refstates and len(args.refstates) != 0:
+        print(
+            "Error: provide exactly two refstate files"
+            " for diff mode, or use --refstate for"
+            " single-file comparison.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Live diagnose mode
     eventlog_path = args.eventlog
     if not Path(eventlog_path).exists():
         print(
@@ -263,7 +337,6 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
     exit_code = 0
 
     # Parse systemd's userspace TPM measurement log
-    # (runtime PCR extensions not in the UEFI event log)
     userspace_events = parse_userspace_log(
         args.userspace_log,
     )
@@ -290,16 +363,24 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
             print(f"  PCR {pcr:>2}: {val}")
     print()
 
-    # Refstate diff
-    if args.refstate:
-        if not Path(args.refstate).exists():
+    # Resolve refstate: explicit flag, auto-detect, or none
+    refstate_path = args.refstate
+    if not refstate_path and Path(DEFAULT_REFSTATE).exists():
+        refstate_path = DEFAULT_REFSTATE
+        print(
+            f"Auto-detected saved refstate:"
+            f" {refstate_path}"
+        )
+
+    if refstate_path:
+        if not Path(refstate_path).exists():
             print(
                 f"Error: refstate not found:"
-                f" {args.refstate}",
+                f" {refstate_path}",
                 file=sys.stderr,
             )
             return 1
-        with open(args.refstate) as f:
+        with open(refstate_path) as f:
             enrolled = json.load(f)
         current = create_refstate(events)
         diff = diff_refstates(enrolled, current)
@@ -310,35 +391,15 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
         print_event_summary(events, enrolled)
     else:
         print(
-            "No --refstate given; skipping"
-            " refstate comparison."
+            "No refstate to compare against."
         )
         print(
-            "Tip: pass --refstate to compare"
-            " against an enrolled refstate."
+            "Tip: run 'debug-measured-boot-state save'"
+            " before rebooting, then diagnose will"
+            " auto-detect it."
         )
 
     return exit_code
-
-
-def cmd_diff(args: argparse.Namespace) -> int:
-    """Diff two refstate JSON files."""
-    for path in (args.old, args.new):
-        if not Path(path).exists():
-            print(
-                f"Error: file not found: {path}",
-                file=sys.stderr,
-            )
-            return 1
-
-    with open(args.old) as f:
-        old = json.load(f)
-    with open(args.new) as f:
-        new = json.load(f)
-
-    diff = diff_refstates(old, new)
-    same = print_refstate_diff(diff)
-    return 0 if same else 2
 
 
 def main() -> None:
@@ -349,13 +410,48 @@ def main() -> None:
     )
     sub = parser.add_subparsers(dest="command")
 
-    # Default: diagnose mode
+    # save subcommand
+    save = sub.add_parser(
+        "save",
+        help=(
+            "Save current refstate for later comparison"
+        ),
+    )
+    save.add_argument(
+        "-o", "--output",
+        default=DEFAULT_REFSTATE,
+        help=(
+            "Output file"
+            f" (default: {DEFAULT_REFSTATE})"
+        ),
+    )
+    save.add_argument(
+        "-e", "--eventlog",
+        default=UEFI_EVENTLOG,
+        help=(
+            "Binary UEFI event log"
+            f" (default: {UEFI_EVENTLOG})"
+        ),
+    )
+    save.add_argument(
+        "--userspace-log",
+        default=USERSPACE_TPM_LOG,
+        help=(
+            "systemd userspace TPM measurement log"
+            f" (default: {USERSPACE_TPM_LOG})"
+        ),
+    )
+
+    # diagnose subcommand (also the default)
     diag = sub.add_parser(
         "diagnose",
-        help="Diagnose event log against TPM and refstate",
+        help=(
+            "Diagnose event log against TPM and"
+            " refstate, or diff two refstate files"
+        ),
     )
     diag.add_argument(
-        "--eventlog", "-e",
+        "-e", "--eventlog",
         default=UEFI_EVENTLOG,
         help=(
             "Binary UEFI event log"
@@ -363,8 +459,12 @@ def main() -> None:
         ),
     )
     diag.add_argument(
-        "--refstate", "-r",
-        help="Enrolled refstate JSON to compare against",
+        "-r", "--refstate",
+        help=(
+            "Enrolled refstate JSON to compare against"
+            f" (auto-detected from {DEFAULT_REFSTATE}"
+            " if not given)"
+        ),
     )
     diag.add_argument(
         "--tpm-sysfs",
@@ -379,25 +479,27 @@ def main() -> None:
             f" (default: {USERSPACE_TPM_LOG})"
         ),
     )
-
-    # Diff mode
-    df = sub.add_parser(
-        "diff",
-        help="Diff two refstate JSON files",
+    diag.add_argument(
+        "refstates",
+        nargs="*",
+        metavar="REFSTATE",
+        help=(
+            "Two refstate JSON files to diff"
+            " (offline mode, no event log needed)"
+        ),
     )
-    df.add_argument("old", help="Old refstate JSON")
-    df.add_argument("new", help="New refstate JSON")
 
     args = parser.parse_args()
 
-    if args.command == "diff":
-        sys.exit(cmd_diff(args))
+    if args.command == "save":
+        sys.exit(cmd_save(args))
     elif args.command == "diagnose":
         sys.exit(cmd_diagnose(args))
     else:
-        # Default to diagnose if no subcommand
+        # Default to diagnose if no subcommand given
         args.eventlog = UEFI_EVENTLOG
         args.refstate = None
+        args.refstates = []
         args.tpm_sysfs = TPM_SYSFS
         args.userspace_log = USERSPACE_TPM_LOG
         sys.exit(cmd_diagnose(args))
