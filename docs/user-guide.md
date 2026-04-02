@@ -466,10 +466,20 @@ $ cat /tmp/refstate.json | python3 -m json.tool
 }
 ```
 
-`debug-measured-boot-state` diagnoses attestation failures by replaying the event log and comparing against the TPM and an enrolled reference state:
+`debug-measured-boot-state` diagnoses attestation failures by replaying the event log and comparing against the TPM and an enrolled reference state.
+
+Save the current refstate before rebooting so you can compare afterwards:
 
 ```shell-session
-$ debug-measured-boot-state diagnose --refstate enrolled.json
+$ debug-measured-boot-state save
+Saved refstate to /var/lib/keylime/saved-refstate.json
+```
+
+After rebooting, run `diagnose` (or just the bare command — it auto-detects the saved refstate):
+
+```shell-session
+$ debug-measured-boot-state
+Auto-detected saved refstate: /var/lib/keylime/saved-refstate.json
 PCR replay vs TPM:
   PCR  0: ✓ match
   PCR  4: ✗ MISMATCH
@@ -486,10 +496,11 @@ Refstate diff:
   ...
 ```
 
-To compare two refstate files offline:
+You can also compare against a specific refstate or diff two files offline:
 
 ```shell-session
-$ debug-measured-boot-state diff old-refstate.json new-refstate.json
+$ debug-measured-boot-state diagnose -r enrolled.json
+$ debug-measured-boot-state diagnose old-refstate.json new-refstate.json
 ```
 
 ## Credential Storage {#credential-storage}
