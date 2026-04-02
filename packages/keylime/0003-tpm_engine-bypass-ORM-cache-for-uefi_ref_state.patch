@@ -1,20 +1,23 @@
-From ef3a0a471720b652d2523f987fdecf768fa40c34 Mon Sep 17 00:00:00 2001
+From 73770698b80c003c449dc9c14158adfe82683557 Mon Sep 17 00:00:00 2001
 From: phaer <phaer@phaer.org>
-Date: Wed, 25 Mar 2026 17:50:39 +0100
-Subject: [PATCH 3/3] tpm_engine: bypass ORM cache for uefi_ref_state
+Date: Thu, 2 Apr 2026 22:27:25 +0200
+Subject: [PATCH] tpm_engine: bypass ORM cache for uefi_ref_state
 
 Policy updates use DELETE-CREATE which may reuse the same policy
 ID, causing SQLAlchemy's identity map to return stale objects.
 Query the database directly when a fresh agent record is
 available (during attestation verification).
 
-Signed-off-by: phaer <phaer@phaer.org>
+Use db_manager.session() directly instead of session_context()
+to avoid a premature commit() on the shared scoped session,
+which would flush pending evidence items and cause identity-map
+conflicts (SAWarning about EvidenceItemMapping).
 ---
- keylime/verification/tpm_engine.py | 17 +++++++++++++++++
- 1 file changed, 17 insertions(+)
+ keylime/verification/tpm_engine.py | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
 
 diff --git a/keylime/verification/tpm_engine.py b/keylime/verification/tpm_engine.py
-index 2243a3d..d51fbb4 100644
+index 2243a3d..a9d045e 100644
 --- a/keylime/verification/tpm_engine.py
 +++ b/keylime/verification/tpm_engine.py
 @@ -11,8 +11,10 @@ from keylime.common import algorithms, states
@@ -28,7 +31,7 @@ index 2243a3d..d51fbb4 100644
  from keylime.shared_data import get_shared_memory
  from keylime.tpm import tpm2_objects, tpm_util
  from keylime.tpm.tpm_main import Tpm
-@@ -879,6 +881,21 @@ class TPMEngine(VerificationEngine):
+@@ -879,6 +881,25 @@ class TPMEngine(VerificationEngine):
  
      @property
      def uefi_ref_state(self) -> Any:
@@ -36,13 +39,17 @@ index 2243a3d..d51fbb4 100644
 +        # record is available (during attestation verification).
 +        # Policy updates use DELETE-CREATE which may reuse the same
 +        # policy ID, causing the ORM to return stale cached objects.
++        #
++        # Use db_manager.session() directly instead of
++        # session_context() to avoid a premature commit() on the
++        # shared scoped session, which would flush pending evidence
++        # items and cause identity-map conflicts (SAWarning).
 +        if hasattr(self, "_fresh_agent") and self._fresh_agent and self._fresh_agent.mb_policy_id:
-+            result = None
-+            with db_manager.session_context() as session:
-+                result = session.execute(
-+                    text("SELECT mb_policy FROM mbpolicies WHERE id = :policy_id"),
-+                    {"policy_id": self._fresh_agent.mb_policy_id},
-+                ).fetchone()
++            session = db_manager.session()
++            result = session.execute(
++                text("SELECT mb_policy FROM mbpolicies WHERE id = :policy_id"),
++                {"policy_id": self._fresh_agent.mb_policy_id},
++            ).fetchone()
 +
 +            if result and result[0]:
 +                return result[0]
