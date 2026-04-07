@@ -66,8 +66,15 @@ python3Packages.buildPythonApplication {
     # Use the policy's get_relevant_pcrs() for event log PCR replay
     # (PCR 11 has runtime extensions from systemd-pcrphase).
     ./0002-tpm-use-policy-s-relevant-PCRs-for-event-log-verific.patch
-    # Bypass ORM cache for uefi_ref_state.
-    ./0003-tpm_engine-bypass-ORM-cache-for-uefi_ref_state.patch
+    # The verifier maps `mbpolicies` and `verifiermain` to two
+    # independent SQLAlchemy ORM classes (declarative_base in db/
+    # versus the model framework in models/), with separate identity
+    # maps that cannot see each other's writes.  Both patches issue
+    # raw SQL to bypass the cache for fields that are read or written
+    # across the mapping boundary.  Until upstream consolidates to a
+    # single mapping per table, this is the only mechanism that works.
+    ./0003-tpm_engine-bypass-dual-mapping-cache-for-uefi_ref_st.patch
+    ./0004-tpm_engine-bypass-dual-mapping-cache-for-accept_atte.patch
   ];
 
   doCheck = false;

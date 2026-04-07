@@ -1,0 +1,100 @@
+From 0ce86e6c56a916df4ef712dfb20352f4bd2ff159 Mon Sep 17 00:00:00 2001
+From: phaer <phaer@phaer.org>
+Date: Tue, 7 Apr 2026 11:33:32 +0200
+Subject: [PATCH 4/4] tpm_engine: bypass dual-mapping cache for
+ accept_attestations
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Push-mode agents are supposed to recover from a timeout-induced
+FAIL state by simply pushing a successful attestation: the upstream
+attestation_controller has an explicit bypass that accepts retries
+even when accept_attestations=False, and _process_results then
+re-enables the flag.  In practice this never happens — the row stays
+at False forever even though attestation_count keeps growing.
+
+The root cause is the same dual-mapping issue addressed by the
+previous patch for mbpolicies: `verifiermain` is mapped to *two*
+independent SQLAlchemy ORM classes:
+
+  - keylime.db.verifier_db.VerfierMain (declarative_base) is used
+    by push_agent_monitor._mark_agent_failed() to flip
+    accept_attestations to False on timeout.
+  - keylime.models.verifier.VerifierAgent (model framework) is used
+    by the attestation flow here in tpm_engine.
+
+Each has its own MetaData, identity map, and change tracking; the
+two cannot see each other's writes.  When push_agent_monitor sets
+False via the legacy mapping, the model framework's cached
+VerifierAgent instance still has accept_attestations=True (the
+value it loaded earlier).  When _process_results re-assigns True,
+SQLAlchemy compares against the loaded state, decides it is a
+no-op, and silently drops the column from the UPDATE.  The DB row
+stays at False; the agent stays in FAIL forever.
+
+Issue a direct UPDATE alongside the model assignment so the column
+is unambiguously written.  As with the previous patch, the proper
+upstream fix is to consolidate to a single mapping for
+`verifiermain`.
+
+Reproducer: stop a push-mode agent long enough for the timeout
+multiplier (5x quote_interval) to fire, then restart it.  Without
+this patch the agent's attestation_count keeps growing but
+attestation_status stays FAIL indefinitely.
+
+Signed-off-by: phaer <phaer@phaer.org>
+---
+ keylime/verification/tpm_engine.py | 35 ++++++++++++++++++++++++++++--
+ 1 file changed, 33 insertions(+), 2 deletions(-)
+
+diff --git a/keylime/verification/tpm_engine.py b/keylime/verification/tpm_engine.py
+index 2eeb943..7d49e37 100644
+--- a/keylime/verification/tpm_engine.py
++++ b/keylime/verification/tpm_engine.py
+@@ -744,9 +744,40 @@ class TPMEngine(VerificationEngine):
+             # Reset consecutive failures counter on success
+             self.attestation.agent.consecutive_attestation_failures = 0
+ 
+-            # Re-enable attestations on successful attestation
+-            # This allows PUSH mode agents to recover from timeout-induced FAIL status
++            # Re-enable attestations on successful attestation.
++            # This allows PUSH mode agents to recover from timeout-induced FAIL status.
++            #
++            # The model-layer assignment below is not enough on its own.
++            # The root cause is structural: the `verifiermain` row is mapped
++            # to *two* independent SQLAlchemy ORM classes:
++            #
++            #   - keylime.db.verifier_db.VerfierMain (declarative_base) —
++            #     used by push_agent_monitor and cloud_verifier_tornado
++            #   - keylime.models.verifier.VerifierAgent (model framework) —
++            #     used here in the push-mode attestation flow
++            #
++            # Each has its own MetaData, identity map, and change tracking;
++            # SQLAlchemy has no way to synchronize them.  When
++            # push_agent_monitor sets accept_attestations=False via the
++            # legacy mapping, the model-framework instance still has the
++            # value loaded earlier.  Re-assigning True compares against
++            # that loaded state and is treated as a no-op, so the column
++            # is silently dropped from the UPDATE.  The row stays at
++            # False forever even though attestation_count keeps growing.
++            #
++            # Issue a direct UPDATE that bypasses both ORM layers.  The
++            # proper upstream fix is to consolidate to a single mapping
++            # for `verifiermain`; until then this is the only mechanism
++            # that crosses the mapping boundary.
+             self.attestation.agent.accept_attestations = True
++            with db_manager.session_context() as _session:
++                _session.execute(
++                    text(
++                        "UPDATE verifiermain SET accept_attestations = :v"
++                        " WHERE agent_id = :id"
++                    ),
++                    {"v": True, "id": self.agent_id},
++                )
+ 
+             # Update operational state to GET_QUOTE if not already set
+             # This ensures the agent shows as actively attesting in status queries
+-- 
+2.53.0
+

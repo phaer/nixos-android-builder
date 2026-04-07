@@ -1,0 +1,101 @@
+From b401874030b771e8f5ace29104314a6694f99628 Mon Sep 17 00:00:00 2001
+From: phaer <phaer@phaer.org>
+Date: Tue, 7 Apr 2026 11:33:17 +0200
+Subject: [PATCH 3/4] tpm_engine: bypass dual-mapping cache for uefi_ref_state
+
+The verifier maps the `mbpolicies` table via *two* independent
+SQLAlchemy ORM classes:
+
+  - keylime.db.verifier_db.VerifierMbpolicy (declarative_base) is
+    used by cloud_verifier_tornado.add_agent() to DELETE the old
+    policy and INSERT a new one when the tenant re-enrolls with
+    --mb_refstate.
+  - keylime.models.verifier.MBPolicy (model framework) is used by
+    the attestation flow via VerifierAgent.mb_policy.
+
+Each mapping has its own MetaData, identity map, and relationship
+cache; SQLAlchemy has no way to synchronize them.  When the tenant
+updates a policy through the legacy mapping, the model framework's
+cached MBPolicy instance is oblivious.  Worse, DELETE+INSERT can
+reuse the same primary key, so even a 'fresh' load through the
+model framework may return the stale identity-mapped object
+instead of issuing a real SELECT.
+
+Read the policy via a raw SELECT that bypasses both ORM layers.
+This is a workaround for the structural issue; the proper upstream
+fix is to consolidate to a single mapping for `mbpolicies`.
+
+Use db_manager.session() directly instead of session_context() to
+avoid a premature commit() on the shared scoped session, which
+would flush pending evidence items and cause identity-map
+conflicts (SAWarning about EvidenceItemMapping).
+
+Signed-off-by: phaer <phaer@phaer.org>
+---
+ keylime/verification/tpm_engine.py | 41 ++++++++++++++++++++++++++++++
+ 1 file changed, 41 insertions(+)
+
+diff --git a/keylime/verification/tpm_engine.py b/keylime/verification/tpm_engine.py
+index 2243a3d..2eeb943 100644
+--- a/keylime/verification/tpm_engine.py
++++ b/keylime/verification/tpm_engine.py
+@@ -11,8 +11,10 @@ from keylime.common import algorithms, states
+ from keylime.failure import Component, Failure
+ from keylime.ima import ima
+ from keylime.ima.file_signatures import ImaKeyring, ImaKeyrings
++from keylime.models.base import db_manager
+ from keylime.models.base.types import Timestamp  # type: ignore[attr-defined]
+ from keylime.models.verifier.auth_session import AuthSession
++from sqlalchemy import text
+ from keylime.shared_data import get_shared_memory
+ from keylime.tpm import tpm2_objects, tpm_util
+ from keylime.tpm.tpm_main import Tpm
+@@ -879,6 +881,45 @@ class TPMEngine(VerificationEngine):
+ 
+     @property
+     def uefi_ref_state(self) -> Any:
++        # Bypass both ORM layers when reading the measured-boot policy.
++        #
++        # The `mbpolicies` row is mapped to two independent SQLAlchemy
++        # ORM classes:
++        #
++        #   - keylime.db.verifier_db.VerifierMbpolicy (declarative_base)
++        #     — used by cloud_verifier_tornado.add_agent() to DELETE the
++        #     old policy and INSERT a new one when the tenant re-enrolls
++        #     with --mb_refstate.
++        #   - keylime.models.verifier.MBPolicy (model framework) — used
++        #     here via VerifierAgent.mb_policy in the attestation flow.
++        #
++        # Each mapping has its own MetaData, identity map, and relationship
++        # cache.  When the tenant updates a policy via the legacy mapping,
++        # the model-framework's cached MBPolicy instance for the same row
++        # is unaware of the change.  Worse, DELETE+INSERT can reuse the
++        # same primary key, so even a "fresh" load via the model framework
++        # may return the stale identity-mapped object instead of issuing
++        # a real SELECT.
++        #
++        # Issue a raw SELECT that bypasses both ORM layers.  The proper
++        # upstream fix is to consolidate to a single mapping for
++        # `mbpolicies`; until then this is the only way to read the
++        # actual current policy.
++        #
++        # Use db_manager.session() directly instead of
++        # session_context() to avoid a premature commit() on the
++        # shared scoped session, which would flush pending evidence
++        # items and cause identity-map conflicts (SAWarning).
++        if hasattr(self, "_fresh_agent") and self._fresh_agent and self._fresh_agent.mb_policy_id:
++            session = db_manager.session()
++            result = session.execute(
++                text("SELECT mb_policy FROM mbpolicies WHERE id = :policy_id"),
++                {"policy_id": self._fresh_agent.mb_policy_id},
++            ).fetchone()
++
++            if result and result[0]:
++                return result[0]
++
+         return self.agent.mb_policy.mb_policy
+ 
+     @property
+-- 
+2.53.0
+
