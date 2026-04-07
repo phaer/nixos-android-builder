@@ -32,6 +32,7 @@ in
 
       environment.systemPackages = [
         pkgs.openssl
+        pkgs.sqlite
         tpm2-tools
       ];
 
@@ -123,7 +124,7 @@ in
   testScript =
     { nodes, ... }:
     ''
-      import subprocess, os, json
+      import subprocess, os, json, time
 
       # Prepare the agent's signed writable disk image (like the integration test)
       subprocess.run([
@@ -227,7 +228,7 @@ in
           if uuids:
             agent_uuid = uuids[0]
             break
-          import time; time.sleep(1)
+          time.sleep(1)
         assert agent_uuid, "Agent did not register within 30s"
         agent.log(f"Agent EK-derived UUID: {agent_uuid}")
 
@@ -284,5 +285,111 @@ in
           timeout=90,
         )
         server.log("Tampered UKI digest correctly rejected")
+
+      with subtest("Push-mode agent recovers from timeout"):
+        # Helper to fetch the verifier's view of the agent.
+        def get_agent_results():
+          resp = json.loads(server.succeed(
+            "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
+            f" https://127.0.0.1:8881/v2.5/agents/{agent_uuid}"
+          ))
+          return resp.get("results", {})
+
+        def get_attestation_status():
+          return get_agent_results().get("attestation_status", "")
+
+        def dump_state(label):
+          r = get_agent_results()
+          server.log(
+            f"{label}: status={r.get('attestation_status')}"
+            f" accept={r.get('accept_attestations')}"
+            f" count={r.get('attestation_count')}"
+            f" failures={r.get('consecutive_attestation_failures')}"
+            f" last_quote={r.get('last_received_quote')}"
+            f" last_ok={r.get('last_successful_attestation')}"
+          )
+
+        # Re-enroll with the correct refstate so we're back in PASS state.
+        server.succeed(
+          f"keylime_tenant -c delete -u {agent_uuid}"
+          " -v 127.0.0.1 -vp 8881"
+        )
+        server.succeed(
+          f"keylime_tenant --push-model -c add -t 192.168.1.1 -u {agent_uuid}"
+          " -r 127.0.0.1 -rp 8891 -v 127.0.0.1 -vp 8881"
+          " --mb_refstate /tmp/measured-boot-state.json"
+        )
+
+        for _ in range(60):
+          if get_attestation_status() == "PASS":
+            break
+          time.sleep(1)
+        dump_state("after re-enrollment")
+        assert get_attestation_status() == "PASS", "agent did not return to PASS after re-enrollment"
+        baseline = get_agent_results()
+        baseline_count = baseline.get("attestation_count") or 0
+        server.log("Agent back in PASS state; stopping to trigger timeout")
+
+        # Stop the agent to simulate silence.  With quote_interval=2
+        # and the upstream 5x multiplier, push_agent_monitor will
+        # mark accept_attestations=False after ~10s.
+        agent.succeed("systemctl stop keylime-agent.service")
+
+        for _ in range(30):
+          if get_attestation_status() == "FAIL":
+            break
+          time.sleep(1)
+        dump_state("after timeout")
+        assert get_attestation_status() == "FAIL", "verifier did not mark agent FAIL after timeout"
+        server.log("Agent marked FAIL after push-mode timeout fired")
+
+        # Restart the agent.  The verifier's attestation_controller
+        # has an explicit bypass for push-mode agents, so a new
+        # successful attestation should reset accept_attestations=True.
+        agent.succeed("systemctl start keylime-agent.service")
+        agent.wait_for_unit("keylime-agent.service")
+        restart_time = time.time()
+
+        # Recovery requires the agent to push at least one new
+        # successful attestation.  We watch attestation_count, not
+        # just status — a stale PASS reading should not pass.
+        recovered = False
+        for _ in range(120):
+          r = get_agent_results()
+          new_count = r.get("attestation_count") or 0
+          if r.get("attestation_status") == "PASS" and new_count > baseline_count:
+            recovered = True
+            break
+          time.sleep(1)
+
+        if not recovered:
+          dump_state("recovery FAILED — final state")
+          # Dump the full verifier response to see all fields
+          full_response = server.succeed(
+            "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
+            f" https://127.0.0.1:8881/v2.5/agents/{agent_uuid}"
+          )
+          server.log(f"full verifier response:\n{full_response}")
+          # Query the SQLite database directly for the raw accept_attestations value
+          db_value = server.succeed(
+            "sqlite3 /var/lib/keylime/cv_data.sqlite"
+            f" \"SELECT agent_id, accept_attestations, attestation_count,"
+            " consecutive_attestation_failures FROM verifiermain"
+            f" WHERE agent_id='{agent_uuid}';\" || true"
+          )
+          server.log(f"DB row: {db_value}")
+          server.log(
+            "agent journal since restart:\n"
+            + agent.succeed(
+              f"journalctl -u keylime-agent.service --since='@{int(restart_time)}'"
+              " --no-pager -o cat || true"
+            )
+          )
+          server.log(
+            "verifier journal (grep accept):\n"
+            + server.succeed("journalctl -u keylime-verifier.service --no-pager -o cat | grep -i 'accept_attest\\|push_agent_monitor\\|attestation.*passed' | tail -40 || true")
+          )
+        assert recovered, "agent did not recover from timeout"
+        server.log("Agent recovered to PASS — push-mode self-healing works")
     '';
 }
