@@ -266,12 +266,33 @@ in
         server.log("Policy verified: all PCRs covered by measured_boot_policy")
 
       for i in range(1, 4):
-        with subtest(f"Attestation persists after reboot {i}/3"):
+        with subtest(f"Attestation and EK persist after reboot {i}/3"):
           agent.shutdown()
           agent.start()
           agent.wait_for_unit("multi-user.target")
           agent.succeed("systemctl start keylime-agent")
           agent.wait_for_unit("keylime-agent.service")
+
+          # EK stability check: the registrar should still contain
+          # exactly the same UUID.  If the swtpm's Endorsement Primary
+          # Seed changed (e.g. state directory lost, TPM2_Clear issued),
+          # the agent would register under a new EK-derived UUID,
+          # leaving a stale entry behind.
+          reg_uuids = []
+          for _ in range(30):
+            resp = json.loads(server.succeed(
+              "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
+              " https://127.0.0.1:8891/v2.5/agents/"
+            ))
+            reg_uuids = resp.get("results", {}).get("uuids", [])
+            if reg_uuids == [agent_uuid]:
+              break
+            _time.sleep(1)
+          assert reg_uuids == [agent_uuid], (
+            f"EK unstable after reboot {i}:"
+            f" expected [{agent_uuid}], got {reg_uuids}"
+          )
+          server.log(f"Reboot {i}/3: EK stable, UUID unchanged")
 
           server.wait_until_succeeds(
             "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
