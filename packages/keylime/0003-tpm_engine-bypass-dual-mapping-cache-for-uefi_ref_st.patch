@@ -1,9 +1,9 @@
-From b401874030b771e8f5ace29104314a6694f99628 Mon Sep 17 00:00:00 2001
+From 7792638424c6cd764abbc15f251ab6bdb367e0a0 Mon Sep 17 00:00:00 2001
 From: phaer <phaer@phaer.org>
-Date: Tue, 7 Apr 2026 11:33:17 +0200
+Date: Tue, 7 Apr 2026 14:11:33 +0200
 Subject: [PATCH 3/4] tpm_engine: bypass dual-mapping cache for uefi_ref_state
 
-The verifier maps the `mbpolicies` table via *two* independent
+The verifier maps the `mbpolicies` table via two independent
 SQLAlchemy ORM classes:
 
   - keylime.db.verifier_db.VerifierMbpolicy (declarative_base) is
@@ -30,27 +30,38 @@ avoid a premature commit() on the shared scoped session, which
 would flush pending evidence items and cause identity-map
 conflicts (SAWarning about EvidenceItemMapping).
 
+Also clean up ima_policy (which already had an equivalent bypass)
+to use the same top-level imports and a single-line comment
+referring to uefi_ref_state for the full explanation.
+
 Signed-off-by: phaer <phaer@phaer.org>
 ---
- keylime/verification/tpm_engine.py | 41 ++++++++++++++++++++++++++++++
- 1 file changed, 41 insertions(+)
+ keylime/verification/tpm_engine.py |  56 ++++++++++++----
+ test/test_tpm_engine.py            | 102 ++++++++++++++++++++++++++++-
+ 2 files changed, 144 insertions(+), 14 deletions(-)
 
 diff --git a/keylime/verification/tpm_engine.py b/keylime/verification/tpm_engine.py
-index 2243a3d..2eeb943 100644
+index a21eacd..18defd1 100644
 --- a/keylime/verification/tpm_engine.py
 +++ b/keylime/verification/tpm_engine.py
-@@ -11,8 +11,10 @@ from keylime.common import algorithms, states
+@@ -1,5 +1,6 @@
+ # pyright: reportAttributeAccessIssue=false
+ # Uses ORM models with dynamically-created attributes from metaclasses
++import json
+ import math
+ import time
+ from datetime import timedelta
+@@ -11,6 +12,9 @@ from keylime.common import algorithms, states
  from keylime.failure import Component, Failure
  from keylime.ima import ima
  from keylime.ima.file_signatures import ImaKeyring, ImaKeyrings
++from sqlalchemy import text
++
 +from keylime.models.base import db_manager
  from keylime.models.base.types import Timestamp  # type: ignore[attr-defined]
  from keylime.models.verifier.auth_session import AuthSession
-+from sqlalchemy import text
  from keylime.shared_data import get_shared_memory
- from keylime.tpm import tpm2_objects, tpm_util
- from keylime.tpm.tpm_main import Tpm
-@@ -879,6 +881,45 @@ class TPMEngine(VerificationEngine):
+@@ -880,22 +884,51 @@ class TPMEngine(VerificationEngine):
  
      @property
      def uefi_ref_state(self) -> Any:
@@ -96,6 +107,166 @@ index 2243a3d..2eeb943 100644
          return self.agent.mb_policy.mb_policy
  
      @property
+     def ima_policy(self) -> Any:
+-        # If using a fresh agent, bypass SQLAlchemy's identity map cache by querying the database directly
+-        # This is necessary because policy updates use DELETE-CREATE which may reuse the same policy ID,
+-        # causing the identity map to return stale cached policy objects
++        # Raw SELECT to bypass the dual-mapping identity-map issue — see uefi_ref_state for details.
+         if hasattr(self, "_fresh_agent") and self._fresh_agent and self._fresh_agent.ima_policy_id:  # type: ignore[attr-defined]
+-            # pylint: disable=import-outside-toplevel
+-            import json
+-
+-            from sqlalchemy import text
+-
+-            from keylime.models.base import db_manager
+-
+-            # Query the database directly using raw SQL to completely bypass ORM caching
+             with db_manager.session_context() as session:
+                 result = session.execute(
+                     text("SELECT ima_policy FROM allowlists WHERE id = :policy_id"),
+@@ -903,7 +936,6 @@ class TPMEngine(VerificationEngine):
+                 ).fetchone()
+ 
+                 if result and result[0]:
+-                    # Parse the JSON policy stored in the database
+                     return json.loads(result[0])
+ 
+         return self.agent.ima_policy.ima_policy
+diff --git a/test/test_tpm_engine.py b/test/test_tpm_engine.py
+index 628b6c5..969fba4 100644
+--- a/test/test_tpm_engine.py
++++ b/test/test_tpm_engine.py
+@@ -115,11 +115,13 @@ class TestTPMEngineProcessResults(unittest.TestCase):
+         # Evaluation should be set to fail
+         self.assertEqual(self.mock_attestation.evaluation, "fail")
+ 
++    @patch("keylime.models.base.db_manager.session_context")
+     @patch("keylime.verification.tpm_engine.config.getboolean")
+-    def test_process_results_success_extends_token(self, mock_getboolean):
++    def test_process_results_success_extends_token(self, mock_getboolean, mock_session_context):
+         """Successful attestation should extend auth token"""
+         # Configure mocks
+         mock_getboolean.return_value = True  # extend_token_on_attestation
++        mock_session_context.return_value.__enter__.return_value = MagicMock()
+ 
+         # Mock _extend_auth_token
+         with patch.object(self.engine, "_extend_auth_token") as mock_extend:
+@@ -141,11 +143,13 @@ class TestTPMEngineProcessResults(unittest.TestCase):
+         # Evaluation should be set to pass
+         self.assertEqual(self.mock_attestation.evaluation, "pass")
+ 
++    @patch("keylime.models.base.db_manager.session_context")
+     @patch("keylime.verification.tpm_engine.config.getboolean")
+-    def test_process_results_success_no_extend_when_disabled(self, mock_getboolean):
++    def test_process_results_success_no_extend_when_disabled(self, mock_getboolean, mock_session_context):
+         """Successful attestation should not extend token when disabled"""
+         # Configure mocks
+         mock_getboolean.return_value = False  # extend_token_on_attestation disabled
++        mock_session_context.return_value.__enter__.return_value = MagicMock()
+ 
+         # Mock _extend_auth_token
+         with patch.object(self.engine, "_extend_auth_token") as mock_extend:
+@@ -277,6 +281,100 @@ class TestTPMEngineFreshPolicy(unittest.TestCase):
+         # Create engine instance
+         self.engine = TPMEngine(self.mock_attestation)
+ 
++    @patch("keylime.models.base.db_manager.session")
++    def test_uefi_ref_state_bypass_bypasses_cache(self, mock_session):
++        """Test that uefi_ref_state issues raw SQL to bypass both ORM identity maps.
++
++        The mbpolicies table is mapped by two independent SQLAlchemy ORM classes; a raw
++        SELECT is the only way to guarantee the current database value is returned.
++        """
++        fresh_agent = MagicMock()
++        fresh_agent.mb_policy_id = 7
++
++        mock_result = MagicMock()
++        mock_result.fetchone.return_value = ('[{"log": []}]',)
++        mock_session.return_value.execute.return_value = mock_result
++
++        self.engine._fresh_agent = fresh_agent  # pylint: disable=attribute-defined-outside-init
++
++        policy = self.engine.uefi_ref_state
++
++        self.assertEqual(policy, '[{"log": []}]')
++        mock_session.return_value.execute.assert_called_once()
++        call_args = mock_session.return_value.execute.call_args
++        sql_str = str(call_args[0][0]).upper()
++        self.assertIn("SELECT MB_POLICY FROM MBPOLICIES", sql_str)
++        self.assertEqual(call_args[0][1]["policy_id"], 7)
++
++    def test_uefi_ref_state_uses_cached_when_no_fresh_agent(self):
++        """Test that uefi_ref_state falls back to the ORM value when no fresh agent is available."""
++        self.mock_agent.mb_policy = MagicMock()
++        self.mock_agent.mb_policy.mb_policy = "cached-policy"
++
++        policy = self.engine.uefi_ref_state
++
++        self.assertEqual(policy, "cached-policy")
++
++    def test_uefi_ref_state_uses_cached_when_fresh_agent_has_no_policy_id(self):
++        """Test that uefi_ref_state falls back to ORM when fresh agent carries no mb_policy_id."""
++        fresh_agent = MagicMock()
++        fresh_agent.mb_policy_id = None
++        # When fresh_agent is set, TPMEngine.agent returns it, so mb_policy must be set there
++        fresh_agent.mb_policy = MagicMock()
++        fresh_agent.mb_policy.mb_policy = "cached-policy"
++        self.engine._fresh_agent = fresh_agent  # pylint: disable=attribute-defined-outside-init
++
++        policy = self.engine.uefi_ref_state
++
++        self.assertEqual(policy, "cached-policy")
++
++    @patch("keylime.models.base.db_manager.session")
++    def test_uefi_ref_state_bypass_bypasses_cache(self, mock_session):
++        """Test that uefi_ref_state issues raw SQL to bypass both ORM identity maps.
++
++        The mbpolicies table is mapped by two independent SQLAlchemy ORM classes; a raw
++        SELECT is the only way to guarantee the current database value is returned.
++        """
++        fresh_agent = MagicMock()
++        fresh_agent.mb_policy_id = 7
++
++        mock_result = MagicMock()
++        mock_result.fetchone.return_value = ('[{"log": []}]',)
++        mock_session.return_value.execute.return_value = mock_result
++
++        self.engine._fresh_agent = fresh_agent  # pylint: disable=attribute-defined-outside-init
++
++        policy = self.engine.uefi_ref_state
++
++        self.assertEqual(policy, '[{"log": []}]')
++        mock_session.return_value.execute.assert_called_once()
++        call_args = mock_session.return_value.execute.call_args
++        sql_str = str(call_args[0][0]).upper()
++        self.assertIn("SELECT MB_POLICY FROM MBPOLICIES", sql_str)
++        self.assertEqual(call_args[0][1]["policy_id"], 7)
++
++    def test_uefi_ref_state_uses_cached_when_no_fresh_agent(self):
++        """Test that uefi_ref_state falls back to the ORM value when no fresh agent is available."""
++        self.mock_agent.mb_policy = MagicMock()
++        self.mock_agent.mb_policy.mb_policy = "cached-policy"
++
++        policy = self.engine.uefi_ref_state
++
++        self.assertEqual(policy, "cached-policy")
++
++    def test_uefi_ref_state_uses_cached_when_fresh_agent_has_no_policy_id(self):
++        """Test that uefi_ref_state falls back to ORM when fresh agent carries no mb_policy_id."""
++        fresh_agent = MagicMock()
++        fresh_agent.mb_policy_id = None
++        # When fresh_agent is set, TPMEngine.agent returns it, so mb_policy must be set there
++        fresh_agent.mb_policy = MagicMock()
++        fresh_agent.mb_policy.mb_policy = "cached-policy"
++        self.engine._fresh_agent = fresh_agent  # pylint: disable=attribute-defined-outside-init
++
++        policy = self.engine.uefi_ref_state
++
++        self.assertEqual(policy, "cached-policy")
++
+     @patch("keylime.models.base.db_manager.session_context")
+     def test_ima_policy_reload_bypasses_cache(self, mock_session_context):
+         """Test that ima_policy property reloads fresh policy from database"""
 -- 
 2.53.0
 

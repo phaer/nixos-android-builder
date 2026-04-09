@@ -7,7 +7,10 @@
   efivar,
 }:
 let
-  version = "7.14.1";
+  # Unreleased master commit past v7.14.1 — needed as the base for our
+  # local patch series.  All four patches below target this revision.
+  version = "7.14.1-unstable-2026-04-02";
+  rev = "4c2a0c6ca84c87667c9a19605ae767e1755ac713";
 in
 python3Packages.buildPythonApplication {
   pname = "keylime";
@@ -17,8 +20,8 @@ python3Packages.buildPythonApplication {
   src = fetchFromGitHub {
     owner = "keylime";
     repo = "keylime";
-    tag = "v${version}";
-    hash = "sha256-EM+h/+rAzzGcp8pT3E74INLzEDBSc1Hjtojxbm26jt0=";
+    inherit rev;
+    hash = "sha256-RLmTn/YYWs6BJnnfMj09MAwy3DKQqR0qVohNXhL65/c=";
   };
 
   build-system = with python3Packages; [

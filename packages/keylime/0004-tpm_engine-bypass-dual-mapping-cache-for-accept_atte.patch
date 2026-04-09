@@ -1,6 +1,6 @@
-From 0ce86e6c56a916df4ef712dfb20352f4bd2ff159 Mon Sep 17 00:00:00 2001
+From ddc13eb825675ae8b68849437192dd20a6ce1f68 Mon Sep 17 00:00:00 2001
 From: phaer <phaer@phaer.org>
-Date: Tue, 7 Apr 2026 11:33:32 +0200
+Date: Tue, 7 Apr 2026 14:13:03 +0200
 Subject: [PATCH 4/4] tpm_engine: bypass dual-mapping cache for
  accept_attestations
 MIME-Version: 1.0
@@ -46,13 +46,14 @@ attestation_status stays FAIL indefinitely.
 Signed-off-by: phaer <phaer@phaer.org>
 ---
  keylime/verification/tpm_engine.py | 35 ++++++++++++++++++++++++++++--
- 1 file changed, 33 insertions(+), 2 deletions(-)
+ test/test_tpm_engine.py            | 27 ++++++++++++++++++++---
+ 2 files changed, 57 insertions(+), 5 deletions(-)
 
 diff --git a/keylime/verification/tpm_engine.py b/keylime/verification/tpm_engine.py
-index 2eeb943..7d49e37 100644
+index 18defd1..86ea273 100644
 --- a/keylime/verification/tpm_engine.py
 +++ b/keylime/verification/tpm_engine.py
-@@ -744,9 +744,40 @@ class TPMEngine(VerificationEngine):
+@@ -746,9 +746,40 @@ class TPMEngine(VerificationEngine):
              # Reset consecutive failures counter on success
              self.attestation.agent.consecutive_attestation_failures = 0
  
@@ -95,6 +96,65 @@ index 2eeb943..7d49e37 100644
  
              # Update operational state to GET_QUOTE if not already set
              # This ensures the agent shows as actively attesting in status queries
+diff --git a/test/test_tpm_engine.py b/test/test_tpm_engine.py
+index 969fba4..897903e 100644
+--- a/test/test_tpm_engine.py
++++ b/test/test_tpm_engine.py
+@@ -203,17 +203,28 @@ class TestTPMEngineProcessResults(unittest.TestCase):
+         # Evaluation should be set to fail
+         self.assertEqual(self.mock_attestation.evaluation, "fail")
+ 
++    @patch("keylime.models.base.db_manager.session_context")
+     @patch("keylime.verification.tpm_engine.config.getboolean")
+     @patch("keylime.verification.tpm_engine.agent_util.is_push_mode_agent")
+     @patch("keylime.verification.tpm_engine.push_agent_monitor.schedule_agent_timeout")
+     def test_process_results_success_recovers_from_timeout(
+-        self, mock_schedule_timeout, mock_is_push_mode, mock_getboolean
++        self, mock_schedule_timeout, mock_is_push_mode, mock_getboolean, mock_session_context
+     ):
+-        """Successful attestation should re-enable accept_attestations for PUSH mode recovery"""
++        """Successful attestation should re-enable accept_attestations for PUSH mode recovery.
++
++        The model-layer assignment (agent.accept_attestations = True) is not enough on its
++        own because push_agent_monitor may have set the flag via the legacy ORM mapping which
++        the model framework cannot see.  A direct UPDATE must also be issued to cross the
++        dual-mapping boundary.
++        """
+         # Configure mocks
+         mock_getboolean.return_value = True  # extend_token_on_attestation
+         mock_is_push_mode.return_value = True  # PUSH mode agent
+ 
++        # Mock the session used for the direct UPDATE
++        mock_session = MagicMock()
++        mock_session_context.return_value.__enter__.return_value = mock_session
++
+         # Simulate agent that has timed out (accept_attestations=False)
+         self.mock_agent.accept_attestations = False
+ 
+@@ -228,12 +239,22 @@ class TestTPMEngineProcessResults(unittest.TestCase):
+                             # Process results with no failure (successful attestation)
+                             self.engine._process_results(None)
+ 
+-        # accept_attestations should be re-enabled for recovery
++        # accept_attestations should be re-enabled via the model layer
+         self.assertTrue(
+             self.mock_agent.accept_attestations,
+             "Successful attestation should re-enable accept_attestations to allow PUSH mode agents to recover from timeout",
+         )
+ 
++        # A direct UPDATE must also be issued to bypass the dual-mapping identity-map problem
++        mock_session.execute.assert_called_once()
++        call_args = mock_session.execute.call_args
++        sql_str = str(call_args[0][0]).upper()
++        params = call_args[0][1]
++        self.assertIn("UPDATE VERIFIERMAIN", sql_str)
++        self.assertIn("ACCEPT_ATTESTATIONS", sql_str)
++        self.assertEqual(params["v"], True)
++        self.assertEqual(params["id"], "test-agent-123")
++
+         # Consecutive failures should be reset
+         self.assertEqual(self.mock_agent.consecutive_attestation_failures, 0)
+ 
 -- 
 2.53.0
 
