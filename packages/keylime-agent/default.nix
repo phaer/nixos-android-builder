@@ -33,9 +33,14 @@ rustPlatform.buildRustPackage (finalAttrs: {
 
   env.LIBCLANG_PATH = "${lib.getLib clang.cc}/lib";
 
-  # Use the privileged fd for UEFI event log evidence instead of
-  # re-opening by path (which fails after run_as privilege drop).
-  patches = [ ./0001-push-model-cache-UEFI-event-log-bytes-at-startup.patch ];
+  patches = [
+    # https://github.com/keylime/rust-keylime/pull/1223
+    # Cache the UEFI event log bytes during privileged init so
+    # evidence submission works after run_as drops to keylime:tss
+    # (re-opening /sys/kernel/security/tpm0/binary_bios_measurements
+    # by path fails with EACCES).
+    ./0001-push-model-cache-UEFI-event-log-bytes-at-startup.patch
+  ];
 
   doCheck = false;
 
