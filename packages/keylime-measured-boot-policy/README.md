@@ -13,11 +13,18 @@ shim/GRUB chain:
   itself), not a shim → GRUB → kernel sequence.
 - **PCR 8/9** have no `EV_IPL` events for kernel cmdline or initrd.
   Instead, systemd-stub measures UKI PE sections into **PCR 11**.
-- **PCR 11** has both firmware-time events (UKI PE sections from
-  systemd-stub) and runtime extensions (boot phases from
-  systemd-pcrphase). Keylime claims PCR 11 globally for measured boot,
-  so it cannot also be in `tpm_policy`. The policy accepts PCR 11
-  events but does not include it in `relevant_pcr_indices`.
+- **PCR 9** and **PCR 11** both receive runtime (userspace)
+  extensions that are not captured in the UEFI event log, so an
+  event-log-vs-live-PCR replay check would always mismatch.  The
+  policy accepts whatever events are in the log for these PCRs but
+  excludes them from `relevant_pcr_indices`, so keylime's
+  `mb_pcrs_to_check()` skips the replay comparison:
+  - **PCR 11:** `systemd-pcrphase` extends boot phase strings
+    (`sysinit`, `ready`, …) at runtime — expected by design.
+  - **PCR 9:** `systemd-tpm2-setup.service` (systemd ≥ 259) extends
+    an NvPCR anchoring measurement at runtime.
+  The security-critical content of both PCRs (the UKI image) is
+  already pinned via `uki_digest` in PCR 4.
 
 ## Components
 
@@ -84,5 +91,5 @@ nix build .#checks.x86_64-linux.keylime
 | 4 | UKI application, EFI actions | UKI digest pinned to refstate |
 | 5 | GPT table, EFI actions | Accepted |
 | 7 | SecureBoot, PK, KEK, db, dbx, authority | Keys pinned to refstate |
-| 9 | `EV_EVENT_TAG` from systemd-stub | Accepted |
-| 11 | UKI PE sections from systemd-stub | Accepted |
+| 9 | `EV_EVENT_TAG` from systemd-stub | Accepted; excluded from replay (runtime NvPCR extension in systemd ≥ 259) |
+| 11 | UKI PE sections from systemd-stub | Accepted; excluded from replay (runtime `systemd-pcrphase` extensions) |

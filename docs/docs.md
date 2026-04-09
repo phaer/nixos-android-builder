@@ -293,8 +293,8 @@ The `uki` policy checks:
 - **PCR 4** – UKI application digest (pinned — a single `EV_EFI_BOOT_SERVICES_APPLICATION`, unlike shim/GRUB chains)
 - **PCR 5** – GPT partition table, EFI actions (accepted)
 - **PCR 7** – Secure Boot keys: PK, KEK, db, dbx (pinned to specific key lists)
-- **PCR 9** – `EV_EVENT_TAG` from systemd-stub (accepted)
-- **PCR 11** – UKI PE section measurements from systemd-stub (accepted in the event log; PCR 11 is also included in the TPM quote via keylime's measured boot PCR mask)
+- **PCR 9** – `EV_EVENT_TAG` from systemd-stub (accepted in the event log).  PCR 9 is excluded from the event-log-vs-live-PCR replay check because systemd ≥ 259 extends PCR 9 at runtime from `systemd-tpm2-setup.service` (NvPCR anchoring), which is not captured in the UEFI event log.
+- **PCR 11** – UKI PE section measurements from systemd-stub (accepted in the event log).  PCR 11 is excluded from the event-log-vs-live-PCR replay check because systemd-pcrphase extends it at runtime with boot phase strings (`sysinit`, `ready`, …) that are not captured in the UEFI event log.
 
 Keylime's built-in `example` policy expects a shim → GRUB → kernel boot chain and is not compatible with UKI boots.  The custom `uki` policy was written specifically for this boot chain.
 

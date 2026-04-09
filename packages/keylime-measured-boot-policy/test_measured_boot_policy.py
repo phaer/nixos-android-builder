@@ -289,7 +289,12 @@ class TestPolicyRegistration:
         assert "uki" in policies.get_policy_names()
 
     def test_relevant_pcrs(self, policy):
-        expected = frozenset([0, 1, 2, 3, 4, 5, 7, 9])
+        # PCRs 9 and 11 are excluded from replay because both
+        # receive runtime (userspace) extensions not in the UEFI
+        # event log: PCR 11 via systemd-pcrphase, PCR 9 via
+        # systemd >= 259 NvPCR anchoring in
+        # systemd-tpm2-setup.service.
+        expected = frozenset([0, 1, 2, 3, 4, 5, 7])
         assert policy.get_relevant_pcrs() == expected
 
 

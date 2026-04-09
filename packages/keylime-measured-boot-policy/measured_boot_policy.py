@@ -87,11 +87,39 @@ def sigs_strip0x(
 class UkiPolicy(policies.Policy):
     """Measured boot policy for UKI boot chains."""
 
-    # PCR 11 is excluded: it has both event-log content (UKI PE
-    # sections from systemd-stub) and runtime extensions (from
-    # systemd-pcrphase). The raw tpm_policy digest covers both.
+    # PCRs 9 and 11 are excluded from the event-log replay check
+    # (see keylime's mb_pcrs_to_check()) because both receive
+    # runtime extensions from userspace that are not captured in
+    # the UEFI event log, so replaying the log and comparing
+    # against the live PCR will always mismatch.
+    #
+    # PCR 11: expected-by-design. systemd-stub measures UKI PE
+    # sections at boot (these DO appear in the event log), and
+    # systemd-pcrphase extends phase strings ("sysinit", "ready",
+    # ...) at runtime via the userspace TPM log.  The runtime
+    # extensions are the whole point of PCR 11 in a UKI boot.
+    #
+    # PCR 9: the "Linux IPL" PCR.  systemd 259 added NvPCR
+    # support and initializes the default NvPCR definitions
+    # (hardware, cryptsetup) in systemd-tpm2-setup.service on
+    # every boot, which extends PCR 9 with an anchoring
+    # measurement.  This is per-host (anchored to a local
+    # secret), runtime-only, and not in the event log.  Rather
+    # than masking the upstream .nvpcr files (fragile — brittle
+    # to new defaults) or per-host pinning the runtime value
+    # (defeats image-wide attestation), we drop PCR 9 from the
+    # replay check entirely.
+    #
+    # In both cases the event-level policy checks still run
+    # against whatever PCR 9 / PCR 11 events are in the UEFI
+    # event log (see the dispatcher below), so tampering with
+    # those events is still detected.  What we lose is the
+    # end-to-end integrity check that ties the event log to
+    # the live PCR — a small weakening that is acceptable here
+    # because the security-critical content of both PCRs (the
+    # UKI image) is already pinned via uki_digest in PCR 4.
     relevant_pcr_indices = frozenset(
-        [0, 1, 2, 3, 4, 5, 7, 9],
+        [0, 1, 2, 3, 4, 5, 7],
     )
 
     def get_relevant_pcrs(self) -> typing.FrozenSet[int]:
