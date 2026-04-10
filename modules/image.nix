@@ -65,6 +65,7 @@
           # We bind the whole directory because it has no extra cost and
           # we don't know what tools inside the fhsenv might expect /usr/bin paths.
           device = "/bin";
+          fsType = "none";
           options = [
             "bind"
             "x-systemd.requires=bin.mount"
@@ -79,6 +80,9 @@
                 upperdir = "/nix/.rw-store/upper";
                 workdir = "/nix/.rw-store/work";
               };
+              # Must be mounted in the initrd so that /sbin/init (a symlink
+              # into the nix store) can be resolved before switch-root.
+              neededForBoot = true;
             }
           else
             {
@@ -88,6 +92,7 @@
             };
         "/nix/.ro-store" = lib.mkIf config.nixosAndroidBuilder.debug {
           device = "/usr/nix/store";
+          fsType = "none";
           options = [ "bind" ];
           neededForBoot = true;
         };
@@ -98,6 +103,8 @@
             "size=20%"
             "mode=0755"
           ];
+          # Must be mounted before the /nix/store overlay (which uses it as upperdir).
+          neededForBoot = true;
         };
       };
 
@@ -202,11 +209,18 @@
     # as new partitions on first boot (which triggers formatting + TPM2 LUKS
     # enrollment). On subsequent boots, repart matches them by type+label and
     # leaves them untouched (no FactoryReset).
+    # Bind the LUKS key to PCR 7 (secure boot state). This ensures the
+    # partitions can only be unsealed on a system running with the expected
+    # secure boot policy — consistent with how individual credentials inside
+    # these partitions are encrypted (--tpm2-pcrs=7 in credential-storage.nix).
+    # Without an explicit TPM2PCRs, systemd 259 uses an empty policy, meaning
+    # any system with the TPM can unseal the partition.
     systemd.repart.partitions."31-var-lib-credentials" = {
       Type = "linux-generic";
       Label = "var-lib-credentials";
       Format = "ext4";
       Encrypt = "tpm2";
+      TPM2PCRs = "7";
       SizeMinBytes = "64M";
     };
     systemd.repart.partitions."32-var-lib-keylime" = {
@@ -214,6 +228,7 @@
       Label = "var-lib-keylime";
       Format = "ext4";
       Encrypt = "tpm2";
+      TPM2PCRs = "7";
       SizeMinBytes = "64M";
     };
 
