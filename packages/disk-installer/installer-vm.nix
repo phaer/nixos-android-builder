@@ -44,6 +44,12 @@ in
       efi.keepVariables = false;
       tpm.enable = true;
 
+      # systemd 259 reads LoaderTpm2ActivePcrBanks from EFI to select the PCR hash
+      # algorithm. Without TPM2 support compiled into OVMF, GetActivePcrBanks()
+      # returns 0, causing tpm2_get_best_pcr_bank() to fail with EOPNOTSUPP.
+      # Use OVMF with tpmSupport (no SecureBoot/SMM required) to fix this.
+      efi.OVMF = hostPkgs.OVMF.override { tpmSupport = true; };
+
       # NixOS overrides filesystems for VMs by default
       fileSystems = lib.mkForce { };
       useDefaultFilesystems = false;

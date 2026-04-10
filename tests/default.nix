@@ -41,6 +41,13 @@ let
               initrdBackdoor = true;
             };
             nixosAndroidBuilder.unattended.enable = lib.mkForce false;
+            # Pin the feature flags the VM tests rely on so the
+            # tests are immune to local configuration.nix drift
+            # (e.g. a developer disabling artifactStorage to skip
+            # that flow during manual runs).  The installerInteractive
+            # test waits for the artifact-storage dialog on tty2,
+            # which only exists when this flag is set.
+            nixosAndroidBuilder.artifactStorage.enable = lib.mkForce true;
           };
         }
       )
