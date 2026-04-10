@@ -304,6 +304,9 @@
         # Run systemd-repart in initrd at boot
         repart = {
           enable = true;
+          # We disable discard as it can make boots painfully slow here on some
+          # of our test machines
+          discard = lib.mkDefault false;
           extraArgs = [
             "--key-file=/etc/disk.key"
             # --factory-reset instructs systemd-repart to reset all partitions marked with FactoryReset=true,
