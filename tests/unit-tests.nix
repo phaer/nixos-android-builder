@@ -11,7 +11,8 @@
 {
   # Building the package triggers pytestCheckHook, which runs
   # test_measured_boot_policy.py against the keylime MBA framework.
-  policyTests = (pkgs.callPackage ../packages/keylime-measured-boot-policy {
-    keylime = keylimePackage;
-  }).package;
+  policyTests =
+    (pkgs.callPackage ../packages/keylime-measured-boot-policy {
+      keylime = keylimePackage;
+    }).package;
 }

@@ -1,7 +1,11 @@
 # Shared definitions for the keylime server NixOS module (modules/keylime.nix)
 # and the system-manager port (system-manager/keylime.nix). Contains INI
 # helpers, config defaults, option declarations, and config-file generators.
-{ lib, pkgs, keylime ? pkgs.callPackage ../../packages/keylime { } }:
+{
+  lib,
+  pkgs,
+  keylime ? pkgs.callPackage ../../packages/keylime { },
+}:
 
 let
   measuredBootPolicy = pkgs.callPackage ../../packages/keylime-measured-boot-policy {

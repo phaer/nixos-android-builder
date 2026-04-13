@@ -1,4 +1,9 @@
-{ imageModules, customPackages, lib, ... }:
+{
+  imageModules,
+  customPackages,
+  lib,
+  ...
+}:
 {
   name = "nixos-android-builder-integration-test";
   nodes.machine =

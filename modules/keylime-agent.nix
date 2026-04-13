@@ -266,9 +266,7 @@ in
       unitConfig.ConditionPathExists = "/dev/tpm0";
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${pkgs.lib.getExe
-          measuredBoot.report-measured-boot-state
-        }";
+        ExecStart = "${pkgs.lib.getExe measuredBoot.report-measured-boot-state}";
         Restart = "on-failure";
         RestartSec = "10s";
       };

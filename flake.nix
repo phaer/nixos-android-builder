@@ -22,7 +22,15 @@
       lib = nixpkgs.lib;
 
       customPackages = import ./packages { inherit pkgs; };
-      inherit (customPackages) tpm2-tools keylime keylime-agent measuredBoot attestation-ctl secureBootScripts diskInstaller;
+      inherit (customPackages)
+        tpm2-tools
+        keylime
+        keylime-agent
+        measuredBoot
+        attestation-ctl
+        secureBootScripts
+        diskInstaller
+        ;
 
       nixosModules = lib.pipe (builtins.readDir ./modules) [
         (lib.filterAttrs (n: v: (lib.hasSuffix ".nix" n) && v == "regular"))
