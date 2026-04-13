@@ -12,32 +12,45 @@ import typing
 from keylime.mba.elchecking import policies, tests
 
 # UEFI GUIDs appear in two byte-order formats in event logs
-# depending on firmware/parser. We match both forms:
-# index 0 = mixed-endian (as seen in some tpm2_eventlog output),
-# index 1 = standard UEFI form.
+# depending on firmware/parser.  The standard UEFI form has the
+# first three fields in big-endian; the mixed-endian form (as
+# seen in some tpm2_eventlog output) byte-swaps those fields.
+# We define each GUID once in standard form and derive the
+# mixed-endian variant, then match both.
+
+
+def _guid_both_forms(standard: str) -> typing.Tuple[str, str]:
+    """Return (mixed-endian, standard) forms of a UEFI GUID.
+
+    The first three dash-separated fields are byte-reversed;
+    the last two are left unchanged.
+    """
+    parts = standard.split("-")
+    mixed = "-".join([
+        bytes.fromhex(parts[0])[::-1].hex(),
+        bytes.fromhex(parts[1])[::-1].hex(),
+        bytes.fromhex(parts[2])[::-1].hex(),
+        parts[3],
+        parts[4],
+    ])
+    return (mixed, standard)
+
 
 # EFI_GLOBAL_VARIABLE: namespace for SecureBoot, PK, KEK
-EFI_GLOBAL_VARIABLE = (
-    "61dfe48b-ca93-d211-aa0d-00e098032b8c",
-    "8be4df61-93ca-11d2-aa0d-00e098032b8c",
+EFI_GLOBAL_VARIABLE = _guid_both_forms(
+    "8be4df61-93ca-11d2-aa0d-00e098032b8c"
 )
-
 # EFI_IMAGE_SECURITY_DATABASE_GUID: namespace for db, dbx
-EFI_IMAGE_SECURITY_DATABASE = (
-    "cbb219d7-3a3d-9645-a3bc-dad00e67656f",
-    "d719b2cb-3d3a-4596-a3bc-dad00e67656f",
+EFI_IMAGE_SECURITY_DATABASE = _guid_both_forms(
+    "d719b2cb-3d3a-4596-a3bc-dad00e67656f"
 )
-
 # EFI_CERT_X509_GUID: X.509 certificate signature type
-EFI_CERT_X509 = (
-    "a159c0a5-e494-a74a-87b5-ab155c2bf072",
-    "a5c059a1-94e4-4aa7-87b5-ab155c2bf072",
+EFI_CERT_X509 = _guid_both_forms(
+    "a5c059a1-94e4-4aa7-87b5-ab155c2bf072"
 )
-
 # EFI_CERT_SHA256_GUID: SHA-256 hash signature type
-EFI_CERT_SHA256 = (
-    "2616c4c1-4c50-9240-aca9-41f936934328",
-    "c1c41626-504c-4092-aca9-41f936934328",
+EFI_CERT_SHA256 = _guid_both_forms(
+    "c1c41626-504c-4092-aca9-41f936934328"
 )
 
 hex_pat = re.compile("0x[0-9a-f]+")
