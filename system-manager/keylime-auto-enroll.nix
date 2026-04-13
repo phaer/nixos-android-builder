@@ -3,8 +3,8 @@
 # Runs an HTTPS endpoint that accepts measured boot reports from agents,
 # and polls the registrar for newly registered agents.  When an agent
 # is both registered AND has submitted its measured boot report, it is
-# automatically enrolled with the verifier using the complete TPM
-# policy (firmware PCRs 0-3, 7 + PCR 11).
+# automatically enrolled with the verifier using --mb_refstate and
+# the uki measured boot policy (event log replay for PCRs 0-5, 7).
 {
   config,
   lib,

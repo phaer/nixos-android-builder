@@ -203,7 +203,7 @@ sequenceDiagram
         S->>S: Daemon matches registrar<br/>entries with measured boot reports
     end
 
-    S->>S: keylime_tenant -c add<br/>(PCRs 0,1,2,3,7,11)
+    S->>S: keylime_tenant -c add<br/>(--mb_refstate, uki policy)
 
     S->>A: Verifier requests TPM quote
     A->>S: Agent provides quote
