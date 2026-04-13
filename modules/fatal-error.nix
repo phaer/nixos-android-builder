@@ -43,7 +43,13 @@ let
         Restart = "no";
       };
 
+      environment = {
+        TERM = "linux";
+        TERMINFO = "${pkgs.ncurses}/share/terminfo";
+      };
+
       path = [
+        pkgs.coreutils
         pkgs.dialog
         pkgs.kbd
         pkgs.systemd
@@ -73,6 +79,7 @@ in
   boot.initrd.systemd = {
     inherit targets services;
     extraBin = {
+      cat = "${pkgs.coreutils}/bin/cat";
       dialog = "${pkgs.dialog}/bin/dialog";
       chvt = "${pkgs.kbd}/bin/chvt";
     };
