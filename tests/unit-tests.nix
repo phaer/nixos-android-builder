@@ -8,13 +8,10 @@
   pkgs,
   keylimePackage,
 }:
-let
-  policyDir = pkgs.callPackage ../packages/keylime-measured-boot-policy {
-    keylime = keylimePackage;
-  };
-in
 {
   # Building the package triggers pytestCheckHook, which runs
   # test_measured_boot_policy.py against the keylime MBA framework.
-  policyTests = policyDir.package;
+  policyTests = (pkgs.callPackage ../packages/keylime-measured-boot-policy {
+    keylime = keylimePackage;
+  }).package;
 }
