@@ -8,8 +8,8 @@
 
 let
   cfg = config.services.keylime;
-  shared = import ./lib/keylime-shared.nix { inherit lib pkgs; };
   inherit (customPackages) keylime;
+  shared = import ./lib/keylime-shared.nix { inherit lib pkgs keylime; };
 in
 {
   options.services.keylime = shared.mkOptions keylime;

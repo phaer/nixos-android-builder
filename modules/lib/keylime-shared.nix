@@ -1,10 +1,12 @@
 # Shared definitions for the keylime server NixOS module (modules/keylime.nix)
 # and the system-manager port (system-manager/keylime.nix). Contains INI
 # helpers, config defaults, option declarations, and config-file generators.
-{ lib, pkgs }:
+{ lib, pkgs, keylime ? pkgs.callPackage ../../packages/keylime { } }:
 
 let
-  measuredBootPolicy = pkgs.callPackage ../../packages/keylime-measured-boot-policy { };
+  measuredBootPolicy = pkgs.callPackage ../../packages/keylime-measured-boot-policy {
+    inherit keylime;
+  };
 
   # Keylime's config.getlist() uses ast.literal_eval and expects Python list
   # literals (e.g. '["value"]') for certain options.
