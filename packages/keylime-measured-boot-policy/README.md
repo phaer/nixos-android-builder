@@ -70,7 +70,7 @@ Unit tests run without a VM or TPM:
 
 ```bash
 nix build .#checks.x86_64-linux.policyTests   # policy (18 tests)
-nix build .#checks.x86_64-linux.libraryTests   # library (21 tests)
+# library tests run via pytestCheckHook in the measured-boot-library package build
 ```
 
 The full VM integration test (including a negative attestation check

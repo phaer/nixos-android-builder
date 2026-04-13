@@ -1,33 +1,18 @@
-# Python unit tests for measured boot policy and library.
+# Python unit tests for measured boot policy.
 #
 # These are fast, pure tests that don't need a VM or TPM.
-# Run with: nix build .#checks.x86_64-linux.unitTests
+# Run with: nix build .#checks.x86_64-linux.policyTests
+#
+# Note: measured-boot-library tests run via the package's checkPhase
+# (pytestCheckHook), not as a separate flake check.
 {
   pkgs,
   keylimePackage,
 }:
 let
-  measured-boot-library = pkgs.callPackage ../packages/measured-boot-library { };
-
   policyDir = pkgs.callPackage ../packages/keylime-measured-boot-policy { };
 in
 {
-  # Unit tests for the measured boot state library
-  libraryTests =
-    pkgs.runCommand "measured-boot-library-tests"
-      {
-        nativeBuildInputs = [
-          (pkgs.python3.withPackages (ps: [
-            ps.pytest
-            measured-boot-library
-          ]))
-        ];
-      }
-      ''
-        pytest -v ${../packages/measured-boot-library/test_measured_boot_state.py}
-        touch $out
-      '';
-
   # Unit tests for the UKI measured boot policy.
   # keylime is built as a Python application, so we add its
   # site-packages and propagated dependencies to PYTHONPATH.

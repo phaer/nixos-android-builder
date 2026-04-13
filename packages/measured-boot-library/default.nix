@@ -15,8 +15,6 @@ python3Packages.buildPythonPackage {
   build-system = [ python3Packages.setuptools ];
   dependencies = [ python3Packages.pyyaml ];
 
-  # Unit tests are in test_measured_boot_state.py and run as a
-  # separate flake check (checks.libraryTests) because they need
-  # pytest but not tpm2_eventlog.
-  doCheck = false;
+  nativeCheckInputs = [ python3Packages.pytestCheckHook ];
+  pytestFlagsArray = [ "test_measured_boot_state.py" ];
 }
