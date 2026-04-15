@@ -204,7 +204,6 @@ in
       with subtest("Registrar starts and is listening with TLS"):
         server.succeed("systemctl start keylime-registrar.service")
         server.wait_for_unit("keylime-registrar.service")
-        server.wait_for_open_port(8890)
         server.wait_for_open_port(8891)
 
       with subtest("Verifier starts and is listening with mTLS"):

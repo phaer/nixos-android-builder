@@ -415,7 +415,6 @@ rec {
   mkFirewallPorts =
     cfg:
     lib.optionals cfg.registrar.enable [
-      (cfg.registrar.settings.port or registrarDefaults.port)
       (cfg.registrar.settings.tls_port or registrarDefaults.tls_port)
     ]
     ++ lib.optional cfg.verifier.enable (cfg.verifier.settings.port or verifierDefaults.port);
