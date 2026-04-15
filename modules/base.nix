@@ -49,6 +49,16 @@
     hardware.enableRedistributableFirmware = true;
     hardware.enableAllHardware = true;
 
+    # Console font with full Unicode box-drawing support (U+2500-U+257F).
+    # systemd puts the console in UTF-8 mode at boot; the kernel then maps
+    # Unicode code points through the font's Unicode table.  The default
+    # VGA ROM font has no entries for U+2500+, so those glyphs render as '?'.
+    console = {
+      font = "ter-v16n";
+      packages = [ pkgs.terminus_font ];
+      earlySetup = true;
+    };
+
     # Console on tty1 for bare-metal
     boot.consoleLogLevel = lib.mkForce 0;
     boot.kernelParams = [
