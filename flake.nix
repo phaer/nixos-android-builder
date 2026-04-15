@@ -2,7 +2,7 @@
   description = "An ephemeral NixOS system to build Android Open Source Project";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-25.11";
+    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     system-manager = {
       url = "github:numtide/system-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -20,6 +20,17 @@
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
       lib = nixpkgs.lib;
+
+      customPackages = import ./packages { inherit pkgs; };
+      inherit (customPackages)
+        tpm2-tools
+        keylime
+        keylime-agent
+        measuredBoot
+        attestation-ctl
+        secureBootScripts
+        diskInstaller
+        ;
 
       nixosModules = lib.pipe (builtins.readDir ./modules) [
         (lib.filterAttrs (n: v: (lib.hasSuffix ".nix" n) && v == "regular"))
@@ -51,6 +62,7 @@
       nixos = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
         imports = imageModules;
+        _module.args = { inherit customPackages; };
       };
       run-vm = nixos.config.system.build.vmWithWritableDisk;
       image = nixos.config.system.build.finalImage;
@@ -68,19 +80,13 @@
       installer = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
         imports = installerModules;
+        _module.args = { inherit customPackages; };
       };
       installer-image = installer.config.system.build.image;
-
-      secureBootScripts = pkgs.callPackage ./packages/secure-boot-scripts { };
-      diskInstaller = pkgs.callPackage ./packages/disk-installer { };
 
       docs = pkgs.callPackage ./packages/docs {
         inherit self nixos;
       };
-
-      keylime = pkgs.callPackage ./packages/keylime { };
-      keylime-agent = pkgs.callPackage ./packages/keylime-agent { };
-      pcrPolicy = pkgs.callPackage ./packages/pcr-policy { };
 
     in
     {
@@ -92,6 +98,7 @@
       devShells.${system} = {
         default = pkgs.mkShell {
           packages = with secureBootScripts; [
+            attestation-ctl
             create-signing-keys
             diskInstaller.configure
             docs.build-docs
@@ -111,7 +118,8 @@
           keylime-agent
           ;
         inherit (secureBootScripts) create-signing-keys;
-        inherit (pcrPolicy) report-pcrs read-firmware-pcrs;
+        inherit attestation-ctl;
+        inherit (measuredBoot) measure-boot-state report-measured-boot-state debug-measured-boot-state;
         configure-disk-image = diskInstaller.configure;
         default = image;
       };
@@ -136,6 +144,7 @@
       checks.${system} = import ./tests/default.nix {
         inherit
           pkgs
+          customPackages
           installerModules
           imageModules
           nixos
@@ -143,6 +152,7 @@
         keylimeModule = nixosModules.keylime;
         keylimeAgentModule = nixosModules.keylime-agent;
         keylimeAgentPackage = keylime-agent;
+        keylimePackage = keylime;
       };
     };
 }

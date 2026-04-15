@@ -1,11 +1,13 @@
 {
   pkgs,
+  customPackages,
   installerModules,
   imageModules,
   nixos,
   keylimeModule,
   keylimeAgentModule,
   keylimeAgentPackage,
+  keylimePackage,
 }:
 let
   inherit (pkgs) lib;
@@ -45,14 +47,20 @@ let
     ];
   };
   payload = "${nixosWithBackdoor.config.system.build.finalImage}/${nixosWithBackdoor.config.image.filePath}";
+
+  unitTests = import ./unit-tests.nix {
+    inherit pkgs keylimePackage;
+  };
 in
 {
+  inherit (unitTests) policyTests;
   integration = pkgs.testers.runNixOSTest {
     imports = [
       ./integration.nix
       noKeylimeAgent
       {
         _module.args = {
+          inherit customPackages;
           imageModules = imageModules;
         };
       }
@@ -92,6 +100,7 @@ in
         _module.args = {
           imageModules = imageModules;
           inherit
+            customPackages
             keylimeModule
             keylimeAgentModule
             keylimeAgentPackage
@@ -108,6 +117,7 @@ in
         _module.args = {
           imageModules = imageModules;
           inherit
+            customPackages
             keylimeModule
             keylimeAgentModule
             keylimeAgentPackage

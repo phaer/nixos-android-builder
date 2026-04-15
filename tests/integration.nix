@@ -1,4 +1,9 @@
-{ imageModules, lib, ... }:
+{
+  imageModules,
+  customPackages,
+  lib,
+  ...
+}:
 {
   name = "nixos-android-builder-integration-test";
   nodes.machine =
@@ -6,6 +11,7 @@
     {
       imports = imageModules;
       config = {
+        _module.args = { inherit customPackages; };
         nixosAndroidBuilder.unattended.enable = lib.mkForce false;
         # Decrease resource usage for VM tests a bit as long as we are not actually
         # building android as part of the test suite.

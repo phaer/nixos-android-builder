@@ -1,18 +1,20 @@
-# Test: auto-enrollment of keylime agents with full PCR policy.
+# Test: auto-enrollment of keylime agents with measured boot policy.
 #
 # Verifies that the auto-enrollment daemon on the server side
 # automatically enrolls a new agent when it both registers with
-# the registrar AND reports its full TPM PCR values.
+# the registrar AND reports its measured boot reference state.
 {
   keylimeModule,
   keylimeAgentModule,
   keylimeAgentPackage,
+  customPackages,
   imageModules,
   lib,
   pkgs,
   ...
 }:
 let
+  inherit (customPackages) tpm2-tools measuredBoot;
   tlsDir = "/var/lib/keylime/tls";
   caCert = "${tlsDir}/ca-cert.pem";
   caKey = "${tlsDir}/ca-key.pem";
@@ -29,7 +31,6 @@ let
     ];
   } (builtins.readFile ../system-manager/keylime-auto-enroll.py);
 
-  pcrPolicy = pkgs.callPackage ../packages/pcr-policy { };
 in
 {
   name = "keylime-auto-enroll";
@@ -38,6 +39,7 @@ in
     { pkgs, ... }:
     {
       imports = [ keylimeModule ];
+      _module.args = { inherit customPackages; };
 
       virtualisation.tpm.enable = true;
 
@@ -45,7 +47,7 @@ in
 
       environment.systemPackages = [
         pkgs.openssl
-        pkgs.tpm2-tools
+        tpm2-tools
         pkgs.curl
       ];
 
@@ -95,6 +97,7 @@ in
     { config, lib, ... }:
     {
       imports = imageModules ++ [ keylimeAgentModule ];
+      _module.args = { inherit customPackages; };
 
       system.name = lib.mkForce "agent";
 
@@ -110,9 +113,10 @@ in
       environment.systemPackages = [
         pkgs.coreutils
         pkgs.openssl
-        pkgs.tpm2-tools
+        tpm2-tools
         pkgs.curl
-        pcrPolicy.report-pcrs
+        measuredBoot.report-measured-boot-state
+        measuredBoot.measure-boot-state
       ];
 
       systemd.tmpfiles.rules = [
@@ -129,8 +133,8 @@ in
 
       # Don't start automatically — start after CA cert is provisioned
       systemd.services.keylime-agent.wantedBy = lib.mkForce [ ];
-      # Don't auto-start report-pcrs — we trigger it manually after agent starts
-      systemd.services.keylime-report-pcrs.wantedBy = lib.mkForce [ ];
+      # Don't auto-start — we trigger it manually after agent starts
+      systemd.services.keylime-report-measured-boot-state.wantedBy = lib.mkForce [ ];
     };
 
   testScript =
@@ -232,15 +236,12 @@ in
         assert agent_uuid, "Agent did not register within 30s"
         agent.log(f"Agent UUID: {agent_uuid}")
 
-        # Report PCRs to the enrollment server.
-        # report-pcrs reads the UUID from agent_data.json's
-        # ek_hash field (populated after registration).
-        agent.succeed(
-          f"KEYLIME_ENROLL_URL=https://{server_ip}:8893"
-          " report-pcrs"
-        )
+        # Report measured boot state to the enrollment server.
+        # Reads UUID from agent_data.json and server address
+        # from /boot/attestation-server.json.
+        agent.succeed("report-measured-boot-state")
 
-      with subtest("Verifier attests the auto-enrolled agent with full policy"):
+      with subtest("Verifier attests the auto-enrolled agent with measured boot policy"):
         server.wait_until_succeeds(
           "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
           f" https://127.0.0.1:8881/v2.5/agents/{agent_uuid}"
@@ -249,26 +250,49 @@ in
         )
         server.log("Agent successfully auto-enrolled and attested!")
 
-        # Verify the policy includes firmware PCRs (not just PCR 11)
+        # Verify the enrolled policy uses measured boot + PCR 11
         cvstatus = json.loads(server.succeed(
           "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
           f" https://127.0.0.1:8881/v2.5/agents/{agent_uuid}"
         ))
-        tpm_policy = cvstatus.get("results", {}).get("tpm_policy", {})
-        server.log(f"TPM policy: {json.dumps(tpm_policy)}")
+        results = cvstatus.get("results", {})
+        tpm_policy_raw = results.get("tpm_policy", "{}")
+        tpm_policy = json.loads(tpm_policy_raw) if isinstance(tpm_policy_raw, str) else tpm_policy_raw
+        server.log(f"TPM policy keys: {list(tpm_policy.keys())}")
 
-        # Must have firmware PCRs AND PCR 11
+        # Only the mask should be present — no individual PCR entries
         for pcr in ["0", "1", "2", "3", "7", "11"]:
-          assert pcr in tpm_policy, f"PCR {pcr} missing from enrolled policy"
-        server.log("Full PCR policy verified (PCRs 0, 1, 2, 3, 7, 11)")
+          assert pcr not in tpm_policy, f"PCR {pcr} should not be in tpm_policy (covered by measured_boot_policy)"
+        server.log("Policy verified: all PCRs covered by measured_boot_policy")
 
       for i in range(1, 4):
-        with subtest(f"Attestation persists after reboot {i}/3"):
+        with subtest(f"Attestation and EK persist after reboot {i}/3"):
           agent.shutdown()
           agent.start()
           agent.wait_for_unit("multi-user.target")
           agent.succeed("systemctl start keylime-agent")
           agent.wait_for_unit("keylime-agent.service")
+
+          # EK stability check: the registrar should still contain
+          # exactly the same UUID.  If the swtpm's Endorsement Primary
+          # Seed changed (e.g. state directory lost, TPM2_Clear issued),
+          # the agent would register under a new EK-derived UUID,
+          # leaving a stale entry behind.
+          reg_uuids = []
+          for _ in range(30):
+            resp = json.loads(server.succeed(
+              "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
+              " https://127.0.0.1:8891/v2.5/agents/"
+            ))
+            reg_uuids = resp.get("results", {}).get("uuids", [])
+            if reg_uuids == [agent_uuid]:
+              break
+            _time.sleep(1)
+          assert reg_uuids == [agent_uuid], (
+            f"EK unstable after reboot {i}:"
+            f" expected [{agent_uuid}], got {reg_uuids}"
+          )
+          server.log(f"Reboot {i}/3: EK stable, UUID unchanged")
 
           server.wait_until_succeeds(
             "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
