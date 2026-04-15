@@ -326,6 +326,111 @@ class TestPolicyAccepts:
         assert policy.evaluate(rs, el) == ""
 
 
+class TestFirmwareVariants:
+    """Policy accepts event types emitted by real firmware
+    that are not present in the baseline synthetic log."""
+
+    def test_post_code_in_pcr0(self, policy, valid_refstate):
+        """Some firmware measures POST code blobs into PCR 0
+        using the older EV_POST_CODE event type."""
+        el = build_eventlog()
+        el["events"].insert(1, make_event(
+            0, "EV_POST_CODE",
+            make_digests("ab" * 32),
+            event_data={"BlobBase": 4289069056,
+                        "BlobLength": 4980736},
+        ))
+        assert policy.evaluate(valid_refstate, el) == ""
+
+    def test_efi_variable_boot2_in_pcr1(self, policy,
+                                        valid_refstate):
+        """Recent firmware uses EV_EFI_VARIABLE_BOOT2 in PCR 1
+        instead of or alongside EV_EFI_VARIABLE_BOOT."""
+        el = build_eventlog()
+        el["events"].append(make_event(
+            1, "EV_EFI_VARIABLE_BOOT2",
+            make_digests("ab" * 32),
+        ))
+        assert policy.evaluate(valid_refstate, el) == ""
+
+    def test_firmware_blob_in_pcr2(self, policy):
+        """Some firmware measures option ROM blobs into PCR 2
+        using EV_EFI_PLATFORM_FIRMWARE_BLOB instead of
+        EV_EFI_BOOT_SERVICES_DRIVER.  The blob must be in the
+        refstate since measure-boot-state captures from all PCRs."""
+        pcr2_blob = "ab" * 32
+        rs = build_refstate(fw_blobs=[pcr2_blob])
+        el = build_eventlog(fw_blobs=[])  # no PCR 0 blobs
+        el["events"].append(make_event(
+            2, "EV_EFI_PLATFORM_FIRMWARE_BLOB",
+            make_digests(pcr2_blob),
+            event_data={"BlobBase": 3423741648,
+                        "BlobLength": 122368},
+        ))
+        assert policy.evaluate(rs, el) == ""
+
+    def test_firmware_blob2_in_pcr2(self, policy):
+        """Same as above for EV_EFI_PLATFORM_FIRMWARE_BLOB2."""
+        pcr2_blob = "ab" * 32
+        rs = build_refstate(fw_blobs=[pcr2_blob])
+        el = build_eventlog(fw_blobs=[])
+        el["events"].append(make_event(
+            2, "EV_EFI_PLATFORM_FIRMWARE_BLOB2",
+            make_digests(pcr2_blob),
+            event_data={"BlobBase": 3423741648,
+                        "BlobLength": 122368},
+        ))
+        assert policy.evaluate(rs, el) == ""
+
+    def test_wrong_firmware_blob_in_pcr2_rejected(self,
+                                                   policy):
+        """A PCR 2 blob whose digest is not in the refstate
+        must be rejected."""
+        rs = build_refstate(fw_blobs=["ab" * 32])
+        el = build_eventlog(fw_blobs=[])
+        el["events"].append(make_event(
+            2, "EV_EFI_PLATFORM_FIRMWARE_BLOB",
+            make_digests("00" * 32),  # wrong digest
+            event_data={"BlobBase": 3423741648,
+                        "BlobLength": 122368},
+        ))
+        assert policy.evaluate(rs, el) != ""
+
+    def test_post_code_in_pcr2(self, policy, valid_refstate):
+        """Some firmware measures option ROM code into PCR 2
+        using the older EV_POST_CODE event type."""
+        el = build_eventlog()
+        el["events"].append(make_event(
+            2, "EV_POST_CODE",
+            make_digests("ab" * 32),
+            event_data={"BlobBase": 983040,
+                        "BlobLength": 65536},
+        ))
+        assert policy.evaluate(valid_refstate, el) == ""
+
+    def test_efi_action_in_pcr6(self, policy, valid_refstate):
+        """Some firmware emits EV_EFI_ACTION in PCR 6.
+
+        PCR 6 is not in relevant_pcr_indices and is skipped by
+        tpm_policy, so acceptance here provides no integrity
+        guarantee; the handler just prevents the dispatcher from
+        choking.
+        """
+        el = build_eventlog()
+        el["events"].append(make_efi_action(
+            6, "Ready To Boot",
+        ))
+        assert policy.evaluate(valid_refstate, el) == ""
+
+    @pytest.mark.parametrize("pcr", [8, 9, 11, 14, 15])
+    def test_separator_in_higher_pcrs(self, policy,
+                                      valid_refstate, pcr):
+        """Some firmware emits EV_SEPARATOR for PCRs beyond 7."""
+        el = build_eventlog()
+        el["events"].append(make_separator(pcr))
+        assert policy.evaluate(valid_refstate, el) == ""
+
+
 class TestPolicyRejectsUki:
     def test_wrong_uki_digest(self, policy,
                               valid_eventlog):

@@ -215,6 +215,14 @@ class UkiPolicy(policies.Policy):
             (0, "EV_NO_ACTION"),
             tests.OnceTest(tests.AcceptAll()),
         )
+        # Older TCG event type used by some firmware to measure
+        # POST code blobs into PCR 0.  PCR 0 is in
+        # relevant_pcr_indices so the digest is covered by the
+        # end-to-end quote comparison regardless.
+        dispatcher.set(
+            (0, "EV_POST_CODE"),
+            tests.AcceptAll(),
+        )
         dispatcher.set(
             (0, "EV_S_CRTM_VERSION"),
             events_final.get("s_crtms"),
@@ -253,10 +261,37 @@ class UkiPolicy(policies.Policy):
             (1, "EV_EFI_ACTION"),
             tests.EvEfiActionTest(1),
         )
+        # Newer UEFI spec variant of EV_EFI_VARIABLE_BOOT,
+        # used by recent firmware for boot variable measurements.
+        dispatcher.set(
+            (1, "EV_EFI_VARIABLE_BOOT2"),
+            tests.AcceptAll(),
+        )
 
         # PCR 2 -- boot services drivers (accept)
         dispatcher.set(
             (2, "EV_EFI_BOOT_SERVICES_DRIVER"),
+            tests.AcceptAll(),
+        )
+        # Some firmware measures option ROM / UEFI driver blobs
+        # into PCR 2 using EV_EFI_PLATFORM_FIRMWARE_BLOB rather
+        # than EV_EFI_BOOT_SERVICES_DRIVER.  Feed these into the
+        # same platform_firmware_blobs collector as PCR 0 events:
+        # measure-boot-state captures blobs from all PCRs into
+        # the refstate, so the policy must match them the same way.
+        dispatcher.set(
+            (2, "EV_EFI_PLATFORM_FIRMWARE_BLOB"),
+            events_final.get("platform_firmware_blobs"),
+        )
+        dispatcher.set(
+            (2, "EV_EFI_PLATFORM_FIRMWARE_BLOB2"),
+            events_final.get("platform_firmware_blobs"),
+        )
+        # Some firmware measures option ROM code into PCR 2
+        # using the older EV_POST_CODE type.  PCR 2 is in
+        # relevant_pcr_indices so the quote comparison covers it.
+        dispatcher.set(
+            (2, "EV_POST_CODE"),
             tests.AcceptAll(),
         )
 
@@ -278,6 +313,18 @@ class UkiPolicy(policies.Policy):
         dispatcher.set(
             (5, "EV_EFI_ACTION"),
             tests.EvEfiActionTest(5),
+        )
+
+        # PCR 6 -- Host Platform Manufacturer Specific.
+        # PCR 6 is not in relevant_pcr_indices, so its value is
+        # not checked end-to-end against the quote (the verifier
+        # also skips it in tpm_policy).  These handlers exist
+        # solely to prevent the dispatcher from rejecting events
+        # that firmware emits here; they provide no integrity
+        # guarantee beyond what the separator already covers.
+        dispatcher.set(
+            (6, "EV_EFI_ACTION"),
+            tests.AcceptAll(),
         )
 
         # PCR 7 -- Secure Boot variables
@@ -356,8 +403,11 @@ class UkiPolicy(policies.Policy):
             vd_authority,
         )
 
-        # Separators for PCRs 0-7
-        for pcr in range(8):
+        # Separators for PCRs 0-15.
+        # range(8) covered the firmware PCRs; extend to 15 because
+        # some firmware also emits separators for PCRs 8-15 to
+        # mark the end of each measurement phase.
+        for pcr in range(16):
             dispatcher.set(
                 (pcr, "EV_SEPARATOR"),
                 tests.EvSeperatorTest(),
