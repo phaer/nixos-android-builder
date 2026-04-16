@@ -218,6 +218,7 @@
           customPackages
           installerModules
           imageModules
+          desktopModules
           nixos
           ;
         keylimeModule = nixosModules.keylime;

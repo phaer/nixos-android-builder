@@ -3,6 +3,7 @@
   customPackages,
   installerModules,
   imageModules,
+  desktopModules,
   nixos,
   keylimeModule,
   keylimeAgentModule,
@@ -130,6 +131,18 @@ in
   credentialStorage = pkgs.testers.runNixOSTest {
     imports = [
       ./credential-storage.nix
+    ];
+  };
+
+  desktop = pkgs.testers.runNixOSTest {
+    imports = [
+      ./desktop.nix
+      {
+        _module.args = {
+          inherit customPackages;
+          desktopModules = desktopModules;
+        };
+      }
     ];
   };
 
