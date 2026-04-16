@@ -103,6 +103,40 @@
       };
       installer-image = installer.config.system.build.image;
 
+      desktopModules = [
+        ./modules/base.nix
+        ./modules/nix.nix
+        ./modules/fatal-error.nix
+        ./modules/secure-boot.nix
+        ./modules/yubikey-auth.nix
+        ./hosts/desktop/configuration.nix
+        ./hosts/desktop/image.nix
+        ./hosts/desktop/vm.nix
+        (
+          { modulesPath, ... }:
+          {
+            imports = [
+              "${modulesPath}/image/repart.nix"
+              "${modulesPath}/profiles/minimal.nix"
+              "${modulesPath}/virtualisation/qemu-vm.nix"
+            ];
+          }
+        )
+      ];
+
+      desktop = pkgs.nixos {
+        nixpkgs.hostPlatform = { inherit system; };
+        imports = desktopModules;
+        _module.args = { inherit customPackages; };
+      };
+      desktop-gnome = pkgs.nixos {
+        nixpkgs.hostPlatform = { inherit system; };
+        imports = desktopModules ++ [ { desktop.gnome = true; } ];
+        _module.args = { inherit customPackages; };
+      };
+      run-desktop-vm = desktop.config.system.build.vmWithWritableDisk;
+      run-desktop-gnome-vm = desktop-gnome.config.system.build.vmWithWritableDisk;
+
       docs = pkgs.callPackage ./packages/docs {
         inherit self nixos;
       };
@@ -110,7 +144,7 @@
     in
     {
       inherit nixosModules;
-      nixosConfigurations = { inherit nixos installer; };
+      nixosConfigurations = { inherit nixos installer desktop desktop-gnome; };
 
       formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt-tree;
 
@@ -130,6 +164,8 @@
       packages.${system} = {
         inherit
           run-vm
+          run-desktop-vm
+          run-desktop-gnome-vm
           image
           installer-image
           installer-vm

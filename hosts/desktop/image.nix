@@ -1,0 +1,74 @@
+# Disk image and partition layout for the desktop configuration.
+#
+# Simple conventional layout:
+#   - ESP with UKI (secure boot signed)
+#   - ext4 root partition with the full NixOS system
+#   - systemd-repart grows root to fill disk at first boot
+{
+  pkgs,
+  lib,
+  config,
+  ...
+}:
+let
+  efiArch = config.nixpkgs.hostPlatform.efiArch;
+  efiUki = "/EFI/BOOT/BOOT${lib.toUpper efiArch}.EFI";
+in
+{
+  config = {
+    system.image = {
+      id = config.system.name;
+      version = config.system.nixos.version;
+    };
+
+    # Alias so that mkInstallerModules and vm.nix can use the same
+    # attribute (finalImage) for both builder and desktop images.
+    system.build.finalImage = config.system.build.image;
+
+    # Standard filesystem layout.
+    fileSystems = {
+      "/" = {
+        device = "/dev/disk/by-partlabel/root";
+        fsType = "ext4";
+      };
+      "/boot" = {
+        device = "/dev/disk/by-partlabel/boot";
+        fsType = "vfat";
+      };
+    };
+
+    ## Build-time image configuration (systemd-repart)
+    image.repart = {
+      # OVMF does not work with the default repart sector size of 4096
+      sectorSize = 512;
+      name = config.system.name;
+
+      partitions = {
+        "00-esp" = {
+          contents = {
+            "${efiUki}".source = "${config.system.build.uki}/${config.system.boot.loader.ukiFile}";
+            "/image-id".source = pkgs.writeText "image-id" "${config.system.name}\n";
+          };
+          repartConfig = {
+            Type = "esp";
+            Label = "boot";
+            Format = "vfat";
+            SizeMinBytes = "256M";
+          };
+        };
+        "10-root" = {
+          storePaths = [ config.system.build.toplevel ];
+          repartConfig = {
+            Type = "root";
+            Label = "root";
+            Format = "ext4";
+            Minimize = "guess";
+          };
+        };
+      };
+    };
+
+    # Grow root partition to fill disk at first boot.
+    boot.initrd.systemd.repart.enable = true;
+  };
+}
