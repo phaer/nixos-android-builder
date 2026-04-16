@@ -42,7 +42,25 @@
         ))
       ];
 
-      ourModules = (lib.attrValues nixosModules) ++ [ ./configuration.nix ];
+      builderModules = [
+        ./modules/android-build-env.nix
+        ./modules/artifact-storage.nix
+        ./modules/base.nix
+        ./modules/branch-selector.nix
+        ./modules/credential-storage.nix
+        ./modules/debug.nix
+        ./modules/disable-ldso.nix
+        ./modules/fatal-error.nix
+        ./modules/fhsenv.nix
+        ./modules/image.nix
+        ./modules/keylime.nix
+        ./modules/keylime-agent.nix
+        ./modules/secure-boot.nix
+        ./modules/unattended.nix
+        ./modules/vm.nix
+        ./modules/yubikey-auth.nix
+        ./configuration.nix
+      ];
 
       imageModules = [
         (
@@ -57,7 +75,7 @@
           }
         )
       ]
-      ++ ourModules;
+      ++ builderModules;
 
       nixos = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
