@@ -46,6 +46,7 @@
         ./modules/android-build-env.nix
         ./modules/artifact-storage.nix
         ./modules/base.nix
+        ./modules/builder.nix
         ./modules/branch-selector.nix
         ./modules/credential-storage.nix
         ./modules/debug.nix
