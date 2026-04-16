@@ -5,6 +5,19 @@
   ...
 }:
 {
+  options.nixosAndroidBuilder.imageId = lib.mkOption {
+    type = lib.types.str;
+    default = "android-builder";
+    description = ''
+      The image identifier written to /image-id on the ESP.
+      Defaults to "android-builder" and should not normally need to be
+      changed. Kept separate from system.name so that test VMs can
+      override system.name (which the NixOS test driver uses as the
+      Python machine variable name) without corrupting the image-id
+      that configure-disk-image uses to validate image type.
+    '';
+  };
+
   config = {
     # The NixOS default activation script to create /usr/bin/env assumes a
     # writable /usr/ file system. That's not the case for us, so we disable
@@ -12,7 +25,7 @@
     # below.
     system = {
       image = {
-        id = config.system.name;
+        id = config.nixosAndroidBuilder.imageId;
         version = config.system.nixos.version;
       };
     };
@@ -169,11 +182,16 @@
           };
 
         partitions = {
-          "00-esp".repartConfig = {
-            Type = "esp";
-            Label = "boot";
-            Format = "vfat";
-            SizeMinBytes = "128M";
+          "00-esp" = {
+            contents = {
+              "/image-id".source = pkgs.writeText "image-id" "${config.nixosAndroidBuilder.imageId}\n";
+            };
+            repartConfig = {
+              Type = "esp";
+              Label = "boot";
+              Format = "vfat";
+              SizeMinBytes = "128M";
+            };
           };
           "10-store-verity".repartConfig = {
             Label = "store-verity";
