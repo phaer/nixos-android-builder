@@ -86,22 +86,34 @@
       run-vm = nixos.config.system.build.vmWithWritableDisk;
       image = nixos.config.system.build.finalImage;
 
-      installerModules = [
+      mkInstallerModules = target: [
         diskInstaller.module
         diskInstaller.vm
         nixosModules.fatal-error
         {
-          diskInstaller.payload = "${nixos.config.system.build.finalImage}/${nixos.config.image.filePath}";
+          diskInstaller.payload = "${target.config.system.build.finalImage}/${target.config.image.filePath}";
         }
       ];
 
-      installer-vm = installer.config.system.build.vmWithInstallerDisk;
+      installerModules = mkInstallerModules nixos;
+
       installer = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
         imports = installerModules;
         _module.args = { inherit customPackages; };
       };
+      installer-vm = installer.config.system.build.vmWithInstallerDisk;
       installer-image = installer.config.system.build.image;
+
+      desktopInstallerModules = mkInstallerModules desktop;
+
+      desktop-installer = pkgs.nixos {
+        nixpkgs.hostPlatform = { inherit system; };
+        imports = desktopInstallerModules;
+        _module.args = { inherit customPackages; };
+      };
+      desktop-installer-vm = desktop-installer.config.system.build.vmWithInstallerDisk;
+      desktop-installer-image = desktop-installer.config.system.build.image;
 
       desktopModules = [
         ./modules/base.nix
@@ -144,7 +156,7 @@
     in
     {
       inherit nixosModules;
-      nixosConfigurations = { inherit nixos installer desktop desktop-gnome; };
+      nixosConfigurations = { inherit nixos installer desktop desktop-gnome desktop-installer; };
 
       formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt-tree;
 
@@ -169,6 +181,8 @@
           image
           installer-image
           installer-vm
+          desktop-installer-image
+          desktop-installer-vm
           keylime
           keylime-agent
           ;
