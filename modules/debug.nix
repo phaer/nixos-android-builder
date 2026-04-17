@@ -22,11 +22,6 @@
       gitMinimal
     ];
 
-    # Set an empty password for "user"
-    users.users."user" = {
-      initialHashedPassword = "";
-    };
-
     # Allow password-less sudo for wheel users
     security.sudo.wheelNeedsPassword = false;
 

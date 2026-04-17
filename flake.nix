@@ -122,6 +122,7 @@
         ./modules/fatal-error.nix
         ./modules/secure-boot.nix
         ./modules/yubikey-auth.nix
+        ./modules/desktop.nix
         ./hosts/desktop/configuration.nix
         ./hosts/desktop/image.nix
         ./hosts/desktop/vm.nix
