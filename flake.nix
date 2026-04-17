@@ -118,6 +118,7 @@
       desktopModules = [
         ./modules/base.nix
         ./modules/nix.nix
+        ./modules/debug.nix
         ./modules/fatal-error.nix
         ./modules/secure-boot.nix
         ./modules/yubikey-auth.nix

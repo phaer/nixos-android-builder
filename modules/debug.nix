@@ -10,7 +10,10 @@
     ./nix.nix
   ];
 
-  config = lib.mkIf (config.nixosAndroidBuilder.debug) {
+  options.nixosAndroidBuilder.debug =
+    lib.mkEnableOption "image customizations for interactive access during run-time";
+
+  config = lib.mkIf config.nixosAndroidBuilder.debug {
     # Add extra software from nixpkgs for convinience.
     environment.systemPackages = with pkgs; [
       vim

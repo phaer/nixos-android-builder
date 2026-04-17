@@ -7,9 +7,6 @@
   ...
 }:
 {
-  options.nixosAndroidBuilder = {
-    debug = lib.mkEnableOption "image customizations for interactive access during run-time";
-  };
   config = {
     # Disable nix in non-interactive builds.
     nix.enable = lib.mkDefault false;
