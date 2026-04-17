@@ -78,6 +78,10 @@ in
 {
   boot.initrd.systemd = {
     inherit targets services;
+    # dialog links against libncurses, but the terminfo data directory is not
+    # a library dependency and won't be pulled into the initrd automatically.
+    # Add it explicitly so the TERMINFO env var in fatal-error.service resolves.
+    storePaths = [ pkgs.ncurses ];
     extraBin = {
       cat = "${pkgs.coreutils}/bin/cat";
       dialog = "${pkgs.dialog}/bin/dialog";
