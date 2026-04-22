@@ -10,8 +10,7 @@
     ./nix.nix
   ];
 
-  options.nixosAndroidBuilder.debug =
-    lib.mkEnableOption "image customizations for interactive access during run-time";
+  options.nixosAndroidBuilder.debug = lib.mkEnableOption "image customizations for interactive access during run-time";
 
   config = lib.mkIf config.nixosAndroidBuilder.debug {
     # Add extra software from nixpkgs for convinience.
@@ -28,10 +27,7 @@
     # Enable unauthenticated shell if early boot fails
     boot.initrd.systemd.emergencyAccess = true;
 
-    # Add verbose log output, to aid debugging boot issues. log_level=debug is available as well.
     boot.kernelParams = [
-      "systemd.show_status=true"
-      "systemd.log_level=info"
       "rd.systemd.debug_shell=tty3"
       "systemd.debug_shell=tty3"
     ];
