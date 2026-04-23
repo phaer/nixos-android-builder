@@ -174,6 +174,17 @@ in
     ];
   };
 
+  desktopGnome = pkgs.testers.runNixOSTest {
+    imports = [
+      ./desktop-gnome.nix
+      {
+        _module.args = {
+          inherit customPackages;
+          desktopModules = desktopModules;
+        };
+      }
+    ];
+  };
 
   desktopInstaller = pkgs.testers.runNixOSTest {
     imports = [
