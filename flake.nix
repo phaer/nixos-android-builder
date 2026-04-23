@@ -158,7 +158,15 @@
     in
     {
       inherit nixosModules;
-      nixosConfigurations = { inherit nixos installer desktop desktop-gnome desktop-installer; };
+      nixosConfigurations = {
+        inherit
+          nixos
+          installer
+          desktop
+          desktop-gnome
+          desktop-installer
+          ;
+      };
 
       formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt-tree;
 
@@ -217,9 +225,11 @@
           pkgs
           customPackages
           installerModules
+          desktopInstallerModules
           imageModules
           desktopModules
           nixos
+          desktop
           ;
         keylimeModule = nixosModules.keylime;
         keylimeAgentModule = nixosModules.keylime-agent;

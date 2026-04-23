@@ -64,7 +64,7 @@
     };
 
     # Don't auto-login with empty passwords — require U2F or explicit auth.
-    security.pam.services.greetd.allowNullPassword = false;
+    security.pam.services.greetd.allowNullPassword = lib.mkForce false;
 
     # Tell logind the session type so pam_systemd creates a wayland
     # session (not tty). GNOME/Mutter need this to find their session.

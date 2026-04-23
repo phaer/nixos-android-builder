@@ -6,12 +6,24 @@
 }:
 {
   name = "desktop-integration-test";
+
+  # U2F authentication (YubiKey) is not tested here because pam_u2f
+  # requires a real USB HID device speaking the CTAP protocol — there
+  # is no practical virtual FIDO2 authenticator for NixOS VM tests.
+  # Instead, we test login via password auth (groupA is empty, so
+  # yubikey-auth.nix leaves PAM defaults intact).
+
   nodes.machine =
     { ... }:
     {
       imports = desktopModules;
       config = {
         _module.args = { inherit customPackages; };
+
+        # Set a known password for the test user so we can log in
+        # through tuigreet without U2F.
+        users.users.user.hashedPassword = "$6$0kZnFhhiulKUACXN$B83f7jPk8ZF2R1.wAMbM/IXuqvV6Ub41K2vrH6evE5EeCK51v9l/gTGATe8dkt2a19DRt9caZwrr7CIsOV1s0."; # "test"
+
         virtualisation = lib.mkVMOverride {
           diskSize = 30 * 1024;
           memorySize = 8 * 1024;
@@ -70,6 +82,16 @@
         output = machine.succeed("cat /home/user/sentinel").strip()
         assert output == "hello-desktop", \
           f"Expected 'hello-desktop', got '{output}'"
+
+      with subtest("login yields a shell session"):
+        # tuigreet shows the greeting on tty1; type credentials and
+        # verify we land in a shell.
+        machine.wait_until_tty_matches("1", "NixOS Desktop")
+        machine.send_chars("user\n")
+        machine.sleep(1)
+        machine.send_chars("test\n")
+        # After login, tuigreet hands off to bash (the default --cmd).
+        machine.wait_until_tty_matches("1", "user@")
 
       machine.shutdown()
     '';
