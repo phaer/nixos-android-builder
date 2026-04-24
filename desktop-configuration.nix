@@ -8,7 +8,7 @@
     nixosAndroidBuilder.debug = true;
 
     # Basic interactive tools and passwordless sudo come from debug.nix.
-    # Login greeter and session picker come from modules/greetd.nix.
+    # Login greeter and session picker come from modules/desktop.nix.
     # U2F authentication comes from modules/yubikey-auth.nix.
 
     # YubiKey groups — override in a machine-specific config.

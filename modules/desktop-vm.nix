@@ -11,8 +11,8 @@ let
   cfg = config.virtualisation;
   hostPkgs = cfg.host.pkgs;
 
-  secureBootScripts = hostPkgs.callPackage ../../packages/secure-boot-scripts { };
-  disk-installer = hostPkgs.callPackage ../../packages/disk-installer { };
+  secureBootScripts = hostPkgs.callPackage ../packages/secure-boot-scripts { };
+  disk-installer = hostPkgs.callPackage ../packages/disk-installer { };
 in
 {
   config = {
