@@ -123,9 +123,9 @@
         ./modules/secure-boot.nix
         ./modules/yubikey-auth.nix
         ./modules/greetd.nix
-        ./hosts/desktop/configuration.nix
-        ./hosts/desktop/image.nix
-        ./hosts/desktop/vm.nix
+        ./modules/desktop-image.nix
+        ./modules/desktop-vm.nix
+        ./desktop-configuration.nix
         (
           { modulesPath, ... }:
           {
