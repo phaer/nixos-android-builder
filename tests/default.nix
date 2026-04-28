@@ -1,4 +1,5 @@
 {
+  self,
   pkgs,
   customPackages,
   installerModules,
@@ -167,7 +168,7 @@ in
       ./desktop.nix
       {
         _module.args = {
-          inherit customPackages;
+          inherit self customPackages;
           desktopModules = desktopModules;
         };
       }

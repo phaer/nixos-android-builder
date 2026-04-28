@@ -1,4 +1,5 @@
 {
+  self,
   desktopModules,
   customPackages,
   lib,
@@ -18,7 +19,7 @@
     {
       imports = desktopModules;
       config = {
-        _module.args = { inherit customPackages; };
+        _module.args = { inherit customPackages self; };
 
         # Clear YubiKey groups so yubikey-auth.nix leaves PAM defaults
         # intact and falls back to password auth. pam_u2f cannot be
@@ -93,6 +94,11 @@
         output = machine.succeed("cat /home/user/sentinel").strip()
         assert output == "hello-desktop", \
           f"Expected 'hello-desktop', got '{output}'"
+
+      with subtest("flake source is available"):
+        machine.succeed("test -d /home/user/nixos-android-builder")
+        machine.succeed("test -f /home/user/nixos-android-builder/flake.nix")
+        machine.succeed("test -f /home/user/nixos-android-builder/flake.lock")
 
       with subtest("login yields a shell session"):
         # tuigreet shows the greeting on tty1; type credentials and

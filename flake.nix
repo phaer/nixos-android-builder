@@ -231,6 +231,7 @@
 
       checks.${system} = import ./tests/default.nix {
         inherit
+          self
           pkgs
           customPackages
           installerModules
