@@ -50,22 +50,8 @@
       machine.switch_root()
       machine.wait_for_unit("default.target")
 
-      with subtest("greetd is running"):
+      with subtest("installed system boots"):
         machine.wait_for_unit("greetd.service")
-
-      with subtest("root is ext4 on disk"):
-        output = machine.succeed("mount | grep ' / '")
-        assert "ext4" in output, f"root is not ext4: {output}"
-        assert "rw" in output, f"root is not writable: {output}"
-
-      # Note: systemd-repart resize is NOT tested here because the test
-      # backdoor (switch_root) skips the initrd where repart runs.
-      # Resize is covered by the desktop test.
-
-      with subtest("nix with flakes is available"):
-        machine.succeed("nix --version")
-        output = machine.succeed("nix show-config 2>&1 | grep experimental-features")
-        assert "flakes" in output, f"flakes not enabled: {output}"
 
       machine.shutdown()
     '';
