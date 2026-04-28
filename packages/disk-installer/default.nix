@@ -6,7 +6,7 @@
   mtools,
   util-linux,
   sbsigntool,
-  parted,
+  gptfdisk,
 }:
 {
 
@@ -34,7 +34,7 @@
     name = "run-disk-installer";
     runtimeInputs = [
       jq
-      parted
+      gptfdisk
       # some dependencies are in boot.initrd.systemd.extraBin,
       # as we don't want to pull their whole store paths into the
       # initrd for just a few binaries: lsblk, ddrescue, dialog,
