@@ -79,8 +79,14 @@
       XDG_SESSION_TYPE = "wayland";
     };
 
+    # PipeWire for audio (GNOME expects a working audio stack).
+    services.pipewire = lib.mkIf config.desktop.gnome {
+      enable = true;
+      alsa.enable = true;
+      pulse.enable = true;
+    };
+
     # GNOME desktop (optional).
-    services.xserver.enable = lib.mkIf config.desktop.gnome true;
     services.desktopManager.gnome.enable = lib.mkIf config.desktop.gnome true;
   };
 }
