@@ -19,6 +19,12 @@
 
         desktop.gnome = true;
 
+        # Clear YubiKey groups so yubikey-auth.nix leaves PAM defaults
+        # intact and falls back to password auth. pam_u2f cannot be
+        # tested in QEMU — it requires a real USB HID FIDO2 device.
+        nixosAndroidBuilder.yubikeys.groupA = lib.mkForce [];
+        nixosAndroidBuilder.yubikeys.groupB = lib.mkForce [];
+
         # Set a known password for the test user so we can log in
         # through tuigreet without U2F.
         users.users.user.hashedPassword = "$6$IQa3TAd7zSqu0PUX$YB0xu1nCT5O/vL.309PMiDO4gmPmyGOaRLzAdmSWYL3VmSmeBPtIEZg1TW.NkXrGO9Cc8Gxxklwqmif5.9qc.1"; # "test"
