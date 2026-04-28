@@ -106,7 +106,6 @@
       installer-image = installer.config.system.build.image;
 
       desktopInstallerModules = mkInstallerModules desktop;
-      desktopGnomeInstallerModules = mkInstallerModules desktop-gnome;
 
       desktop-installer = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
@@ -115,13 +114,6 @@
       };
       desktop-installer-vm = desktop-installer.config.system.build.vmWithInstallerDisk;
       desktop-installer-image = desktop-installer.config.system.build.image;
-
-      desktop-gnome-installer = pkgs.nixos {
-        nixpkgs.hostPlatform = { inherit system; };
-        imports = desktopGnomeInstallerModules;
-        _module.args = { inherit customPackages; };
-      };
-      desktop-gnome-installer-image = desktop-gnome-installer.config.system.build.image;
 
       desktopModules = [
         ./modules/base.nix
@@ -150,13 +142,7 @@
         imports = desktopModules;
         _module.args = { inherit customPackages self; };
       };
-      desktop-gnome = pkgs.nixos {
-        nixpkgs.hostPlatform = { inherit system; };
-        imports = desktopModules ++ [ { desktop.gnome = true; } ];
-        _module.args = { inherit customPackages self; };
-      };
       run-desktop-vm = desktop.config.system.build.vmWithWritableDisk;
-      run-desktop-gnome-vm = desktop-gnome.config.system.build.vmWithWritableDisk;
 
       docs = pkgs.callPackage ./packages/docs {
         inherit self nixos;
@@ -170,9 +156,7 @@
           nixos
           installer
           desktop
-          desktop-gnome
           desktop-installer
-          desktop-gnome-installer
           ;
       };
 
@@ -195,13 +179,11 @@
         inherit
           run-vm
           run-desktop-vm
-          run-desktop-gnome-vm
           image
           installer-image
           installer-vm
           desktop-installer-image
           desktop-installer-vm
-          desktop-gnome-installer-image
           keylime
           keylime-agent
           ;

@@ -60,7 +60,7 @@
 
       # Note: systemd-repart resize is NOT tested here because the test
       # backdoor (switch_root) skips the initrd where repart runs.
-      # Resize is covered by the desktop and desktop-gnome tests.
+      # Resize is covered by the desktop test.
 
       with subtest("nix with flakes is available"):
         machine.succeed("nix --version")
