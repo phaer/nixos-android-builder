@@ -6,3 +6,9 @@ result
 keys
 docs/mermaid-filter.err
 __pycache__/
+.ruff_cache/
+
+# VM runtime state
+*-swtpm/
+*-efi-vars.fd
+vm-state/
