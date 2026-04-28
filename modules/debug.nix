@@ -13,7 +13,7 @@
   options.nixosAndroidBuilder.debug = lib.mkEnableOption "image customizations for interactive access during run-time";
 
   config = lib.mkIf config.nixosAndroidBuilder.debug {
-    # Add extra software from nixpkgs for convinience.
+    # Add extra software from nixpkgs for convenience.
     environment.systemPackages = with pkgs; [
       vim
       htop
@@ -33,7 +33,7 @@
     ];
 
     # Add grep to the initrd. Feel free to remove, this just makes
-    # inspection and debugging in an emergency shell much more convinient.
+    # inspection and debugging in an emergency shell much more convenient.
     boot.initrd.systemd.initrdBin = [ pkgs.gnugrep ];
   };
 }

@@ -81,7 +81,7 @@
       "nls_iso8859_1"
     ];
 
-    # Define a stateVersion to supress eval warnings. As we don't keep state, it's irrelevant.
+    # Define a stateVersion to suppress eval warnings. As we don't keep state, it's irrelevant.
     system.stateVersion = "25.05";
   };
 }

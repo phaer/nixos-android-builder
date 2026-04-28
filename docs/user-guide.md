@@ -505,7 +505,7 @@ $ debug-measured-boot-state diagnose old-refstate.json new-refstate.json
 
 ## Credential Storage {#credential-storage}
 
-The builder includes a TPM-backed credential store for persisting secrets - such as those needed to authenticate to private source repositories or clodu storage to stora build artifacts in - across reboots. Credentials are encrypted with the machine's TPM and can only be decrypted on the same hardware with the same Secure Boot policy.
+The builder includes a TPM-backed credential store for persisting secrets - such as those needed to authenticate to private source repositories or cloud storage to store build artifacts in - across reboots. Credentials are encrypted with the machine's TPM and can only be decrypted on the same hardware with the same Secure Boot policy.
 
 The `credential-store` command manages credentials on the target machine:
 
@@ -564,7 +564,7 @@ To update all flake's inputs, run:
 $ nix flake update
 ```
 
-After updating, (re-)builds of the image will use the latest packages from the tracked `nixpkgs` branch - currently `nixos-25.11`.
+After updating, (re-)builds of the image will use the latest packages from the tracked `nixpkgs` branch - currently `nixos-unstable`.
 
 To catch possible regression bugs early, we do recommend to run at least the `integration` test as described in [Automated Tests](#automated-tests) below.
 

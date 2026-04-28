@@ -161,7 +161,7 @@ def extract_and_verify_uki(img_spec, cert_path, label):
 
 
 def copy_secureboot_keys(img_spec, keystore):
-    """Copy PK.auth, KEK.auth, and db.auth from keystore to ESP/KEYS directory for secure boot auto enrollmnent"""
+    """Copy PK.auth, KEK.auth, and db.auth from keystore to ESP/KEYS directory for secure boot auto enrollment"""
     print(f"Copying keystore files for auto-enrollment...")
 
 
