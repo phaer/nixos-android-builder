@@ -255,7 +255,7 @@
         fontconfig
         flex
         bison
-        xorg.libX11
+        libX11
         mesa
         openssl
         jdk
