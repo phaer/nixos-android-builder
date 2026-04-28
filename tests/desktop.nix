@@ -70,6 +70,11 @@
         assert "ext4" in output, f"root is not ext4: {output}"
         assert "rw" in output, f"root is not writable: {output}"
 
+      with subtest("network is configured"):
+        # NetworkManager should be running and an interface should have an IP.
+        machine.wait_for_unit("NetworkManager.service")
+        machine.wait_until_succeeds("ip -4 addr show | grep -q 'inet '", timeout=30)
+
       with subtest("nix with flakes is available"):
         machine.succeed("nix --version")
         output = machine.succeed("nix show-config 2>&1 | grep experimental-features")
