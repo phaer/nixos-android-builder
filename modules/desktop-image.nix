@@ -70,5 +70,13 @@ in
 
     # Grow root partition to fill disk at first boot.
     boot.initrd.systemd.repart.enable = true;
+
+    # Copy a read-only snapshot of the flake into the user's home on
+    # first boot. Only applied when self is passed via _module.args
+    # (real image builds); skipped in tests where it is not provided.
+    systemd.tmpfiles.rules =
+      let self = config._module.args.self or null;
+      in lib.optional (self != null)
+        "C /home/user/nixos-android-builder 0755 user user - ${self}";
   };
 }
