@@ -17,14 +17,16 @@
   config = {
     # Git is needed for nix flake operations on the bundled source tree.
     # The gnome-wayland wrapper is only needed for the GNOME session.
-    environment.systemPackages = [ pkgs.gitMinimal ]
-      ++ lib.optionals config.desktop.gnome [
-        (pkgs.writeShellScriptBin "gnome-wayland" ''
-          export XDG_CURRENT_DESKTOP=GNOME
-          . /etc/profile
-          exec ${pkgs.gnome-session}/bin/gnome-session "$@"
-        '')
-      ];
+    environment.systemPackages = [
+      pkgs.gitMinimal
+    ]
+    ++ lib.optionals config.desktop.gnome [
+      (pkgs.writeShellScriptBin "gnome-wayland" ''
+        export XDG_CURRENT_DESKTOP=GNOME
+        . /etc/profile
+        exec ${pkgs.gnome-session}/bin/gnome-session "$@"
+      '')
+    ];
 
     # The desktop uses NetworkManager instead of networkd (set in base.nix).
     # NetworkManager provides DHCP, WiFi, and a UI for GNOME; it conflicts

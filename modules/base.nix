@@ -2,7 +2,9 @@
 {
   lib,
   pkgs,
-  ...}: {
+  ...
+}:
+{
 
   imports = [
     ./nix.nix

@@ -24,8 +24,8 @@
         # Clear YubiKey groups so yubikey-auth.nix leaves PAM defaults
         # intact and falls back to password auth. pam_u2f cannot be
         # tested in QEMU — it requires a real USB HID FIDO2 device.
-        nixosAndroidBuilder.yubikeys.groupA = lib.mkForce [];
-        nixosAndroidBuilder.yubikeys.groupB = lib.mkForce [];
+        nixosAndroidBuilder.yubikeys.groupA = lib.mkForce [ ];
+        nixosAndroidBuilder.yubikeys.groupB = lib.mkForce [ ];
 
         # Set a known password for the test user so we can log in
         # through tuigreet without U2F.
