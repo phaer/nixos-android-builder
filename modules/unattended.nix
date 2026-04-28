@@ -90,7 +90,14 @@ in
     systemd.services."autovt@tty1".enable = false;
     systemd.services."autovt@tty2".enable = false;
 
-    # filter usb devices
+    # USBGuard: block mass storage devices (class 08) to prevent
+    # unauthorized data exfiltration during builds. Everything else
+    # is allowed — keyboard, mouse, YubiKey, network adapters, etc.
+    # This is an intentional trade-off: the build machine needs these
+    # USB devices for operation, and the build environment is
+    # air-gapped (no network connectivity required). The
+    # disable-usb-guard script stops USBGuard near the end of the
+    # build pipeline to allow copying artifacts to USB storage.
     services.usbguard = {
       enable = true;
       rules = ''
