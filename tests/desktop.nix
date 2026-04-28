@@ -71,6 +71,14 @@
         assert "ext4" in output, f"root is not ext4: {output}"
         assert "rw" in output, f"root is not writable: {output}"
 
+      with subtest("root partition was grown by systemd-repart"):
+        # The minimized image root is ~2-3 GB; after repart it should fill
+        # the 30 GB virtual disk.  Check that root is at least 20 GB.
+        output = machine.succeed("df --output=size -BG / | tail -1").strip()
+        size_gb = int(output.rstrip("G"))
+        assert size_gb >= 20, \
+          f"Root partition too small ({size_gb}G), systemd-repart may not have grown it"
+
       with subtest("network is configured"):
         # NetworkManager should be running and an interface should have an IP.
         machine.wait_for_unit("NetworkManager.service")

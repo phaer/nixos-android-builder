@@ -59,6 +59,10 @@
       with subtest("greetd is running"):
         machine.wait_for_unit("greetd.service")
 
+      # Note: systemd-repart resize is tested in desktop.nix.
+      # It is not duplicated here to keep the GNOME test focused
+      # on the graphical session.
+
       with subtest("login starts GNOME session"):
         # tuigreet shows the greeting; type credentials.
         machine.wait_until_tty_matches("1", "NixOS Desktop")
