@@ -15,6 +15,13 @@
   };
 
   config = {
+    # The desktop uses NetworkManager instead of networkd (set in base.nix).
+    # NetworkManager provides DHCP, WiFi, and a UI for GNOME; it conflicts
+    # with systemd-networkd so we disable the latter.
+    networking.useNetworkd = lib.mkForce false;
+    networking.networkmanager.enable = true;
+    networking.useDHCP = lib.mkDefault true;
+
     # Wrapper that sets up the environment for GNOME's Wayland session.
     # gnome-session needs XDG_SESSION_TYPE, XDG_CURRENT_DESKTOP, and a
     # D-Bus session bus before it can start Mutter as its compositor.
