@@ -117,7 +117,6 @@
 
       desktopModules = [
         ./modules/base.nix
-        ./modules/nix.nix
         ./modules/debug.nix
         ./modules/fatal-error.nix
         ./modules/secure-boot.nix
@@ -141,12 +140,12 @@
       desktop = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
         imports = desktopModules;
-        _module.args = { inherit customPackages; };
+        _module.args = { inherit customPackages self; };
       };
       desktop-gnome = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
         imports = desktopModules ++ [ { desktop.gnome = true; } ];
-        _module.args = { inherit customPackages; };
+        _module.args = { inherit customPackages self; };
       };
       run-desktop-vm = desktop.config.system.build.vmWithWritableDisk;
       run-desktop-gnome-vm = desktop-gnome.config.system.build.vmWithWritableDisk;

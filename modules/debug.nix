@@ -6,10 +6,6 @@
   ...
 }:
 {
-  imports = [
-    ./nix.nix
-  ];
-
   options.nixosAndroidBuilder.debug = lib.mkEnableOption "image customizations for interactive access during run-time";
 
   config = lib.mkIf config.nixosAndroidBuilder.debug {

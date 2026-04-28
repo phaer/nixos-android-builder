@@ -2,9 +2,12 @@
 {
   lib,
   pkgs,
-  ...
-}:
-{
+  ...}: {
+
+  imports = [
+    ./nix.nix
+  ];
+
   config = {
     # All users must be declared at build-time.
     users.mutableUsers = false;
