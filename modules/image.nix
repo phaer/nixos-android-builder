@@ -33,6 +33,14 @@
     # Updating the random seed on /boot can not work with a read-only /boot.
     systemd.services.systemd-boot-random-seed.enable = lib.mkForce false;
 
+    # Disable the GPT auto-generator in both the initrd and the main system.
+    # Since "/" is a tmpfs, the generator cannot find a backing block device
+    # and prints a spurious error on every boot that confuses users.
+    boot.kernelParams = [
+      "systemd.gpt_auto=0"
+      "rd.systemd.gpt_auto=0"
+    ];
+
     # Disable activation script that tries to create /usr/bin/env at runtime,
     # as that will fail with a verity-backed, read-only /usr
     # The NixOS default activation script to create /usr/bin/env assumes a
