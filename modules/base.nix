@@ -43,7 +43,7 @@
     # Unicode code points through the font's Unicode table.  The default
     # VGA ROM font has no entries for U+2500+, so those glyphs render as '?'.
     console = {
-      font = "ter-v16n";
+      font = "ter-v32n";
       packages = [ pkgs.terminus_font ];
       earlySetup = true;
     };
