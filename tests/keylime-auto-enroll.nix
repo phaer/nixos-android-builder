@@ -99,6 +99,10 @@ in
       imports = imageModules ++ [ keylimeAgentModule ];
       _module.args = { inherit customPackages; };
 
+      # imageModules sets system.name = "android-builder"; override it so the
+      # test driver exposes this machine as `agent` (it uses system.name for
+      # Python variable names). nixosAndroidBuilder.imageId stays at its
+      # default "android-builder" so configure-disk-image commands accept it.
       system.name = lib.mkForce "agent";
 
       virtualisation = lib.mkVMOverride {

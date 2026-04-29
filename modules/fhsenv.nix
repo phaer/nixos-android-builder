@@ -58,7 +58,7 @@ in
       ];
       packages = [
         # Our custom builds must be included here as well, so they end up in the closure.
-        # The rest of the pins above a transistive dependencies, which are implicitly included here.
+        # The rest of the pins above a transitive dependencies, which are implicitly included here.
         bash
         glibc
       ];

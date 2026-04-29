@@ -42,7 +42,26 @@
         ))
       ];
 
-      ourModules = (lib.attrValues nixosModules) ++ [ ./configuration.nix ];
+      builderModules = [
+        ./modules/android-build-env.nix
+        ./modules/artifact-storage.nix
+        ./modules/base.nix
+        ./modules/builder.nix
+        ./modules/branch-selector.nix
+        ./modules/credential-storage.nix
+        ./modules/debug.nix
+        ./modules/disable-ldso.nix
+        ./modules/fatal-error.nix
+        ./modules/fhsenv.nix
+        ./modules/image.nix
+        ./modules/keylime.nix
+        ./modules/keylime-agent.nix
+        ./modules/secure-boot.nix
+        ./modules/unattended.nix
+        ./modules/vm.nix
+        ./modules/yubikey-auth.nix
+        ./configuration.nix
+      ];
 
       imageModules = [
         (
@@ -57,7 +76,7 @@
           }
         )
       ]
-      ++ ourModules;
+      ++ builderModules;
 
       nixos = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
@@ -67,22 +86,63 @@
       run-vm = nixos.config.system.build.vmWithWritableDisk;
       image = nixos.config.system.build.finalImage;
 
-      installerModules = [
+      mkInstallerModules = target: [
         diskInstaller.module
         diskInstaller.vm
         nixosModules.fatal-error
         {
-          diskInstaller.payload = "${nixos.config.system.build.finalImage}/${nixos.config.image.filePath}";
+          diskInstaller.payload = "${target.config.system.build.finalImage}/${target.config.image.filePath}";
         }
       ];
 
-      installer-vm = installer.config.system.build.vmWithInstallerDisk;
+      installerModules = mkInstallerModules nixos;
+
       installer = pkgs.nixos {
         nixpkgs.hostPlatform = { inherit system; };
         imports = installerModules;
         _module.args = { inherit customPackages; };
       };
+      installer-vm = installer.config.system.build.vmWithInstallerDisk;
       installer-image = installer.config.system.build.image;
+
+      desktopInstallerModules = mkInstallerModules desktop;
+
+      desktop-installer = pkgs.nixos {
+        nixpkgs.hostPlatform = { inherit system; };
+        imports = desktopInstallerModules;
+        _module.args = { inherit customPackages; };
+      };
+      desktop-installer-vm = desktop-installer.config.system.build.vmWithInstallerDisk;
+      desktop-installer-image = desktop-installer.config.system.build.image;
+
+      desktopModules = [
+        ./modules/base.nix
+        ./modules/debug.nix
+        ./modules/fatal-error.nix
+        ./modules/secure-boot.nix
+        ./modules/yubikey-auth.nix
+        ./modules/desktop.nix
+        ./modules/desktop-image.nix
+        ./modules/desktop-vm.nix
+        ./desktop-configuration.nix
+        (
+          { modulesPath, ... }:
+          {
+            imports = [
+              "${modulesPath}/image/repart.nix"
+              "${modulesPath}/profiles/minimal.nix"
+              "${modulesPath}/virtualisation/qemu-vm.nix"
+            ];
+          }
+        )
+      ];
+
+      desktop = pkgs.nixos {
+        nixpkgs.hostPlatform = { inherit system; };
+        imports = desktopModules;
+        _module.args = { inherit customPackages self; };
+      };
+      run-desktop-vm = desktop.config.system.build.vmWithWritableDisk;
 
       docs = pkgs.callPackage ./packages/docs {
         inherit self nixos;
@@ -91,7 +151,14 @@
     in
     {
       inherit nixosModules;
-      nixosConfigurations = { inherit nixos installer; };
+      nixosConfigurations = {
+        inherit
+          nixos
+          installer
+          desktop
+          desktop-installer
+          ;
+      };
 
       formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt-tree;
 
@@ -111,9 +178,12 @@
       packages.${system} = {
         inherit
           run-vm
+          run-desktop-vm
           image
           installer-image
           installer-vm
+          desktop-installer-image
+          desktop-installer-vm
           keylime
           keylime-agent
           ;
@@ -143,11 +213,15 @@
 
       checks.${system} = import ./tests/default.nix {
         inherit
+          self
           pkgs
           customPackages
           installerModules
+          desktopInstallerModules
           imageModules
+          desktopModules
           nixos
+          desktop
           ;
         keylimeModule = nixosModules.keylime;
         keylimeAgentModule = nixosModules.keylime-agent;

@@ -41,6 +41,36 @@ def get_partition_offset(device, type_uuid):
     return partition["start"] * sector_size
 
 
+def get_image_id(img_spec):
+    """Read /image-id from an ESP to identify the image type (e.g. 'android-builder', 'desktop')."""
+    result = subprocess.run(
+        ["mtype", "-i", img_spec, "::/image-id"],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode == 0:
+        return result.stdout.strip()
+    return None
+
+
+def get_payload_image_id(device):
+    """Get the image-id from the payload's ESP (works for both payload-only and installer images)."""
+    payload_only = is_payload_only(device)
+    if payload_only:
+        esp_offset = get_partition_offset(device, UUID_EFI_SYSTEM)
+    else:
+        esp_offset = get_payload_esp_offset(device)
+    return get_image_id(f"{device}@@{esp_offset}")
+
+
+def require_builder_image(device, command):
+    """Raise an error if the image is not an android-builder image."""
+    image_id = get_payload_image_id(device)
+    if image_id and image_id != "android-builder":
+        raise InstallerError(
+            f"The '{command}' command is only supported for android-builder images "
+            f"(this image is '{image_id}')")
+
+
 def is_payload_only(device):
     """Check if this is a payload-only image (no nested installer structure)."""
     try:
@@ -131,7 +161,7 @@ def extract_and_verify_uki(img_spec, cert_path, label):
 
 
 def copy_secureboot_keys(img_spec, keystore):
-    """Copy PK.auth, KEK.auth, and db.auth from keystore to ESP/KEYS directory for secure boot auto enrollmnent"""
+    """Copy PK.auth, KEK.auth, and db.auth from keystore to ESP/KEYS directory for secure boot auto enrollment"""
     print(f"Copying keystore files for auto-enrollment...")
 
 
@@ -254,8 +284,13 @@ def cmd_status(args):
         if not verify_mtools_access(esp_img_spec):
             raise InstallerError("Cannot access EFI partition (invalid FAT filesystem)")
 
-        show_storage_target(esp_img_spec)
-        show_attestation_server_status(esp_img_spec)
+        image_id = get_image_id(esp_img_spec)
+        if image_id:
+            print(f"Image ID: {image_id}\n")
+
+        if not image_id or image_id == "android-builder":
+            show_storage_target(esp_img_spec)
+            show_attestation_server_status(esp_img_spec)
         extract_and_verify_uki(esp_img_spec, cert_path, "Payload")
     else:
         # Full installer image with nested payload
@@ -273,9 +308,14 @@ def cmd_status(args):
         if not verify_mtools_access(payload_img_spec):
             raise InstallerError("Cannot access nested EFI partition (invalid FAT filesystem)")
 
+        image_id = get_image_id(payload_img_spec)
+        if image_id:
+            print(f"Payload image ID: {image_id}\n")
+
         show_install_target(installer_img_spec)
-        show_storage_target(installer_img_spec)
-        show_attestation_server_status(payload_img_spec)
+        if not image_id or image_id == "android-builder":
+            show_storage_target(installer_img_spec)
+            show_attestation_server_status(payload_img_spec)
 
         extract_and_verify_uki(installer_img_spec, cert_path, "Installer")
         extract_and_verify_uki(payload_img_spec, cert_path, "Payload")
@@ -364,6 +404,7 @@ def cmd_set_target(args):
 
 def cmd_set_storage(args):
     """Configure target for artifact storage."""
+    require_builder_image(args.device, "set-storage")
     device = Path(args.device)
     if not device.exists():
         raise InstallerError(f"Device or image file not found: {device}")
@@ -440,6 +481,7 @@ def show_attestation_server_status(img_spec):
 
 def cmd_set_attestation_server(args):
     """Write attestation-server.json to the ESP for runtime keylime agent configuration."""
+    require_builder_image(args.device, "set-attestation-server")
     device = Path(args.device)
     if not device.exists():
         raise InstallerError(f"Device or image file not found: {device}")

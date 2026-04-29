@@ -1,4 +1,4 @@
-# Store outputs on an unecrypted, persistent disk partition
+# Store outputs on an unencrypted, persistent disk partition
 {
   lib,
   config,
@@ -33,7 +33,7 @@ let
 in
 {
   options.nixosAndroidBuilder.artifactStorage = {
-    enable = lib.mkEnableOption "Storing outputs in an unecrypted, persistent disk partition";
+    enable = lib.mkEnableOption "Storing outputs in an unencrypted, persistent disk partition";
     diskLabel = lib.mkOption {
       description = "disk label that identifies the storage partition";
       type = lib.types.str;

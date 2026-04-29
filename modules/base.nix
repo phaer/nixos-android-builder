@@ -1,13 +1,15 @@
-# Custom Options & generic NixOS configuration, that don't fit in other modules.
+# Generic NixOS base configuration shared across all machine types.
 {
   lib,
   pkgs,
   ...
 }:
 {
-  options.nixosAndroidBuilder = {
-    debug = lib.mkEnableOption "image customizations for interactive access during run-time";
-  };
+
+  imports = [
+    ./nix.nix
+  ];
+
   config = {
     # All users must be declared at build-time.
     users.mutableUsers = false;
@@ -27,23 +29,10 @@
       groups.user = { };
     };
 
-    # Disable nix in non-interactive builds.
-    nix.enable = lib.mkDefault false;
-
-    # Opt-out of lastlog functionality, as it did not seem to work with our setup
-    # and isn't worth investing time in in our use-case.
-    security.pam.services.login.updateWtmp = lib.mkForce false;
-
     # Opt-in into systemd-based initrd, declarative user management and networking.
     boot.initrd.systemd.enable = true;
     services.userborn.enable = true;
     networking.useNetworkd = true;
-
-    # Enable remote attestation via keylime.  The agent uses the TPM
-    # Endorsement Key as its identity (hash_ek) and auto-generates its
-    # mTLS certificate on first start.  Per-deployment config (registrar
-    # address, CA cert) is set in configuration.nix.
-    services.keylime-agent.enable = true;
 
     # Add all available firmware.
     hardware.enableRedistributableFirmware = true;
@@ -60,9 +49,10 @@
     };
 
     # Console on tty1 for bare-metal
-    boot.consoleLogLevel = lib.mkForce 0;
+    boot.consoleLogLevel = lib.mkForce 3;
     boot.kernelParams = [
       "systemd.log_target=console"
+      "systemd.log_level=err"
       "console=tty1"
     ]
     ++ (lib.optional (
@@ -96,7 +86,7 @@
       "nls_iso8859_1"
     ];
 
-    # Define a stateVersion to supress eval warnings. As we don't keep state, it's irrelevant.
+    # Define a stateVersion to suppress eval warnings. As we don't keep state, it's irrelevant.
     system.stateVersion = "25.05";
   };
 }

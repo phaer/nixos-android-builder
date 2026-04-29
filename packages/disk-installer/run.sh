@@ -8,7 +8,16 @@ ddrescue2gauge() {
     local remaining="unknown"
     local errors="0"
 
-    while IFS= read -r line; do
+    while true; do
+        local rc=0
+        IFS= read -r -t 60 line || rc=$?
+        if [ "$rc" -gt 128 ]; then
+            # read timed out — ddrescue may be stalled
+            echo "WARNING: no ddrescue output for 60s" >&5
+            continue
+        elif [ "$rc" -ne 0 ]; then
+            break  # EOF — ddrescue finished
+        fi
         if [[ "$line" =~ pct\ rescued:[[:space:]]*([0-9.]+)% ]]; then
             pct="${BASH_REMATCH[1]}"
         fi
@@ -76,9 +85,20 @@ select_disk() {
     echo "$selected_disk"
 }
 
-chvt 2
-exec 4> >(systemd-cat -p info)
-exec 5> >(systemd-cat -p err)
+# Save current VT so we can restore it later.
+original_vt="$(fgconsole 2>/dev/null || echo 1)"
+
+if [ -e /dev/tty2 ]; then
+    chvt 2
+fi
+
+if command -v systemd-cat >/dev/null 2>&1; then
+    exec 4> >(systemd-cat -p info)
+    exec 5> >(systemd-cat -p err)
+else
+    exec 4>> /run/installer.log
+    exec 5>> /run/installer.log
+fi
 
 echo -e "\nDisk Installer\n" >&4
 
@@ -127,12 +147,15 @@ fi
 
 msg_copy="Copying source disk $INSTALL_SOURCE to target disk $install_target"
 echo $msg_copy >&4
-ddrescue -f -v "$INSTALL_SOURCE" "$install_target" 2>&1 \
+ddrescue -f -v --timeout=300s "$INSTALL_SOURCE" "$install_target" 2>&1 \
     | ddrescue2gauge "$(lsblk -no SIZE "$INSTALL_SOURCE")" \
     | dialog --colors --title "$msg_copy" --gauge "Starting..." 16 60 10
 
 
-printf "fix\n" | parted ---pretend-input-tty "$install_target" print
+# Relocate the GPT backup table to the end of the (now larger) target disk.
+# sgdisk -e is non-interactive and purpose-built for this, unlike parted
+# which requires fragile interactive prompt handling.
+sgdisk -e "$install_target"
 sync
 
 echo 1 > /run/installer_done  # marker file for automated tests
@@ -141,6 +164,6 @@ msg_done="Installation to $install_target done.\n\nPlease remove the installatio
 echo "$msg_done" >&4
 dialog --colors --ok-button " Reboot " --msgbox "$msg_done" 10 60
 
-chvt 1
+chvt "$original_vt"
 
 systemctl reboot --no-block --force

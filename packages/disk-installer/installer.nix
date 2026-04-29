@@ -117,7 +117,7 @@ in
       contents."/etc/terminfo".source = "${pkgs.ncurses}/share/terminfo";
 
       initrdBin = [
-        pkgs.parted
+        pkgs.gptfdisk
         pkgs.dosfstools
         disk-installer.run
       ];
@@ -129,6 +129,7 @@ in
         dialog = "${pkgs.dialog}/bin/dialog";
         systemd-cat = "${pkgs.systemdMinimal}/bin/systemd-cat";
         chvt = "${pkgs.kbd}/bin/chvt";
+        fgconsole = "${pkgs.kbd}/bin/fgconsole";
       };
 
       mounts =

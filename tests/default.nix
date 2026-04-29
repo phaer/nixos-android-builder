@@ -1,9 +1,14 @@
 {
+  self,
   pkgs,
   customPackages,
   installerModules,
+  desktopInstallerModules,
   imageModules,
+  desktopModules,
   nixos,
+  desktop,
+
   keylimeModule,
   keylimeAgentModule,
   keylimeAgentPackage,
@@ -47,6 +52,31 @@ let
     ];
   };
   payload = "${nixosWithBackdoor.config.system.build.finalImage}/${nixosWithBackdoor.config.image.filePath}";
+
+  # Same for the desktop image: add test backdoor so the test driver
+  # can interact with the installed system after the installer finishes.
+  desktopWithBackdoor = desktop.extendModules {
+    modules = [
+      (
+        { modulesPath, ... }:
+        {
+          imports = [
+            "${modulesPath}/testing/test-instrumentation.nix"
+          ];
+          config = {
+            testing = {
+              backdoor = true;
+              initrdBackdoor = true;
+            };
+            # Tests use the backdoor, not real auth. Allow passwordless
+            # login to pass the "locked out" assertion.
+            users.allowNoPasswordLogin = lib.mkForce true;
+          };
+        }
+      )
+    ];
+  };
+  desktopPayload = "${desktopWithBackdoor.config.system.build.finalImage}/${desktopWithBackdoor.config.image.filePath}";
 
   unitTests = import ./unit-tests.nix {
     inherit pkgs keylimePackage;
@@ -130,6 +160,31 @@ in
   credentialStorage = pkgs.testers.runNixOSTest {
     imports = [
       ./credential-storage.nix
+    ];
+  };
+
+  desktop = pkgs.testers.runNixOSTest {
+    imports = [
+      ./desktop.nix
+      {
+        _module.args = {
+          inherit self customPackages;
+          desktopModules = desktopModules;
+        };
+      }
+    ];
+  };
+
+  desktopInstaller = pkgs.testers.runNixOSTest {
+    imports = [
+      ./desktop-installer.nix
+      {
+        _module.args = {
+          inherit desktopInstallerModules;
+          payload = desktopPayload;
+          vmInstallerTarget = "/dev/vdb";
+        };
+      }
     ];
   };
 

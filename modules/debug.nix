@@ -6,8 +6,10 @@
   ...
 }:
 {
-  config = lib.mkIf (config.nixosAndroidBuilder.debug) {
-    # Add extra software from nixpkgs for convinience.
+  options.nixosAndroidBuilder.debug = lib.mkEnableOption "image customizations for interactive access during run-time";
+
+  config = lib.mkIf config.nixosAndroidBuilder.debug {
+    # Add extra software from nixpkgs for convenience.
     environment.systemPackages = with pkgs; [
       vim
       htop
@@ -15,37 +17,19 @@
       gitMinimal
     ];
 
-    # Configure nix with flake support, but no channels.
-    nix = {
-      enable = lib.mkForce true;
-      channel.enable = false;
-      settings.experimental-features = [
-        "nix-command"
-        "flakes"
-      ];
-    };
-
-    # Set an empty password for "user"
-    users.users."user" = {
-      initialHashedPassword = "";
-    };
-
     # Allow password-less sudo for wheel users
     security.sudo.wheelNeedsPassword = false;
 
     # Enable unauthenticated shell if early boot fails
     boot.initrd.systemd.emergencyAccess = true;
 
-    # Add verbose log output, to aid debugging boot issues. log_level=debug is available as well.
     boot.kernelParams = [
-      "systemd.show_status=true"
-      "systemd.log_level=info"
       "rd.systemd.debug_shell=tty3"
       "systemd.debug_shell=tty3"
     ];
 
     # Add grep to the initrd. Feel free to remove, this just makes
-    # inspection and debugging in an emergency shell much more convinient.
+    # inspection and debugging in an emergency shell much more convenient.
     boot.initrd.systemd.initrdBin = [ pkgs.gnugrep ];
   };
 }
