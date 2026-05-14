@@ -7,6 +7,10 @@
       url = "github:numtide/system-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    pam-piv-multiparty = {
+      url = "github:JulienMalka/pam-piv-multiparty/v0.1.0";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -14,6 +18,7 @@
       self,
       nixpkgs,
       system-manager,
+      pam-piv-multiparty,
       ...
     }:
     let
@@ -59,6 +64,7 @@
         ./modules/secure-boot.nix
         ./modules/unattended.nix
         ./modules/vm.nix
+        pam-piv-multiparty.nixosModules.default
         ./modules/yubikey-auth.nix
         ./configuration.nix
       ];
@@ -120,6 +126,7 @@
         ./modules/debug.nix
         ./modules/fatal-error.nix
         ./modules/secure-boot.nix
+        pam-piv-multiparty.nixosModules.default
         ./modules/yubikey-auth.nix
         ./modules/desktop.nix
         ./modules/desktop-image.nix
@@ -170,7 +177,7 @@
             diskInstaller.configure
             docs.build-docs
             docs.watch-docs
-            pkgs.pam_u2f
+            pam-piv-multiparty.packages.${system}.default
           ];
         };
       };
