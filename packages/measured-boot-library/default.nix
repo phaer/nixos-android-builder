@@ -16,5 +16,4 @@ python3Packages.buildPythonPackage {
   dependencies = [ python3Packages.pyyaml ];
 
   nativeCheckInputs = [ python3Packages.pytestCheckHook ];
-  pytestFlagsArray = [ "test_measured_boot_state.py" ];
 }

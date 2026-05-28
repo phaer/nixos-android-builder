@@ -27,7 +27,6 @@ let
     preCheck = ''
       export PYTHONPATH="${keylime}/${python3Packages.python.sitePackages}:$PYTHONPATH"
     '';
-    pytestFlagsArray = [ "test_measured_boot_policy.py" ];
   };
 in
 {
