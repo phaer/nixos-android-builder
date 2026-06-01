@@ -71,7 +71,6 @@ in
     };
 
     boot.initrd.systemd = {
-      contents."/etc/terminfo".source = "${pkgs.ncurses}/share/terminfo";
       units."dev-disk-by\\x2dlabeli-artifacts.device.d/timeout.conf" = {
         text = ''
             [Unit]

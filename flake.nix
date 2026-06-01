@@ -2,7 +2,7 @@
   description = "An ephemeral NixOS system to build Android Open Source Project";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-26.05";
     system-manager = {
       url = "github:numtide/system-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -84,14 +84,14 @@
         _module.args = { inherit customPackages; };
       };
       run-vm = nixos.config.system.build.vmWithWritableDisk;
-      image = nixos.config.system.build.finalImage;
+      image = nixos.config.system.build.image;
 
       mkInstallerModules = target: [
         diskInstaller.module
         diskInstaller.vm
         nixosModules.fatal-error
         {
-          diskInstaller.payload = "${target.config.system.build.finalImage}/${target.config.image.filePath}";
+          diskInstaller.payload = "${target.config.system.build.image}/${target.config.image.filePath}";
         }
       ];
 

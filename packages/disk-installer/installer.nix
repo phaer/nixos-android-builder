@@ -114,7 +114,6 @@ in
       emergencyAccess = cfg.debug;
 
       enable = true;
-      contents."/etc/terminfo".source = "${pkgs.ncurses}/share/terminfo";
 
       initrdBin = [
         pkgs.gptfdisk

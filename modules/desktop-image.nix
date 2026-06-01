@@ -21,10 +21,6 @@ in
       version = config.system.nixos.version;
     };
 
-    # Alias so that mkInstallerModules and vm.nix can use the same
-    # attribute (finalImage) for both builder and desktop images.
-    system.build.finalImage = config.system.build.image;
-
     # Standard filesystem layout.
     fileSystems = {
       "/" = {
