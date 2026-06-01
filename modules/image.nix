@@ -108,6 +108,7 @@
           else
             {
               device = "/usr/nix/store";
+              fsType = "none";
               options = [ "bind" ];
               neededForBoot = true;
             };
