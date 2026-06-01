@@ -51,7 +51,7 @@ let
       )
     ];
   };
-  payload = "${nixosWithBackdoor.config.system.build.finalImage}/${nixosWithBackdoor.config.image.filePath}";
+  payload = "${nixosWithBackdoor.config.system.build.image}/${nixosWithBackdoor.config.image.filePath}";
 
   # Same for the desktop image: add test backdoor so the test driver
   # can interact with the installed system after the installer finishes.
@@ -76,7 +76,7 @@ let
       )
     ];
   };
-  desktopPayload = "${desktopWithBackdoor.config.system.build.finalImage}/${desktopWithBackdoor.config.image.filePath}";
+  desktopPayload = "${desktopWithBackdoor.config.system.build.image}/${desktopWithBackdoor.config.image.filePath}";
 
   unitTests = import ./unit-tests.nix {
     inherit pkgs keylimePackage;

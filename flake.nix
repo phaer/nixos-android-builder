@@ -84,14 +84,14 @@
         _module.args = { inherit customPackages; };
       };
       run-vm = nixos.config.system.build.vmWithWritableDisk;
-      image = nixos.config.system.build.finalImage;
+      image = nixos.config.system.build.image;
 
       mkInstallerModules = target: [
         diskInstaller.module
         diskInstaller.vm
         nixosModules.fatal-error
         {
-          diskInstaller.payload = "${target.config.system.build.finalImage}/${target.config.image.filePath}";
+          diskInstaller.payload = "${target.config.system.build.image}/${target.config.image.filePath}";
         }
       ];
 

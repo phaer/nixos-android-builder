@@ -63,10 +63,10 @@ in
         ''
             if [ ! -e ${cfg.diskImage} ]; then
 
-              echo >&2 "Copying ${config.system.build.finalImage}/${config.image.fileName} to ${cfg.diskImage}"
+              echo >&2 "Copying ${config.system.build.image}/${config.image.fileName} to ${cfg.diskImage}"
               ${cfg.qemu.package}/bin/qemu-img convert \
                 -f raw -O raw \
-                "${config.system.build.finalImage}/${config.image.fileName}" \
+                "${config.system.build.image}/${config.image.fileName}" \
                 "${cfg.diskImage}"
 
               echo >&2 "Resizing ${cfg.diskImage} to ${toString cfg.diskSize}M"
