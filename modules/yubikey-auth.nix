@@ -13,7 +13,7 @@ in
 {
   security.pam.multiparty = {
     enable = lib.mkDefault true;
-    groups = [
+    groups = lib.mkDefault [
       "A"
       "B"
     ];
