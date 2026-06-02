@@ -7,6 +7,7 @@
 let
   cfg = config.nixosAndroidBuilder.unattended;
   user = config.users.users.user;
+  numGroups = builtins.length config.security.pam.multiparty.groups;
 
   disable-usb-guard = pkgs.writeShellScriptBin "disable-usb-guard" ''
     set -euo pipefail
@@ -56,10 +57,10 @@ let
   start-shell-if-yubikey-found = pkgs.writeShellScriptBin "start-shell-if-yubikey-found" ''
     set -euo pipefail
     ELAPSED=0
-    echo "Insert both YubiKeys in the next 30 seconds to start interactive shell"
+    echo "Insert all ${toString numGroups} YubiKeys in the next 30 seconds to start interactive shell"
     while [ $ELAPSED -lt 30 ]; do
       yk_count=$(lsusb | grep -ic 'yubikey' || true)
-      if [ "$yk_count" -ge 2 ]; then
+      if [ "$yk_count" -ge ${toString numGroups} ]; then
         tput sgr0
         tput ed
         echo "Found $yk_count YubiKeys. Touch each one when prompted and enter its PIN."
