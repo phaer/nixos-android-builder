@@ -9,7 +9,12 @@
 let
   cfg = config.services.keylime-agent;
 
-  inherit (customPackages) tpm2-tools measuredBoot keylime-agent;
+  inherit (customPackages)
+    tpm2-tools
+    measuredBoot
+    keylime-agent
+    keylime-git-clone
+    ;
 
   # The Rust keylime-agent uses TOML, so string values must be quoted.
   mkValueString =
@@ -206,12 +211,15 @@ in
       # /var/lib/keylime is a persistent LUKS partition; fix ownership after mount
       "z /var/lib/keylime 0750 keylime keylime - -"
       "d /run/keylime 0750 keylime keylime -"
+      "d /run/keylime-git 0755 root root -"
     ];
 
     security.tpm2 = {
       enable = true;
       tctiEnvironment.enable = true;
     };
+
+    environment.systemPackages = [ keylime-git-clone ];
 
     environment.etc."keylime/agent.conf" = {
       text = agentConf;

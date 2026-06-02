@@ -14,26 +14,23 @@ cannot clone.
 
 ## How It Works
 
-```mermaid
-sequenceDiagram
-    participant A as Agent
-    participant N as nginx :8894
-    participant G as keylime-git-auth :8895
-    participant V as keylime-verifier :8881
-
-    A->>N: git clone (mTLS client cert)
-    N->>N: ssl_verify_client<br/>(keylime CA validates cert)
-    N->>G: auth_request /verify?uuid=…
-    G->>V: GET /v2.5/agents/{uuid}
-    alt attested (operational state allowed)
-        V-->>G: 200
-        G-->>N: 200 ALLOW
-        N-->>A: serve repo (static files)
-    else not attested / unknown
-        V-->>G: 404 or disallowed state
-        G-->>N: 403 DENY
-        N-->>A: clone rejected
-    end
+```
+Agent                               Attestation Server
+-----                               ------------------
+git clone https://server:8894/...
+  (presents keylime client cert) --> nginx :8894
+                                        |  ssl_verify_client on
+                                        |  (keylime CA validates cert)
+                                        |
+                                        +- auth_request --> keylime-git-auth :8895
+                                        |                     |
+                                        |                     |  GET /v2.5/agents/{uuid}
+                                        |                     +--> keylime-verifier :8881
+                                        |                           200 -> ALLOW
+                                        |                           else -> DENY
+                                        |
+                                        +- 200 -> nginx serves repo as static files
+                                           403 -> clone rejected
 ```
 
 **Identity.** nginx enforces mTLS against the keylime CA. The agent UUID
@@ -57,25 +54,6 @@ post-receive hook, to keep the index files current.
 ## Managing Repositories
 
 Repositories are bare git repos in `/var/lib/keylime-git/repos/`.
-
-The simplest way to create repos is declaratively via the `repos` option:
-
-```nix
-services.keylime.gitServer = {
-  enable = true;
-  repos = [ "config" "firmware" ];
-};
-```
-
-This creates `config.git` and `firmware.git` as bare repositories on
-boot or system activation. To push content into them from the attestation server:
-
-```bash
-cd /var/lib/keylime-git/repos/config.git
-git --work-tree=/tmp/work checkout -f  # or push from a remote
-```
-
-Alternatively, create repos manually:
 
 Create a new repo:
 
@@ -122,8 +100,8 @@ The credentials are provisioned automatically:
 
 - **Client cert & key** are written to `/run/keylime-git/` by
   `report-measured-boot-state` after successful attestation.
-- **CA cert** is written to `/run/keylime-git/ca-cert.pem` by the agent
-  service on boot from `/boot/attestation-server.json`.
+- **CA cert** is written to `/run/keylime-git/ca-cert.pem` by
+  `report-measured-boot-state` from `/boot/attestation-server.json`.
 
 Both paths are world-readable, so any local user can run
 `keylime-git-clone` without elevated privileges.
@@ -165,4 +143,3 @@ journalctl -fu keylime-git-auth
 | `services.keylime.gitServer.port` | `8894` | nginx HTTPS listen port |
 | `services.keylime.gitServer.authPort` | `8895` | Auth daemon localhost port |
 | `services.keylime.gitServer.repoDir` | `/var/lib/keylime-git/repos` | Bare repo root |
-| `services.keylime.gitServer.repos` | `[]` | Bare repos to create on boot or system activation (names without `.git` suffix) |

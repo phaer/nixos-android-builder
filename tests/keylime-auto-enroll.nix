@@ -167,16 +167,16 @@ in
       with subtest("Git client cert provisioned"):
           agent.wait_until_succeeds(
               "test -f"
-              " /var/lib/keylime/git/client-cert.pem",
+              " /run/keylime-git/client-cert.pem",
               timeout=300,
           )
           agent.succeed(
               "test -f"
-              " /var/lib/keylime/git/client-key.pem"
+              " /run/keylime-git/client-key.pem"
           )
           cn = agent.succeed(
               "openssl x509 -noout -subject"
-              " -in /var/lib/keylime/git/"
+              " -in /run/keylime-git/"
               "client-cert.pem"
           ).strip()
           assert agent_uuid in cn, (

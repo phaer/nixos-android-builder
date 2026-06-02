@@ -34,7 +34,7 @@ from measured_boot_state import (
 
 ATTESTATION_SERVER = Path("/boot/attestation-server.json")
 AGENT_DATA = Path("/var/lib/keylime/agent_data.json")
-GIT_CERT_DIR = Path("/var/lib/keylime/git")
+GIT_CERT_DIR = Path("/run/keylime-git")
 
 
 def generate_measured_boot_state(
@@ -181,6 +181,15 @@ def main() -> None:
     uuid = get_agent_uuid()
     url, ca_cert = get_enroll_config()
 
+    # Write CA cert to the git credential dir early so it is available
+    # to unprivileged users even if attestation or cert fetch fails.
+    GIT_CERT_DIR.mkdir(parents=True, exist_ok=True)
+    ca_path = GIT_CERT_DIR / "ca-cert.pem"
+    ca_path.write_text(
+        ca_cert if ca_cert.endswith("\n") else ca_cert + "\n",
+    )
+    ca_path.chmod(0o644)
+
     print(f"Agent UUID: {uuid}", file=sys.stderr)
     print(
         "MB refstate keys:"
@@ -285,13 +294,12 @@ def main() -> None:
     client_cert = cert_body.get("client_cert")
     client_key = cert_body.get("client_key")
     if client_cert and client_key:
-        GIT_CERT_DIR.mkdir(parents=True, exist_ok=True)
         cert_path = GIT_CERT_DIR / "client-cert.pem"
         key_path = GIT_CERT_DIR / "client-key.pem"
         cert_path.write_text(client_cert)
         key_path.write_text(client_key)
         cert_path.chmod(0o644)
-        key_path.chmod(0o600)
+        key_path.chmod(0o644)
         print(
             f"Git client cert saved to {cert_path}",
             file=sys.stderr,

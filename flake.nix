@@ -26,6 +26,7 @@
         tpm2-tools
         keylime
         keylime-agent
+        keylime-git-clone
         measuredBoot
         attestation-ctl
         secureBootScripts
@@ -186,6 +187,7 @@
           desktop-installer-vm
           keylime
           keylime-agent
+          keylime-git-clone
           ;
         inherit (secureBootScripts) create-signing-keys;
         inherit attestation-ctl;

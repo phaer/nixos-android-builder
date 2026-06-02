@@ -140,8 +140,8 @@ in
       ], env=os.environ.copy(), cwd=agent.state_dir, check=True)
 
       tenant = "-r 127.0.0.1 -rp 8891 -v 127.0.0.1 -vp 8881"
-      agent_cert = "/var/lib/keylime/git/client-cert.pem"
-      agent_key = "/var/lib/keylime/git/client-key.pem"
+      agent_cert = "/run/keylime-git/client-cert.pem"
+      agent_key = "/run/keylime-git/client-key.pem"
 
       def gen_cert(cn, ca_cert, ca_key, prefix):
           """Generate a key + CA-signed cert on the server."""
