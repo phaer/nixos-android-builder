@@ -2,6 +2,13 @@
   # Name our system. Image file names and metadata is derived from this.
   system.name = "android-builder";
 
+  # Enroll one PIV card per group, then paste the printed SPKI values here:
+  #   piv-multiparty-enroll -u user -g A
+  #   piv-multiparty-enroll -u user -g B
+  # entries.user = [
+  #   { group = "A"; spki = "MFkw..."; }
+  #   { group = "B"; spki = "MFkw..."; }
+  # ];
   security.pam.multiparty.entries = { };
 
   nixosAndroidBuilder = {
