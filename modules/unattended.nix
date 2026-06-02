@@ -52,7 +52,7 @@ let
   # YubiKeys before the unattended pipeline starts. We only hand off
   # to `login` once we see at least two YubiKey USB devices, because
   # piv-multiparty requires co-presence and a partial set would fail
-  # auth — burning the operator's only chance to log in.
+  # auth — burning the operator's only chance to log in before the build.
   start-shell-if-yubikey-found = pkgs.writeShellScriptBin "start-shell-if-yubikey-found" ''
     set -euo pipefail
     ELAPSED=0
