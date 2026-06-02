@@ -14,32 +14,35 @@ in
 {
   options.services.keylime = shared.mkOptions keylime;
 
-  config = lib.mkIf cfg.enable {
-    security.tpm2 = {
-      enable = true;
-      tctiEnvironment.enable = true;
-    };
+  config = lib.mkMerge [
+    (shared.mkTlsConfig cfg)
+    (lib.mkIf cfg.enable {
+      security.tpm2 = {
+        enable = true;
+        tctiEnvironment.enable = true;
+      };
 
-    users.users.keylime = {
-      isSystemUser = true;
-      group = "keylime";
-      home = "/var/lib/keylime";
-    };
+      users.users.keylime = {
+        isSystemUser = true;
+        group = "keylime";
+        home = "/var/lib/keylime";
+      };
 
-    users.groups.keylime = { };
+      users.groups.keylime = { };
 
-    systemd.tmpfiles.rules = [
-      "d /var/lib/keylime 0750 keylime keylime -"
-    ];
+      systemd.tmpfiles.rules = [
+        "d /var/lib/keylime 0750 keylime keylime -"
+      ];
 
-    environment.systemPackages = [ cfg.package ];
-    environment.etc = shared.mkEtcFiles cfg;
+      environment.systemPackages = [ cfg.package ];
+      environment.etc = shared.mkEtcFiles cfg;
 
-    systemd.services = shared.mkServices {
-      inherit cfg;
-      wantedBy = [ "multi-user.target" ];
-    };
+      systemd.services = shared.mkServices {
+        inherit cfg;
+        wantedBy = [ "multi-user.target" ];
+      };
 
-    networking.firewall.allowedTCPPorts = shared.mkFirewallPorts cfg;
-  };
+      networking.firewall.allowedTCPPorts = shared.mkFirewallPorts cfg;
+    })
+  ];
 }

@@ -198,7 +198,6 @@
         modules = [
           ./system-manager/tpm2.nix
           ./system-manager/keylime.nix
-          ./system-manager/keylime-auto-enroll.nix
           {
             nixpkgs.hostPlatform = system;
             services.keylime = {

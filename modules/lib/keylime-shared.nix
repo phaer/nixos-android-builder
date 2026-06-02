@@ -364,7 +364,106 @@ rec {
         description = "Settings for tenant.conf [tenant] section.";
       };
     };
+
+    tls = {
+      autoGenerate = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Automatically generate a self-signed CA and mTLS certificates
+          in `/var/lib/keylime/tls/` on first activation.  Existing
+          certificates are never overwritten.
+        '';
+      };
+
+      certLifetime = lib.mkOption {
+        type = lib.types.int;
+        default = 365;
+        description = "Validity period in days for generated certificates.";
+      };
+
+      subjectAlternativeNames = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        example = [
+          "DNS:keylime.example.com"
+          "IP:10.0.0.1"
+        ];
+        description = ''
+          Additional Subject Alternative Names for the server certificate.
+          Host IPs are auto-discovered; use this for extra DNS names or IPs.
+        '';
+      };
+    };
+
+    autoEnroll = {
+      enable = lib.mkEnableOption "automatic enrollment of new Keylime agents with measured boot policy";
+
+      pollInterval = lib.mkOption {
+        type = lib.types.int;
+        default = 10;
+        description = "Seconds between polling the registrar for new agents.";
+      };
+
+      enrollPort = lib.mkOption {
+        type = lib.types.port;
+        default = 8893;
+        description = "HTTPS port for the measured boot report endpoint.";
+      };
+    };
+
   };
+
+  # When tls.autoGenerate is enabled, return config attrset that sets
+  # mkDefault TLS paths for registrar, verifier, and tenant.
+  # Apply with: config = lib.mkMerge [ ... (shared.mkTlsConfig cfg) ];
+  mkTlsConfig =
+    cfg:
+    let
+      tlsDir = "/var/lib/keylime/tls";
+      caCert = "${tlsDir}/ca-cert.pem";
+      serverCert = "${tlsDir}/server-cert.pem";
+      serverKey = "${tlsDir}/server-key.pem";
+      clientCert = "${tlsDir}/client-cert.pem";
+      clientKey = "${tlsDir}/client-key.pem";
+    in
+    lib.mkIf cfg.tls.autoGenerate {
+      services.keylime.registrar.settings = lib.mkIf cfg.registrar.enable {
+        tls_dir = lib.mkDefault tlsDir;
+        server_key = lib.mkDefault serverKey;
+        server_cert = lib.mkDefault serverCert;
+        trusted_client_ca = lib.mkDefault [ caCert ];
+      };
+      services.keylime.tenant.settings = {
+        tls_dir = lib.mkDefault tlsDir;
+        client_key = lib.mkDefault clientKey;
+        client_cert = lib.mkDefault clientCert;
+        trusted_server_ca = lib.mkDefault [ caCert ];
+      };
+      services.keylime.verifier.settings = lib.mkIf cfg.verifier.enable {
+        tls_dir = lib.mkDefault tlsDir;
+        server_key = lib.mkDefault serverKey;
+        server_cert = lib.mkDefault serverCert;
+        trusted_client_ca = lib.mkDefault [ caCert ];
+        client_key = lib.mkDefault clientKey;
+        client_cert = lib.mkDefault clientCert;
+        trusted_server_ca = lib.mkDefault [ caCert ];
+      };
+    };
+
+  # Auto-enroll daemon — same script used by system-manager and NixOS.
+  autoEnrollScript = pkgs.writers.writePython3 "keylime-auto-enroll" {
+    flakeIgnore = [
+      "E501"
+      "E266"
+      "N802"
+    ];
+  } (builtins.readFile ./scripts/keylime-auto-enroll.py);
+
+  # Cert generation script shared between system-manager and NixOS VM tests.
+  generateCertsScript = pkgs.writers.writePython3 "keylime-generate-certs" {
+    libraries = [ ];
+  } (builtins.readFile ./scripts/keylime-generate-certs.py);
 
   mkEtcFiles =
     cfg:
@@ -382,18 +481,32 @@ rec {
       wantedBy,
       extraAfter ? { },
     }:
-    lib.optionalAttrs cfg.registrar.enable {
+    let
+      tlsDir = "/var/lib/keylime/tls";
+      tlsAfter = lib.optional cfg.tls.autoGenerate "keylime-tls.service";
+    in
+    # TLS cert generation
+    lib.optionalAttrs cfg.tls.autoGenerate {
+      keylime-tls = mkTlsService {
+        inherit tlsDir wantedBy;
+        certDays = cfg.tls.certLifetime;
+        extraSans = cfg.tls.subjectAlternativeNames;
+      };
+    }
+    # Registrar
+    // lib.optionalAttrs cfg.registrar.enable {
       keylime-registrar = {
         description = "Keylime Registrar";
-        after = [ "network-online.target" ] ++ (extraAfter.registrar or [ ]);
+        after = [ "network-online.target" ] ++ tlsAfter ++ (extraAfter.registrar or [ ]);
         wants = [ "network-online.target" ];
-        requires = extraAfter.registrar or [ ];
+        requires = tlsAfter ++ (extraAfter.registrar or [ ]);
         inherit wantedBy;
         serviceConfig = commonServiceConfig // {
           ExecStart = "${cfg.package}/bin/keylime_registrar";
         };
       };
     }
+    # Verifier
     // lib.optionalAttrs cfg.verifier.enable {
       keylime-verifier = {
         description = "Keylime Verifier";
@@ -401,14 +514,75 @@ rec {
           "network-online.target"
         ]
         ++ lib.optional cfg.registrar.enable "keylime-registrar.service"
+        ++ tlsAfter
         ++ (extraAfter.verifier or [ ]);
         wants = [ "network-online.target" ];
-        requires = extraAfter.verifier or [ ];
+        requires = tlsAfter ++ (extraAfter.verifier or [ ]);
         inherit wantedBy;
         environment.PYTHONPATH = "${cfg.measuredBootPolicyPath}";
         serviceConfig = commonServiceConfig // {
           ExecStart = "${cfg.package}/bin/keylime_verifier";
         };
+      };
+    }
+    # Auto-enrollment daemon
+    // lib.optionalAttrs cfg.autoEnroll.enable {
+      keylime-auto-enroll = {
+        description = "Auto-enroll new Keylime agents with measured boot policy";
+        after = [
+          "keylime-registrar.service"
+          "keylime-verifier.service"
+        ]
+        ++ tlsAfter;
+        wants = [
+          "keylime-registrar.service"
+          "keylime-verifier.service"
+        ];
+        inherit wantedBy;
+        path = [
+          cfg.package
+          pkgs.openssl
+        ];
+        environment = {
+          KEYLIME_TLS_DIR = tlsDir;
+          KEYLIME_POLL_INTERVAL = toString cfg.autoEnroll.pollInterval;
+          KEYLIME_ENROLL_PORT = toString cfg.autoEnroll.enrollPort;
+        };
+        serviceConfig = commonServiceConfig // {
+          ExecStart = autoEnrollScript;
+          Restart = "on-failure";
+          RestartSec = "10s";
+        };
+      };
+    };
+
+  # Systemd service that generates the keylime TLS PKI on first boot.
+  mkTlsService =
+    {
+      tlsDir,
+      certDays ? 365,
+      extraSans ? [ ],
+      wantedBy ? [ ],
+    }:
+    {
+      description = "Generate Keylime TLS certificates";
+      inherit wantedBy;
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      path = [
+        pkgs.openssl
+        pkgs.iproute2
+        pkgs.coreutils
+      ];
+      environment = {
+        KEYLIME_TLS_DIR = tlsDir;
+        KEYLIME_CERT_DAYS = toString certDays;
+        KEYLIME_EXTRA_SANS = builtins.toJSON extraSans;
+      };
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = generateCertsScript;
       };
     };
 
@@ -417,5 +591,6 @@ rec {
     lib.optionals cfg.registrar.enable [
       (cfg.registrar.settings.tls_port or registrarDefaults.tls_port)
     ]
-    ++ lib.optional cfg.verifier.enable (cfg.verifier.settings.port or verifierDefaults.port);
+    ++ lib.optional cfg.verifier.enable (cfg.verifier.settings.port or verifierDefaults.port)
+    ++ lib.optional cfg.autoEnroll.enable cfg.autoEnroll.enrollPort;
 }
