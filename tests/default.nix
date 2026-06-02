@@ -157,6 +157,23 @@ in
     ];
   };
 
+  keylime-git-server = pkgs.testers.runNixOSTest {
+    imports = [
+      ./keylime-git-server.nix
+      {
+        _module.args = {
+          imageModules = imageModules;
+          inherit
+            customPackages
+            keylimeModule
+            keylimeAgentModule
+            keylimeAgentPackage
+            ;
+        };
+      }
+    ];
+  };
+
   credentialStorage = pkgs.testers.runNixOSTest {
     imports = [
       ./credential-storage.nix
