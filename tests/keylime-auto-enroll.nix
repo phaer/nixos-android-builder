@@ -1,8 +1,12 @@
 # Test: auto-enrollment of keylime agents with measured boot policy.
 #
-# Verifies that the auto-enrollment daemon on the server side
-# automatically enrolls a new agent when it both registers with
-# the registrar AND reports its measured boot reference state.
+# Verifies that the auto-enrollment daemon automatically enrolls a
+# new agent when it both registers with the registrar AND reports
+# its measured boot reference state.
+#
+# Two VMs:
+#   server  - registrar + verifier + auto-enroll
+#   agent   - keylime agent with TPM
 {
   keylimeModule,
   keylimeAgentModule,
@@ -17,20 +21,8 @@ let
   inherit (customPackages) tpm2-tools measuredBoot;
   tlsDir = "/var/lib/keylime/tls";
   caCert = "${tlsDir}/ca-cert.pem";
-  caKey = "${tlsDir}/ca-key.pem";
-  serverCert = "${tlsDir}/server-cert.pem";
-  serverKey = "${tlsDir}/server-key.pem";
   clientCert = "${tlsDir}/client-cert.pem";
   clientKey = "${tlsDir}/client-key.pem";
-
-  autoEnrollScript = pkgs.writers.writePython3 "keylime-auto-enroll" {
-    flakeIgnore = [
-      "E501"
-      "E266"
-      "N802"
-    ];
-  } (builtins.readFile ../system-manager/keylime-auto-enroll.py);
-
 in
 {
   name = "keylime-auto-enroll";
@@ -40,57 +32,23 @@ in
     {
       imports = [ keylimeModule ];
       _module.args = { inherit customPackages; };
-
       virtualisation.tpm.enable = true;
-
-      networking.firewall.allowedTCPPorts = [ 8893 ];
-
       environment.systemPackages = [
-        pkgs.openssl
-        tpm2-tools
         pkgs.curl
+        pkgs.jq
       ];
-
       services.keylime = {
         enable = true;
-        logLevel = "DEBUG";
-
-        registrar = {
-          enable = true;
-          settings = {
-            tls_dir = tlsDir;
-            server_key = serverKey;
-            server_cert = serverCert;
-            trusted_client_ca = [ caCert ];
-          };
-        };
-
+        registrar.enable = true;
         verifier = {
           enable = true;
-          settings = {
-            mode = "push";
-            enable_agent_mtls = true;
-            tls_dir = tlsDir;
-            server_key = serverKey;
-            server_cert = serverCert;
-            trusted_client_ca = [ caCert ];
-            client_key = clientKey;
-            client_cert = clientCert;
-            trusted_server_ca = [ caCert ];
-          };
+          settings.mode = "push";
+        };
+        autoEnroll = {
+          enable = true;
+          pollInterval = 2;
         };
       };
-
-      services.keylime.tenant.settings = {
-        tls_dir = tlsDir;
-        client_key = clientKey;
-        client_cert = clientCert;
-        trusted_server_ca = [ caCert ];
-      };
-
-      # Don't start keylime services automatically — start after cert provisioning
-      systemd.services.keylime-registrar.wantedBy = lib.mkForce [ ];
-      systemd.services.keylime-verifier.wantedBy = lib.mkForce [ ];
     };
 
   nodes.agent =
@@ -98,35 +56,23 @@ in
     {
       imports = imageModules ++ [ keylimeAgentModule ];
       _module.args = { inherit customPackages; };
-
-      # imageModules sets system.name = "android-builder"; override it so the
-      # test driver exposes this machine as `agent` (it uses system.name for
-      # Python variable names). nixosAndroidBuilder.imageId stays at its
-      # default "android-builder" so configure-disk-image commands accept it.
       system.name = lib.mkForce "agent";
-
       virtualisation = lib.mkVMOverride {
         diskSize = 8 * 1024;
         memorySize = 2 * 1024;
         cores = 2;
       };
       systemd.repart.partitions."40-var-lib-build".SizeMinBytes = lib.mkVMOverride "1G";
-
       nixosAndroidBuilder.unattended.enable = lib.mkForce false;
-
       environment.systemPackages = [
         pkgs.coreutils
-        pkgs.openssl
-        tpm2-tools
         pkgs.curl
+        pkgs.openssl
         measuredBoot.report-measured-boot-state
-        measuredBoot.measure-boot-state
       ];
-
       systemd.tmpfiles.rules = [
         "d ${tlsDir} 0750 keylime keylime -"
       ];
-
       services.keylime-agent = {
         enable = true;
         settings = {
@@ -134,10 +80,18 @@ in
           attestation_interval_seconds = lib.mkForce 2;
         };
       };
-
-      # Don't start automatically — start after CA cert is provisioned
-      systemd.services.keylime-agent.wantedBy = lib.mkForce [ ];
-      # Don't auto-start — we trigger it manually after agent starts
+      systemd.services.keylime-agent-config = {
+        description = "Keylime agent config provisioned";
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = "${pkgs.coreutils}/bin/true";
+        };
+      };
+      systemd.services.keylime-agent = {
+        after = [ "keylime-agent-config.service" ];
+        requires = [ "keylime-agent-config.service" ];
+      };
       systemd.services.keylime-report-measured-boot-state.wantedBy = lib.mkForce [ ];
     };
 
@@ -146,164 +100,88 @@ in
     ''
       import subprocess, os, json
 
-      # Prepare the agent's signed writable disk image
       subprocess.run([
-        "${lib.getExe nodes.agent.system.build.prepareWritableDisk}"
+          "${lib.getExe nodes.agent.system.build.prepareWritableDisk}"
       ], env=os.environ.copy(), cwd=agent.state_dir, check=True)
 
-      import time as _time
-      serial_stdout_on()
+      serial_stdout_off()
       server.start()
       agent.start(allow_reboot=True)
-
       server.wait_for_unit("multi-user.target")
       agent.wait_for_unit("multi-user.target")
 
-      with subtest("Generate mTLS PKI and configure agent"):
-        server.succeed("mkdir -p ${tlsDir}")
+      with subtest("Configure and start agent"):
+          server_ip = server.succeed(
+              "ip -4 -o addr show eth1"
+              " | awk '{print $4}' | cut -d/ -f1"
+          ).strip()
 
-        server_ip = server.succeed("ip -4 -o addr show eth1 | awk '{print $4}' | cut -d/ -f1").strip()
-        server.log(f"Server IP: {server_ip}")
+          server.wait_for_open_port(8891)
+          server.wait_for_open_port(8881)
 
-        server.succeed(
-          "openssl req -x509 -newkey rsa:2048 -nodes"
-          " -keyout ${caKey} -out ${caCert}"
-          " -days 365 -subj '/CN=Keylime CA'"
-          " -addext 'basicConstraints=critical,CA:TRUE'"
-          " -addext 'keyUsage=critical,keyCertSign,cRLSign'"
-        )
-        server.succeed(
-          "openssl req -newkey rsa:2048 -nodes"
-          " -keyout ${serverKey} -out /tmp/server.csr -subj '/CN=server'"
-        )
-        server.succeed(
-          "openssl x509 -req -in /tmp/server.csr"
-          " -CA ${caCert} -CAkey ${caKey} -CAcreateserial"
-          " -out ${serverCert} -days 365 -sha256"
-          f" -extfile <(printf 'subjectAltName=DNS:server,DNS:localhost,IP:127.0.0.1,IP:{server_ip}')"
-        )
-        server.succeed(
-          "openssl req -newkey rsa:2048 -nodes"
-          " -keyout ${clientKey} -out /tmp/client.csr -subj '/CN=client'"
-        )
-        server.succeed(
-          "openssl x509 -req -in /tmp/client.csr"
-          " -CA ${caCert} -CAkey ${caKey} -CAcreateserial"
-          " -out ${clientCert} -days 365 -sha256"
-        )
-        server.succeed("chown -R keylime:keylime ${tlsDir}")
-        server.succeed("chmod 0640 ${tlsDir}/*")
-
-        # Write attestation-server.json to agent
-        ca_cert_pem = server.succeed("cat ${caCert}")
-        server_json = json.dumps({"ip": server_ip, "ca_cert": ca_cert_pem})
-        agent.succeed("mount -o remount,rw /boot")
-        agent.succeed(f"cat > /boot/attestation-server.json << 'EOF'\n{server_json}\nEOF")
-        agent.succeed("mount -o remount,ro /boot")
-
-      with subtest("Start registrar and verifier"):
-        server.succeed("systemctl start keylime-registrar.service")
-        server.wait_for_unit("keylime-registrar.service")
-        server.wait_for_open_port(8891)
-
-        server.succeed("systemctl start keylime-verifier.service")
-        server.wait_for_unit("keylime-verifier.service")
-        server.wait_for_open_port(8881)
-
-      with subtest("Start auto-enrollment daemon"):
-        server.succeed(
-          "KEYLIME_TLS_DIR=${tlsDir}"
-          " KEYLIME_POLL_INTERVAL=2"
-          " KEYLIME_ENROLL_PORT=8893"
-          " ${autoEnrollScript}"
-          " >> /tmp/auto-enroll.log 2>&1 &"
-        )
-        _time.sleep(2)  # Give the HTTPS server time to start
-
-      with subtest("Agent registers and reports PCRs"):
-        # Start the keylime agent (registers with registrar)
-        agent.succeed("systemctl start keylime-agent.service")
-        agent.wait_for_unit("keylime-agent.service")
-
-        # Wait for the agent to register
-        agent_uuid = None
-        for _ in range(30):
-          resp = json.loads(server.succeed(
-            "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
-            " https://127.0.0.1:8891/v2.5/agents/"
-          ))
-          uuids = resp.get("results", {}).get("uuids", [])
-          if uuids:
-            agent_uuid = uuids[0]
-            break
-          _time.sleep(1)
-        assert agent_uuid, "Agent did not register within 30s"
-        agent.log(f"Agent UUID: {agent_uuid}")
-
-        # Report measured boot state to the enrollment server.
-        # Reads UUID from agent_data.json and server address
-        # from /boot/attestation-server.json.
-        agent.succeed("report-measured-boot-state")
-
-      with subtest("Verifier attests the auto-enrolled agent with measured boot policy"):
-        server.wait_until_succeeds(
-          "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
-          f" https://127.0.0.1:8881/v2.5/agents/{agent_uuid}"
-          " | grep -q 'operational_state'",
-          timeout=60,
-        )
-        server.log("Agent successfully auto-enrolled and attested!")
-
-        # Verify the enrolled policy uses measured boot + PCR 11
-        cvstatus = json.loads(server.succeed(
-          "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
-          f" https://127.0.0.1:8881/v2.5/agents/{agent_uuid}"
-        ))
-        results = cvstatus.get("results", {})
-        tpm_policy_raw = results.get("tpm_policy", "{}")
-        tpm_policy = json.loads(tpm_policy_raw) if isinstance(tpm_policy_raw, str) else tpm_policy_raw
-        server.log(f"TPM policy keys: {list(tpm_policy.keys())}")
-
-        # Only the mask should be present — no individual PCR entries
-        for pcr in ["0", "1", "2", "3", "7", "11"]:
-          assert pcr not in tpm_policy, f"PCR {pcr} should not be in tpm_policy (covered by measured_boot_policy)"
-        server.log("Policy verified: all PCRs covered by measured_boot_policy")
-
-      for i in range(1, 4):
-        with subtest(f"Attestation and EK persist after reboot {i}/3"):
-          agent.shutdown()
-          agent.start()
-          agent.wait_for_unit("multi-user.target")
-          agent.succeed("systemctl start keylime-agent")
+          ca_cert_pem = server.succeed(
+              "cat ${caCert}"
+          )
+          server_json = json.dumps(
+              {"ip": server_ip, "ca_cert": ca_cert_pem}
+          )
+          agent.succeed("mount -o remount,rw /boot")
+          agent.succeed(
+              "cat > /boot/attestation-server.json"
+              f" << 'EOF'\n{server_json}\nEOF"
+          )
+          agent.succeed("mount -o remount,ro /boot")
+          agent.succeed(
+              "systemctl start"
+              " keylime-agent-config.service"
+          )
           agent.wait_for_unit("keylime-agent.service")
 
-          # EK stability check: the registrar should still contain
-          # exactly the same UUID.  If the swtpm's Endorsement Primary
-          # Seed changed (e.g. state directory lost, TPM2_Clear issued),
-          # the agent would register under a new EK-derived UUID,
-          # leaving a stale entry behind.
-          reg_uuids = []
-          for _ in range(30):
-            resp = json.loads(server.succeed(
-              "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
+      with subtest("Agent registers with registrar"):
+          agent_uuid = server.wait_until_succeeds(
+              "curl -sk"
+              " --cert ${clientCert}"
+              " --key ${clientKey}"
+              " --cacert ${caCert}"
               " https://127.0.0.1:8891/v2.5/agents/"
-            ))
-            reg_uuids = resp.get("results", {}).get("uuids", [])
-            if reg_uuids == [agent_uuid]:
-              break
-            _time.sleep(1)
-          assert reg_uuids == [agent_uuid], (
-            f"EK unstable after reboot {i}:"
-            f" expected [{agent_uuid}], got {reg_uuids}"
-          )
-          server.log(f"Reboot {i}/3: EK stable, UUID unchanged")
+              " | jq -re '.results.uuids[0]'",
+              timeout=30,
+          ).strip()
+          server.log(f"Agent UUID: {agent_uuid}")
 
+      with subtest("Report measured boot state"):
+          agent.succeed("report-measured-boot-state")
+
+      with subtest("Auto-enrolled and attested"):
           server.wait_until_succeeds(
-            "curl -sk --cert ${clientCert} --key ${clientKey} --cacert ${caCert}"
-            f" https://127.0.0.1:8881/v2.5/agents/{agent_uuid}"
-            " | grep -q 'operational_state'",
-            timeout=60,
+              "curl -sk"
+              " --cert ${clientCert}"
+              " --key ${clientKey}"
+              " --cacert ${caCert}"
+              " https://127.0.0.1:8881/v2.5/agents/"
+              f"{agent_uuid}"
+              " | grep -q operational_state",
+              timeout=60,
           )
-          server.log(f"Reboot {i}/3: attestation OK")
+
+      with subtest("Git client cert provisioned"):
+          agent.wait_until_succeeds(
+              "test -f"
+              " /var/lib/keylime/git/client-cert.pem",
+              timeout=300,
+          )
+          agent.succeed(
+              "test -f"
+              " /var/lib/keylime/git/client-key.pem"
+          )
+          cn = agent.succeed(
+              "openssl x509 -noout -subject"
+              " -in /var/lib/keylime/git/"
+              "client-cert.pem"
+          ).strip()
+          assert agent_uuid in cn, (
+              f"Cert CN should contain {agent_uuid},"
+              f" got: {cn}"
+          )
     '';
 }

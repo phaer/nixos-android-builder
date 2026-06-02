@@ -27,6 +27,7 @@
     };
 
   testScript = ''
+    serial_stdout_off()
     machine.start()
     machine.wait_for_unit("multi-user.target")
 
