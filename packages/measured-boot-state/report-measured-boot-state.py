@@ -34,6 +34,7 @@ from measured_boot_state import (
 
 ATTESTATION_SERVER = Path("/boot/attestation-server.json")
 AGENT_DATA = Path("/var/lib/keylime/agent_data.json")
+GIT_CERT_DIR = Path("/var/lib/keylime/git")
 
 
 def generate_measured_boot_state(
@@ -222,18 +223,79 @@ def main() -> None:
         )
         sys.exit(1)
 
-    if body.get("status") == "accepted":
-        print(
-            "Measured boot report accepted.",
-            file=sys.stderr,
-        )
-    else:
+    if body.get("status") != "accepted":
         print(
             "Error: server response:"
             f" {json.dumps(body)}",
             file=sys.stderr,
         )
         sys.exit(1)
+
+    print(
+        "Measured boot report accepted.",
+        file=sys.stderr,
+    )
+
+    # Fetch git client cert from the enrollment server.
+    # The server only issues certs for attested agents, so we
+    # retry until attestation succeeds (enrollment is async).
+    cert_endpoint = f"{url}/v1/cert/{uuid}"
+    for attempt in range(60):
+        try:
+            cert_req = urllib.request.Request(
+                cert_endpoint,
+            )
+            with urllib.request.urlopen(
+                cert_req, context=ctx,
+            ) as cert_resp:
+                cert_body = json.loads(
+                    cert_resp.read(),
+                )
+            break
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                # Not attested yet — wait and retry
+                if attempt == 0:
+                    print(
+                        "Waiting for attestation"
+                        " before fetching git cert...",
+                        file=sys.stderr,
+                    )
+                time.sleep(5)
+                continue
+            print(
+                f"Error fetching cert: {e}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        except urllib.error.URLError as e:
+            print(
+                f"Error fetching cert: {e}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    else:
+        print(
+            "Error: timed out waiting for"
+            " attestation to fetch git cert",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    client_cert = cert_body.get("client_cert")
+    client_key = cert_body.get("client_key")
+    if client_cert and client_key:
+        GIT_CERT_DIR.mkdir(parents=True, exist_ok=True)
+        cert_path = GIT_CERT_DIR / "client-cert.pem"
+        key_path = GIT_CERT_DIR / "client-key.pem"
+        cert_path.write_text(client_cert)
+        key_path.write_text(client_key)
+        cert_path.chmod(0o644)
+        key_path.chmod(0o600)
+        print(
+            f"Git client cert saved to {cert_path}",
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":
