@@ -32,7 +32,8 @@ in
 
       systemd.tmpfiles.rules = [
         "d /var/lib/keylime 0750 keylime keylime -"
-      ];
+      ]
+      ++ shared.mkTmpfilesRules cfg;
 
       environment.systemPackages = [ cfg.package ];
       environment.etc = shared.mkEtcFiles cfg;

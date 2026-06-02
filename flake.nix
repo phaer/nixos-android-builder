@@ -205,6 +205,10 @@
               registrar.enable = true;
               verifier.enable = true;
               autoEnroll.enable = true;
+              gitServer = {
+                enable = true;
+                repos = [ "config" ];
+              };
             };
           }
         ];

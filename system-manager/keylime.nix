@@ -49,7 +49,8 @@ in
       systemd.tmpfiles.rules = [
         "d /var/lib/keylime 0750 keylime keylime -"
         "d ${tlsDir} 0750 keylime keylime -"
-      ];
+      ]
+      ++ shared.mkTmpfilesRules cfg;
 
       environment.etc = shared.mkEtcFiles cfg;
 
