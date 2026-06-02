@@ -10,12 +10,13 @@ System-manager is a tool that applies NixOS-style module configurations (service
 
 ## What It Runs
 
-The configuration deploys four systemd services:
+The configuration deploys four core systemd services plus an optional attestation-gated git server:
 
 - **keylime-registrar** — Accepts TPM identity registrations from agents. Agents contact the registrar when they first boot and present their Endorsement Key (EK) and Attestation Key (AK).
 - **keylime-verifier** — Continuously attests enrolled agents by requesting TPM quotes and verifying them against a measured boot reference state. Uses the custom `uki` measured boot policy.
 - **keylime-auto-enroll** — A custom daemon that bridges registration and verification. It exposes an HTTPS endpoint for agents to submit their measured boot state, polls the registrar for new agents, and automatically enrolls them with the verifier once both conditions are met.
 - **keylime-tls** — A oneshot service that auto-generates a self-signed CA and mTLS PKI (CA, server, and client certificates) in `/var/lib/keylime/tls/` on first activation. Existing certificates are never overwritten.
+- **keylime-git-nginx** / **keylime-git-auth** *(optional)* — A demo-oriented git server that only lets attested agents clone. See [keylime-git-server.md](keylime-git-server.md).
 
 ## Network Ports
 
@@ -24,6 +25,7 @@ All ports use mTLS with certificates from the auto-generated PKI in `/var/lib/ke
 - **8891** — Registrar API (agent registration)
 - **8881** — Verifier API (attestation, enrollment)
 - **8893** — Auto-enroll endpoint (agents POST their measured boot state)
+- **8894** — Git HTTP server (mTLS, agents only; see [keylime-git-server.md](keylime-git-server.md))
 
 ## System Users & File Locations
 
@@ -37,13 +39,11 @@ State and configuration lives in:
 
 ## Module Structure
 
-The configuration is composed of three Nix modules:
+The configuration is composed of two Nix modules:
 
 - **`system-manager/tpm2.nix`** — Simplified port of the NixOS `security.tpm2` module. Manages udev rules and environment variables for TPM access. Does *not* manage kernel modules (the host kernel must have TPM support built-in or loaded).
 
-- **`system-manager/keylime.nix`** — Keylime registrar + verifier services, TLS auto-generation, config file generation. Shares option definitions and defaults with the NixOS agent module via `modules/lib/keylime-shared.nix`.
-
-- **`system-manager/keylime-auto-enroll.nix`** — The auto-enrollment daemon. Depends on both the registrar and verifier being active.
+- **`system-manager/keylime.nix`** — All Keylime services: registrar, verifier, TLS auto-generation, auto-enrollment daemon, and the optional attestation-gated git server. Service definitions, option declarations, and shared helpers all come from `modules/lib/keylime-shared.nix`.
 
 These are wired together in `flake.nix`:
 
@@ -52,7 +52,6 @@ systemConfigs.default = system-manager.lib.makeSystemConfig {
   modules = [
     ./system-manager/tpm2.nix
     ./system-manager/keylime.nix
-    ./system-manager/keylime-auto-enroll.nix
     {
       nixpkgs.hostPlatform = "x86_64-linux";
       services.keylime = {
@@ -60,6 +59,7 @@ systemConfigs.default = system-manager.lib.makeSystemConfig {
         registrar.enable = true;
         verifier.enable = true;
         autoEnroll.enable = true;
+        gitServer.enable = true;
       };
     }
   ];
@@ -143,6 +143,7 @@ If you are running `ufw` or `iptables`, ensure the required ports are accessible
 sudo ufw allow 8891/tcp   # Registrar (TLS)
 sudo ufw allow 8881/tcp   # Verifier (TLS)
 sudo ufw allow 8893/tcp   # Auto-enroll (TLS)
+sudo ufw allow 8894/tcp   # Git server (mTLS, agents only)
 ```
 
 ## Step 5: Distribute the CA Certificate

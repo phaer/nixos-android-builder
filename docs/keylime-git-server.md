@@ -1,0 +1,168 @@
+---
+title: Attestation-Gated Git Server
+---
+
+> **Demo feature.** This git server is designed for demonstration purposes:
+> it shows that only TPM-attested builder machines can clone sensitive
+> repositories. It uses git dumb HTTP (static file serving) which is
+> adequate for small, infrequently-updated repos but not suitable for
+> large-scale production use.
+
+The git server lets attested builder machines clone repositories over
+HTTPS/mTLS. A machine that fails attestation, or has never been attested,
+cannot clone.
+
+## How It Works
+
+```mermaid
+sequenceDiagram
+    participant A as Agent
+    participant N as nginx :8894
+    participant G as keylime-git-auth :8895
+    participant V as keylime-verifier :8881
+
+    A->>N: git clone (mTLS client cert)
+    N->>N: ssl_verify_client<br/>(keylime CA validates cert)
+    N->>G: auth_request /verify?uuid=…
+    G->>V: GET /v2.5/agents/{uuid}
+    alt attested (operational state allowed)
+        V-->>G: 200
+        G-->>N: 200 ALLOW
+        N-->>A: serve repo (static files)
+    else not attested / unknown
+        V-->>G: 404 or disallowed state
+        G-->>N: 403 DENY
+        N-->>A: clone rejected
+    end
+```
+
+**Identity.** nginx enforces mTLS against the keylime CA. The agent UUID
+(SHA-256 of the TPM Endorsement Key) is the CN of the client certificate,
+so no separate credential is needed: a machine provisioned into keylime
+automatically has its git identity.
+
+**Authorization.** `keylime-git-auth` is a small Python daemon on
+`127.0.0.1:8895`. It queries the keylime verifier for the agent's
+operational state and only allows requests from agents in a known-good
+state (START, SAVED, GET_QUOTE, GET_QUOTE_RETRY, PROVIDE_V,
+PROVIDE_V_RETRY). Everything else is denied, including states it does
+not recognise. If the verifier is unreachable, it returns 503 and nginx
+rejects the clone (fail-closed).
+
+**Git transport.** nginx serves the bare repo directory as static files
+(git dumb HTTP). No additional daemons are required. Run
+`git update-server-info` after each push, or install the provided
+post-receive hook, to keep the index files current.
+
+## Managing Repositories
+
+Repositories are bare git repos in `/var/lib/keylime-git/repos/`.
+
+The simplest way to create repos is declaratively via the `repos` option:
+
+```nix
+services.keylime.gitServer = {
+  enable = true;
+  repos = [ "config" "firmware" ];
+};
+```
+
+This creates `config.git` and `firmware.git` as bare repositories on
+boot or system activation. To push content into them from the attestation server:
+
+```bash
+cd /var/lib/keylime-git/repos/config.git
+git --work-tree=/tmp/work checkout -f  # or push from a remote
+```
+
+Alternatively, create repos manually:
+
+Create a new repo:
+
+```bash
+git init --bare /var/lib/keylime-git/repos/my-repo.git
+chown -R keylime:keylime /var/lib/keylime-git/repos/my-repo.git
+git -C /var/lib/keylime-git/repos/my-repo.git update-server-info
+ln -s /etc/keylime-git/hooks/post-receive \
+      /var/lib/keylime-git/repos/my-repo.git/hooks/post-receive
+```
+
+Mirror an existing repo:
+
+```bash
+git clone --bare https://github.com/example/repo.git \
+    /var/lib/keylime-git/repos/repo.git
+chown -R keylime:keylime /var/lib/keylime-git/repos/repo.git
+git -C /var/lib/keylime-git/repos/repo.git update-server-info
+ln -s /etc/keylime-git/hooks/post-receive \
+      /var/lib/keylime-git/repos/repo.git/hooks/post-receive
+```
+
+The post-receive hook runs `git update-server-info` automatically after
+every push so the index files stay current.
+
+## Cloning from an Agent
+
+Builder machines include the `keylime-git-clone` wrapper, which
+automatically configures git with the machine's mTLS credentials:
+
+```bash
+keylime-git-clone https://<server-ip>:8894/my-repo.git
+```
+
+This is equivalent to running `git clone` with the client certificate,
+key, and CA cert flags set. An optional destination directory can be
+appended:
+
+```bash
+keylime-git-clone https://<server-ip>:8894/my-repo.git /path/to/dest
+```
+
+The credentials are provisioned automatically:
+
+- **Client cert & key** are written to `/run/keylime-git/` by
+  `report-measured-boot-state` after successful attestation.
+- **CA cert** is written to `/run/keylime-git/ca-cert.pem` by the agent
+  service on boot from `/boot/attestation-server.json`.
+
+Both paths are world-readable, so any local user can run
+`keylime-git-clone` without elevated privileges.
+
+Custom cert paths can be passed if needed:
+
+```bash
+keylime-git-clone --cert=/path/to/cert --key=/path/to/key --ca=/path/to/ca \
+    https://<server-ip>:8894/my-repo.git
+```
+
+## Verifying the Gate
+
+Check both services are running:
+
+```bash
+systemctl status keylime-git-nginx keylime-git-auth
+```
+
+Confirm nginx rejects an unauthenticated request:
+
+```bash
+curl -k https://127.0.0.1:8894/any-repo.git/info/refs
+# Expected: 400 No required SSL certificate was sent
+```
+
+Watch the attestation gate in real time:
+
+```bash
+journalctl -fu keylime-git-auth
+# Prints ALLOW / DENY with the agent UUID on every request
+```
+
+## Nix Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `services.keylime.gitServer.enable` | `false` | Enable the git server |
+| `services.keylime.gitServer.port` | `8894` | nginx HTTPS listen port |
+| `services.keylime.gitServer.authPort` | `8895` | Auth daemon localhost port |
+| `services.keylime.gitServer.repoDir` | `/var/lib/keylime-git/repos` | Bare repo root |
+| `services.keylime.gitServer.repos` | `[]` | Bare repos to create on boot or system activation (names without `.git` suffix) |
