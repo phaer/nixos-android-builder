@@ -14,23 +14,26 @@ cannot clone.
 
 ## How It Works
 
-```
-Agent                               Attestation Server
------                               ------------------
-git clone https://server/...
-  (presents keylime client cert) --> nginx :443
-                                        |  ssl_verify_client on
-                                        |  (keylime CA validates cert)
-                                        |
-                                        +- auth_request --> keylime-git-auth :8895
-                                        |                     |
-                                        |                     |  GET /v2.5/agents/{uuid}
-                                        |                     +--> keylime-verifier :8881
-                                        |                           200 -> ALLOW
-                                        |                           else -> DENY
-                                        |
-                                        +- 200 -> nginx serves repo as static files
-                                           403 -> clone rejected
+```mermaid
+sequenceDiagram
+    participant A as Agent
+    participant N as nginx :443
+    participant G as keylime-git-auth :8895
+    participant V as keylime-verifier :8881
+
+    A->>N: git clone (mTLS client cert)
+    N->>N: ssl_verify_client<br/>(keylime CA validates cert)
+    N->>G: auth_request /verify?uuid=…
+    G->>V: GET /v2.5/agents/{uuid}
+    alt attested (operational state allowed)
+        V-->>G: 200
+        G-->>N: 200 ALLOW
+        N-->>A: serve repo (static files)
+    else not attested / unknown
+        V-->>G: 404 or disallowed state
+        G-->>N: 403 DENY
+        N-->>A: clone rejected
+    end
 ```
 
 **Identity.** nginx enforces mTLS against the keylime CA. The agent UUID

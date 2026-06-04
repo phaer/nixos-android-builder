@@ -516,11 +516,7 @@ rec {
     // lib.optionalAttrs cfg.verifier.enable (keylimeEtc "keylime/verifier.conf" (mkVerifierConf cfg))
     // lib.optionalAttrs cfg.gitServer.enable {
       "keylime-git/nginx.conf" = {
-        text = mkGitNginxConf {
-          inherit cfg;
-          user = "keylime";
-          group = "keylime";
-        };
+        text = mkGitNginxConf { inherit cfg; };
         mode = "0444";
       };
       "keylime-git/hooks/post-receive" = {
@@ -643,8 +639,8 @@ rec {
         wants = [ "keylime-git-auth.service" ];
         inherit wantedBy;
         serviceConfig = {
-          ExecStart = "${pkgs.nginx}/bin/nginx -c /etc/keylime-git/nginx.conf";
-          ExecReload = "${pkgs.nginx}/bin/nginx -c /etc/keylime-git/nginx.conf -s reload";
+          ExecStart = "${pkgs.nginx}/bin/nginx -c /etc/keylime-git/nginx.conf -e /run/keylime-git/error.log";
+          ExecReload = "${pkgs.nginx}/bin/nginx -c /etc/keylime-git/nginx.conf -e /run/keylime-git/error.log -s reload";
           Restart = "on-failure";
           RestartSec = "5s";
           User = "keylime";
@@ -730,8 +726,6 @@ rec {
   mkGitNginxConf =
     {
       cfg,
-      user ? "root",
-      group ? "root",
       foreground ? true,
     }:
     let
@@ -740,7 +734,6 @@ rec {
     in
     ''
       ${lib.optionalString foreground "daemon off;"}
-      user ${user} ${group};
       pid /run/keylime-git/nginx.pid;
       error_log /run/keylime-git/error.log;
 
