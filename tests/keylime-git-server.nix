@@ -36,7 +36,7 @@ let
   clientKey = "${tlsDir}/client-key.pem";
 
   repoDir = "/var/lib/keylime-git/repos";
-  gitPort = 8894;
+  gitPort = 443;
 
   unknownUuid = "ffffffff-ffff-ffff-ffff-ffffffffffff";
 

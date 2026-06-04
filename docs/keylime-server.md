@@ -25,7 +25,7 @@ All ports use mTLS with certificates from the auto-generated PKI in `/var/lib/ke
 - **8891** — Registrar API (agent registration)
 - **8881** — Verifier API (attestation, enrollment)
 - **8893** — Auto-enroll endpoint (agents POST their measured boot state)
-- **8894** — Git HTTP server (mTLS, agents only; see [keylime-git-server.md](keylime-git-server.md))
+- **443** — Git HTTP server (mTLS, agents only; see [keylime-git-server.md](keylime-git-server.md))
 
 ## System Users & File Locations
 
@@ -143,7 +143,7 @@ If you are running `ufw` or `iptables`, ensure the required ports are accessible
 sudo ufw allow 8891/tcp   # Registrar (TLS)
 sudo ufw allow 8881/tcp   # Verifier (TLS)
 sudo ufw allow 8893/tcp   # Auto-enroll (TLS)
-sudo ufw allow 8894/tcp   # Git server (mTLS, agents only)
+sudo ufw allow 443/tcp   # Git server (mTLS, agents only)
 ```
 
 ## Step 5: Distribute the CA Certificate

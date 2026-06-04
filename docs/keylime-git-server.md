@@ -17,8 +17,8 @@ cannot clone.
 ```
 Agent                               Attestation Server
 -----                               ------------------
-git clone https://server:8894/...
-  (presents keylime client cert) --> nginx :8894
+git clone https://server/...
+  (presents keylime client cert) --> nginx :443
                                         |  ssl_verify_client on
                                         |  (keylime CA validates cert)
                                         |
@@ -85,7 +85,7 @@ Builder machines include the `keylime-git-clone` wrapper, which
 automatically configures git with the machine's mTLS credentials:
 
 ```bash
-keylime-git-clone https://<server-ip>:8894/my-repo.git
+keylime-git-clone https://<server-ip>/my-repo.git
 ```
 
 This is equivalent to running `git clone` with the client certificate,
@@ -93,7 +93,7 @@ key, and CA cert flags set. An optional destination directory can be
 appended:
 
 ```bash
-keylime-git-clone https://<server-ip>:8894/my-repo.git /path/to/dest
+keylime-git-clone https://<server-ip>/my-repo.git /path/to/dest
 ```
 
 The credentials are provisioned automatically:
@@ -110,7 +110,7 @@ Custom cert paths can be passed if needed:
 
 ```bash
 keylime-git-clone --cert=/path/to/cert --key=/path/to/key --ca=/path/to/ca \
-    https://<server-ip>:8894/my-repo.git
+    https://<server-ip>/my-repo.git
 ```
 
 ## Verifying the Gate
@@ -124,7 +124,7 @@ systemctl status keylime-git-nginx keylime-git-auth
 Confirm nginx rejects an unauthenticated request:
 
 ```bash
-curl -k https://127.0.0.1:8894/any-repo.git/info/refs
+curl -k https://127.0.0.1:443/any-repo.git/info/refs
 # Expected: 400 No required SSL certificate was sent
 ```
 
@@ -140,6 +140,6 @@ journalctl -fu keylime-git-auth
 | Option | Default | Description |
 |--------|---------|-------------|
 | `services.keylime.gitServer.enable` | `false` | Enable the git server |
-| `services.keylime.gitServer.port` | `8894` | nginx HTTPS listen port |
+| `services.keylime.gitServer.port` | `443` | nginx HTTPS listen port |
 | `services.keylime.gitServer.authPort` | `8895` | Auth daemon localhost port |
 | `services.keylime.gitServer.repoDir` | `/var/lib/keylime-git/repos` | Bare repo root |

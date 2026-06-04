@@ -417,7 +417,7 @@ rec {
 
       port = lib.mkOption {
         type = lib.types.port;
-        default = 8894;
+        default = 443;
         description = "HTTPS port nginx listens on for git clone requests.";
       };
 
@@ -649,6 +649,9 @@ rec {
           RestartSec = "5s";
           User = "keylime";
           Group = "keylime";
+          # Allow binding to privileged ports (e.g. 443) without running as root.
+          AmbientCapabilities = [ "CAP_NET_BIND_SERVICE" ];
+          CapabilityBoundingSet = [ "CAP_NET_BIND_SERVICE" ];
           ProtectSystem = "strict";
           ProtectHome = true;
           ReadOnlyPaths = [
