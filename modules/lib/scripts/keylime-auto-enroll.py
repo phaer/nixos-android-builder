@@ -33,6 +33,7 @@ import time
 import urllib.request
 import urllib.error
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from pathlib import Path
 
 LOG_LEVEL = os.environ.get("KEYLIME_LOG_LEVEL", "INFO").upper()
 
@@ -52,10 +53,12 @@ POLL_INTERVAL = int(os.environ.get("KEYLIME_POLL_INTERVAL", "10"))
 ENROLL_PORT = int(os.environ.get("KEYLIME_ENROLL_PORT", "8893"))
 
 CA_CERT = os.path.join(TLS_DIR, "ca-cert.pem")
+CA_KEY = os.path.join(TLS_DIR, "ca-key.pem")
 SERVER_CERT = os.path.join(TLS_DIR, "server-cert.pem")
 SERVER_KEY = os.path.join(TLS_DIR, "server-key.pem")
 CLIENT_CERT = os.path.join(TLS_DIR, "client-cert.pem")
 CLIENT_KEY = os.path.join(TLS_DIR, "client-key.pem")
+AGENT_CERTS_DIR = os.path.join(TLS_DIR, "agent-certs")
 
 
 def make_mtls_context() -> ssl.SSLContext:
@@ -129,11 +132,116 @@ def validate_report(report: dict) -> str | None:
     return None
 
 
+def issue_agent_cert(uuid: str) -> tuple[str, str]:
+    """Generate a TLS client cert for an agent, signed by the keylime CA.
+
+    Returns (cert_pem, key_pem).  Certs are cached in AGENT_CERTS_DIR
+    so repeated calls for the same UUID return the same cert.
+    """
+    cert_dir = Path(AGENT_CERTS_DIR)
+    cert_dir.mkdir(parents=True, exist_ok=True)
+    cert_file = cert_dir / f"{uuid}-cert.pem"
+    key_file = cert_dir / f"{uuid}-key.pem"
+
+    if cert_file.exists() and key_file.exists():
+        return cert_file.read_text(), key_file.read_text()
+
+    csr_file = cert_dir / f"{uuid}.csr"
+    try:
+        subprocess.run(
+            ["openssl", "req", "-newkey", "rsa:2048", "-nodes",
+             "-keyout", str(key_file), "-out", str(csr_file),
+             "-subj", f"/CN={uuid}"],
+            check=True, capture_output=True,
+        )
+        subprocess.run(
+            ["openssl", "x509", "-req", "-in", str(csr_file),
+             "-CA", CA_CERT, "-CAkey", CA_KEY, "-CAcreateserial",
+             "-out", str(cert_file), "-days", "365", "-sha256"],
+            check=True, capture_output=True,
+        )
+    finally:
+        csr_file.unlink(missing_ok=True)
+
+    log.info("Issued git client cert for agent %s", uuid)
+    return cert_file.read_text(), key_file.read_text()
+
+
+# Verifier operational states that indicate active attestation.
+# Allowlist matches keylime-git-auth.py; reference: keylime/common/states.py.
+_ATTESTED_STATES = frozenset({
+    1,  # START
+    2,  # SAVED
+    3,  # GET_QUOTE
+    4,  # GET_QUOTE_RETRY
+    5,  # PROVIDE_V
+    6,  # PROVIDE_V_RETRY
+})
+
+
+def is_attested(uuid: str) -> bool:
+    """Check if an agent is attested by the verifier."""
+    url = (
+        f"https://{VERIFIER_IP}:{VERIFIER_PORT}"
+        f"/v2.5/agents/{uuid}"
+    )
+    try:
+        data = api_get(url)
+        state = data.get("results", {}).get(
+            "operational_state",
+        )
+        return state in _ATTESTED_STATES
+    except Exception:
+        return False
+
+
 class EnrollHandler(BaseHTTPRequestHandler):
-    """Handle POST /v1/report_measured_boot_state from agents."""
+    """Handle agent requests.
+
+    POST /v1/report_measured_boot_state
+    GET  /v1/cert/<uuid>  (attested agents only)
+    """
 
     def log_message(self, fmt, *args):
         log.info("HTTP %s", fmt % args)
+
+    def do_GET(self):  # noqa: N802
+        parts = self.path.rstrip("/").split("/")
+        is_cert = len(parts) == 4
+        is_cert = is_cert and parts[1:3] == ["v1", "cert"]
+        if is_cert:
+            self._handle_cert(parts[3])
+        else:
+            self.send_error(404)
+
+    def _handle_cert(self, uuid: str) -> None:
+        """GET /v1/cert/<uuid> — attested agents only."""
+        if not is_attested(uuid):
+            log.warning(
+                "Cert denied for %s: not attested",
+                uuid,
+            )
+            self.send_error(403, "not attested")
+            return
+        try:
+            cert_pem, key_pem = issue_agent_cert(uuid)
+        except Exception as e:
+            log.error(
+                "Cert generation failed for %s: %s",
+                uuid, e,
+            )
+            self.send_error(500, "cert error")
+            return
+        body = json.dumps({
+            "client_cert": cert_pem,
+            "client_key": key_pem,
+        }).encode()
+        self.send_response(200)
+        self.send_header(
+            "Content-Type", "application/json",
+        )
+        self.end_headers()
+        self.wfile.write(body)
 
     def do_POST(self):  # noqa: N802
         if self.path != "/v1/report_measured_boot_state":

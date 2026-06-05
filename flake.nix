@@ -26,6 +26,7 @@
         tpm2-tools
         keylime
         keylime-agent
+        keylime-git-clone
         measuredBoot
         attestation-ctl
         secureBootScripts
@@ -186,6 +187,7 @@
           desktop-installer-vm
           keylime
           keylime-agent
+          keylime-git-clone
           ;
         inherit (secureBootScripts) create-signing-keys;
         inherit attestation-ctl;
@@ -198,7 +200,6 @@
         modules = [
           ./system-manager/tpm2.nix
           ./system-manager/keylime.nix
-          ./system-manager/keylime-auto-enroll.nix
           {
             nixpkgs.hostPlatform = system;
             services.keylime = {
@@ -206,6 +207,10 @@
               registrar.enable = true;
               verifier.enable = true;
               autoEnroll.enable = true;
+              gitServer = {
+                enable = true;
+                repos = [ "config" ];
+              };
             };
           }
         ];

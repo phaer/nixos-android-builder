@@ -364,7 +364,146 @@ rec {
         description = "Settings for tenant.conf [tenant] section.";
       };
     };
+
+    tls = {
+      autoGenerate = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Automatically generate a self-signed CA and mTLS certificates
+          in `/var/lib/keylime/tls/` on first activation.  Existing
+          certificates are never overwritten.
+        '';
+      };
+
+      certLifetime = lib.mkOption {
+        type = lib.types.int;
+        default = 365;
+        description = "Validity period in days for generated certificates.";
+      };
+
+      subjectAlternativeNames = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        example = [
+          "DNS:keylime.example.com"
+          "IP:10.0.0.1"
+        ];
+        description = ''
+          Additional Subject Alternative Names for the server certificate.
+          Host IPs are auto-discovered; use this for extra DNS names or IPs.
+        '';
+      };
+    };
+
+    autoEnroll = {
+      enable = lib.mkEnableOption "automatic enrollment of new Keylime agents with measured boot policy";
+
+      pollInterval = lib.mkOption {
+        type = lib.types.int;
+        default = 10;
+        description = "Seconds between polling the registrar for new agents.";
+      };
+
+      enrollPort = lib.mkOption {
+        type = lib.types.port;
+        default = 8893;
+        description = "HTTPS port for the measured boot report endpoint.";
+      };
+    };
+
+    gitServer = {
+      enable = lib.mkEnableOption "attestation-gated git HTTP server";
+
+      port = lib.mkOption {
+        type = lib.types.port;
+        default = 443;
+        description = "HTTPS port nginx listens on for git clone requests.";
+      };
+
+      authPort = lib.mkOption {
+        type = lib.types.port;
+        default = 8895;
+        description = ''
+          Localhost port for the attestation auth subrequest backend.
+          Only reachable from nginx on the same host.
+        '';
+      };
+
+      repoDir = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/lib/keylime-git/repos";
+        description = ''
+          Directory containing bare git repositories served to attested agents.
+        '';
+      };
+
+      repos = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        example = [
+          "config"
+          "firmware"
+        ];
+        description = ''
+          Bare git repositories to create on first boot (without the
+          .git suffix).
+        '';
+      };
+    };
+
   };
+
+  # When tls.autoGenerate is enabled, return config attrset that sets
+  # mkDefault TLS paths for registrar, verifier, and tenant.
+  # Apply with: config = lib.mkMerge [ ... (shared.mkTlsConfig cfg) ];
+  mkTlsConfig =
+    cfg:
+    let
+      tlsDir = "/var/lib/keylime/tls";
+      caCert = "${tlsDir}/ca-cert.pem";
+      serverCert = "${tlsDir}/server-cert.pem";
+      serverKey = "${tlsDir}/server-key.pem";
+      clientCert = "${tlsDir}/client-cert.pem";
+      clientKey = "${tlsDir}/client-key.pem";
+    in
+    lib.mkIf cfg.tls.autoGenerate {
+      services.keylime.registrar.settings = lib.mkIf cfg.registrar.enable {
+        tls_dir = lib.mkDefault tlsDir;
+        server_key = lib.mkDefault serverKey;
+        server_cert = lib.mkDefault serverCert;
+        trusted_client_ca = lib.mkDefault [ caCert ];
+      };
+      services.keylime.tenant.settings = {
+        tls_dir = lib.mkDefault tlsDir;
+        client_key = lib.mkDefault clientKey;
+        client_cert = lib.mkDefault clientCert;
+        trusted_server_ca = lib.mkDefault [ caCert ];
+      };
+      services.keylime.verifier.settings = lib.mkIf cfg.verifier.enable {
+        tls_dir = lib.mkDefault tlsDir;
+        server_key = lib.mkDefault serverKey;
+        server_cert = lib.mkDefault serverCert;
+        trusted_client_ca = lib.mkDefault [ caCert ];
+        client_key = lib.mkDefault clientKey;
+        client_cert = lib.mkDefault clientCert;
+        trusted_server_ca = lib.mkDefault [ caCert ];
+      };
+    };
+
+  # Auto-enroll daemon — same script used by system-manager and NixOS.
+  autoEnrollScript = pkgs.writers.writePython3 "keylime-auto-enroll" {
+    flakeIgnore = [
+      "E501"
+      "E266"
+      "N802"
+    ];
+  } (builtins.readFile ./scripts/keylime-auto-enroll.py);
+
+  # Cert generation script shared between system-manager and NixOS VM tests.
+  generateCertsScript = pkgs.writers.writePython3 "keylime-generate-certs" {
+    libraries = [ ];
+  } (builtins.readFile ./scripts/keylime-generate-certs.py);
 
   mkEtcFiles =
     cfg:
@@ -374,7 +513,17 @@ rec {
     // lib.optionalAttrs cfg.registrar.enable (
       keylimeEtc "keylime/registrar.conf" (mkRegistrarConf cfg)
     )
-    // lib.optionalAttrs cfg.verifier.enable (keylimeEtc "keylime/verifier.conf" (mkVerifierConf cfg));
+    // lib.optionalAttrs cfg.verifier.enable (keylimeEtc "keylime/verifier.conf" (mkVerifierConf cfg))
+    // lib.optionalAttrs cfg.gitServer.enable {
+      "keylime-git/nginx.conf" = {
+        text = mkGitNginxConf { inherit cfg; };
+        mode = "0444";
+      };
+      "keylime-git/hooks/post-receive" = {
+        text = gitPostReceiveHook;
+        mode = "0555";
+      };
+    };
 
   mkServices =
     {
@@ -382,18 +531,33 @@ rec {
       wantedBy,
       extraAfter ? { },
     }:
-    lib.optionalAttrs cfg.registrar.enable {
+    let
+      tlsDir = "/var/lib/keylime/tls";
+      tlsAfter = lib.optional cfg.tls.autoGenerate "keylime-tls.service";
+      git = cfg.gitServer;
+    in
+    # TLS cert generation
+    lib.optionalAttrs cfg.tls.autoGenerate {
+      keylime-tls = mkTlsService {
+        inherit tlsDir wantedBy;
+        certDays = cfg.tls.certLifetime;
+        extraSans = cfg.tls.subjectAlternativeNames;
+      };
+    }
+    # Registrar
+    // lib.optionalAttrs cfg.registrar.enable {
       keylime-registrar = {
         description = "Keylime Registrar";
-        after = [ "network-online.target" ] ++ (extraAfter.registrar or [ ]);
+        after = [ "network-online.target" ] ++ tlsAfter ++ (extraAfter.registrar or [ ]);
         wants = [ "network-online.target" ];
-        requires = extraAfter.registrar or [ ];
+        requires = tlsAfter ++ (extraAfter.registrar or [ ]);
         inherit wantedBy;
         serviceConfig = commonServiceConfig // {
           ExecStart = "${cfg.package}/bin/keylime_registrar";
         };
       };
     }
+    # Verifier
     // lib.optionalAttrs cfg.verifier.enable {
       keylime-verifier = {
         description = "Keylime Verifier";
@@ -401,14 +565,141 @@ rec {
           "network-online.target"
         ]
         ++ lib.optional cfg.registrar.enable "keylime-registrar.service"
+        ++ tlsAfter
         ++ (extraAfter.verifier or [ ]);
         wants = [ "network-online.target" ];
-        requires = extraAfter.verifier or [ ];
+        requires = tlsAfter ++ (extraAfter.verifier or [ ]);
         inherit wantedBy;
         environment.PYTHONPATH = "${cfg.measuredBootPolicyPath}";
         serviceConfig = commonServiceConfig // {
           ExecStart = "${cfg.package}/bin/keylime_verifier";
         };
+      };
+    }
+    # Auto-enrollment daemon
+    // lib.optionalAttrs cfg.autoEnroll.enable {
+      keylime-auto-enroll = {
+        description = "Auto-enroll new Keylime agents with measured boot policy";
+        after = [
+          "keylime-registrar.service"
+          "keylime-verifier.service"
+        ]
+        ++ tlsAfter;
+        wants = [
+          "keylime-registrar.service"
+          "keylime-verifier.service"
+        ];
+        inherit wantedBy;
+        path = [
+          cfg.package
+          pkgs.openssl
+        ];
+        environment = {
+          KEYLIME_TLS_DIR = tlsDir;
+          KEYLIME_POLL_INTERVAL = toString cfg.autoEnroll.pollInterval;
+          KEYLIME_ENROLL_PORT = toString cfg.autoEnroll.enrollPort;
+        };
+        serviceConfig = commonServiceConfig // {
+          ExecStart = autoEnrollScript;
+          Restart = "on-failure";
+          RestartSec = "10s";
+        };
+      };
+    }
+    # Git auth daemon
+    // lib.optionalAttrs git.enable {
+      keylime-git-auth = {
+        description = "Keylime git attestation gate (auth_request backend)";
+        after = [
+          "keylime-verifier.service"
+        ]
+        ++ tlsAfter;
+        wants = [ "keylime-verifier.service" ];
+        inherit wantedBy;
+        environment = {
+          KEYLIME_TLS_DIR = tlsDir;
+          KEYLIME_AUTH_PORT = toString git.authPort;
+        };
+        serviceConfig = commonServiceConfig // {
+          ExecStart = gitAuthScript;
+          Restart = "on-failure";
+          RestartSec = "5s";
+        };
+      };
+    }
+    # Git nginx frontend
+    // lib.optionalAttrs git.enable {
+      keylime-git-nginx = {
+        description = "Attestation-gated git HTTP server (nginx)";
+        after = [
+          "keylime-git-auth.service"
+          "systemd-tmpfiles-setup.service"
+        ]
+        ++ tlsAfter;
+        wants = [ "keylime-git-auth.service" ];
+        inherit wantedBy;
+        serviceConfig = {
+          ExecStart = "${pkgs.nginx}/bin/nginx -c /etc/keylime-git/nginx.conf -e /run/keylime-git/error.log";
+          ExecReload = "${pkgs.nginx}/bin/nginx -c /etc/keylime-git/nginx.conf -e /run/keylime-git/error.log -s reload";
+          Restart = "on-failure";
+          RestartSec = "5s";
+          User = "keylime";
+          Group = "keylime";
+          # Allow binding to privileged ports (e.g. 443) without running as root.
+          AmbientCapabilities = [ "CAP_NET_BIND_SERVICE" ];
+          CapabilityBoundingSet = [ "CAP_NET_BIND_SERVICE" ];
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          ReadOnlyPaths = [
+            tlsDir
+            git.repoDir
+          ];
+          ReadWritePaths = [ "/run/keylime-git" ];
+          PrivateTmp = true;
+          NoNewPrivileges = true;
+        };
+      };
+    }
+    # Git repo init oneshots
+    // lib.optionalAttrs git.enable (
+      lib.listToAttrs (
+        map (name: {
+          name = "keylime-git-init-${name}";
+          value = mkGitRepoService {
+            repoDir = git.repoDir;
+            inherit name wantedBy;
+          };
+        }) git.repos
+      )
+    );
+
+  # Systemd service that generates the keylime TLS PKI on first boot.
+  mkTlsService =
+    {
+      tlsDir,
+      certDays ? 365,
+      extraSans ? [ ],
+      wantedBy ? [ ],
+    }:
+    {
+      description = "Generate Keylime TLS certificates";
+      inherit wantedBy;
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      path = [
+        pkgs.openssl
+        pkgs.iproute2
+        pkgs.coreutils
+      ];
+      environment = {
+        KEYLIME_TLS_DIR = tlsDir;
+        KEYLIME_CERT_DAYS = toString certDays;
+        KEYLIME_EXTRA_SANS = builtins.toJSON extraSans;
+      };
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = generateCertsScript;
       };
     };
 
@@ -417,5 +708,104 @@ rec {
     lib.optionals cfg.registrar.enable [
       (cfg.registrar.settings.tls_port or registrarDefaults.tls_port)
     ]
-    ++ lib.optional cfg.verifier.enable (cfg.verifier.settings.port or verifierDefaults.port);
+    ++ lib.optional cfg.verifier.enable (cfg.verifier.settings.port or verifierDefaults.port)
+    ++ lib.optional cfg.autoEnroll.enable cfg.autoEnroll.enrollPort
+    ++ lib.optional cfg.gitServer.enable cfg.gitServer.port;
+
+  # Git auth daemon — same script used by system-manager and NixOS.
+  gitAuthScript = pkgs.writers.writePython3 "keylime-git-auth" {
+  } (builtins.readFile ./scripts/keylime-git-auth.py);
+
+  # post-receive hook for dumb HTTP serving.
+  gitPostReceiveHook = ''
+    #!/bin/sh
+    git update-server-info
+  '';
+
+  # nginx config for the attestation-gated git HTTP server.
+  mkGitNginxConf =
+    {
+      cfg,
+      foreground ? true,
+    }:
+    let
+      git = cfg.gitServer;
+      tlsDir = "/var/lib/keylime/tls";
+    in
+    ''
+      ${lib.optionalString foreground "daemon off;"}
+      pid /run/keylime-git/nginx.pid;
+      error_log /run/keylime-git/error.log;
+
+      events {
+          worker_connections 64;
+      }
+
+      http {
+          access_log /run/keylime-git/access.log;
+          proxy_temp_path /run/keylime-git/tmp;
+          client_body_temp_path /run/keylime-git/tmp;
+
+          server {
+              listen ${toString git.port} ssl;
+
+              ssl_certificate     ${tlsDir}/server-cert.pem;
+              ssl_certificate_key ${tlsDir}/server-key.pem;
+              ssl_client_certificate ${tlsDir}/ca-cert.pem;
+              ssl_verify_client on;
+
+              set $agent_uuid "";
+              if ($ssl_client_s_dn ~ "CN=([^,]+)") {
+                  set $agent_uuid $1;
+              }
+
+              location = /internal/auth {
+                  internal;
+                  proxy_pass              http://127.0.0.1:${toString git.authPort}/verify?uuid=$agent_uuid;
+                  proxy_pass_request_body off;
+                  proxy_set_header        Content-Length "";
+              }
+
+              location / {
+                  auth_request /internal/auth;
+                  root      ${git.repoDir};
+                  autoindex off;
+              }
+          }
+      }
+    '';
+
+  # Systemd service that initialises a bare git repository on first boot.
+  mkGitRepoService =
+    {
+      repoDir,
+      name,
+      wantedBy ? [ ],
+    }:
+    {
+      description = "Initialise bare git repository ${name}";
+      inherit wantedBy;
+      path = [ pkgs.gitMinimal ];
+      unitConfig.ConditionPathExists = "!${repoDir}/${name}.git/HEAD";
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = pkgs.writeShellScript "init-git-repo-${name}" ''
+          set -euo pipefail
+          mkdir -p "${repoDir}"
+          git init --bare "${repoDir}/${name}.git"
+          # Enable dumb HTTP serving (static file index)
+          git -C "${repoDir}/${name}.git" update-server-info
+        '';
+      };
+    };
+
+  mkTmpfilesRules =
+    cfg:
+    lib.optionals cfg.gitServer.enable [
+      "d /var/lib/keylime-git       0750 keylime keylime -"
+      "d ${cfg.gitServer.repoDir}   0750 keylime keylime -"
+      "d /run/keylime-git           0750 keylime keylime -"
+      "d /run/keylime-git/tmp       0750 keylime keylime -"
+    ];
 }
