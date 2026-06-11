@@ -1,9 +1,55 @@
 # NixOS Android Builder
 
-This repository contains a custom Linux system to build Android Open Source Project in a (mostly) ephemeral environment. Our images, based on NixOS, provide a FHS-compatible enviroment that can run upstream Androids toolchain while being flexible and relatively easy to adapt due to the NixOS module system.
+A custom NixOS system to build Android Open Source Project in an ephemeral, attested environment.
 
-We boot into memory while keeping build state that's too big for memory in an ephemeral `/var/lib/build` partition on disk. That partition is encrypted with a fresh random key on each boot.
-Persistent, TPM2-bound LUKS partitions store keylime agent state and systemd-encrypted credentials across reboots. A second disk can optionally be used as "artifact storage" for build outputs in air-gapped environments.
+- **Ephemeral** — build state is encrypted with a fresh random key on each boot
+- **Attested** — TPM-based remote attestation via [Keylime](https://keylime.dev/) ensures only unmodified machines can operate
+- **Secure Boot** — signed Unified Kernel Image (UKI) with dm-verity-checked store partition
+- **Declarative** — fully defined in Nix, reproducible from source
 
-See [user-guide.md](./docs/user-guide.md) for usage guidance and [docs.md](./docs/docs.md) for a more detailed description of design considerations, used components limitations, and further work.
+```
+┌─────────────────┐       ┌───────────────────────┐       ┌──────────────────┐
+│  Local Machine   │       │  Attestation Server   │       │ Builder Machine  │
+│                  │       │                       │       │                  │
+│  nix build       │       │  keylime-registrar    │◄─────►│  keylime-agent   │
+│  sign & flash    │       │  keylime-verifier     │       │  TPM 2.0         │
+└────────┬─────────┘       └───────────────────────┘       └────────▲─────────┘
+         │                                                          │
+         └──────────────── flash via USB ───────────────────────────┘
+```
 
+## Quick Start
+
+```shell-session
+$ nix run .#create-signing-keys          # generate Secure Boot keys in ./keys/
+$ nix build .#image                       # build the disk image
+$ install -m 600 result/*.raw .           # copy out of the read-only nix store
+$ nix run .#configure-disk-image -- sign --keystore ./keys --device *.raw
+$ sudo dd bs=1M status=progress if=*.raw of=/dev/sdX && sudo sync
+```
+
+See the [User Guide](./docs/user-guide.md) for the full walkthrough including key generation, attestation server setup, and building Android.
+
+## Try in a VM
+
+```shell-session
+$ nix run .#run-vm
+```
+
+## Tests
+
+```shell-session
+$ nix flake check
+```
+
+## Documentation
+
+Build the manual:
+
+```shell-session
+$ nix build .#book-html        # HTML site in result/
+$ nix run .#build-book          # HTML + PDF to docs/_output/
+$ nix run .#preview-book        # live reload dev server
+```
+
+See also [CONTRIBUTING.md](./CONTRIBUTING.md) for development workflow and testing.
