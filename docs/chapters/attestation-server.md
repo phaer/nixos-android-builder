@@ -73,7 +73,7 @@ Activation creates the `keylime`/`tss` users, writes config to `/etc/keylime/`, 
 ```bash
 systemctl status keylime-tls keylime-registrar keylime-verifier keylime-auto-enroll
 ls -la /var/lib/keylime/tls/       # TLS certificates
-curl -k https://127.0.0.1:8891/v2.5/agents/   # expect mTLS error — registrar is up
+curl -k https://127.0.0.1:8891/v2.5/agents/   # expect TLS client cert error — confirms registrar is listening
 ```
 
 ## Open Firewall

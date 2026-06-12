@@ -6,7 +6,7 @@
 |------|---------|
 | Build disk image | `nix build .#image` |
 | Run builder VM | `nix run .#run-vm` |
-| Run desktop VM (GNOME) | `nix run .#run-desktop-gnome-vm` |
+| Run desktop VM (GNOME) | `nix run .#run-desktop-vm` |
 | Run all checks | `nix flake check` |
 | Format code | `nix fmt` |
 | Enter dev shell | `nix develop` |
@@ -27,6 +27,7 @@ NixOS VM tests verify the build environment, Secure Boot, dm-verity, installer, 
 ```bash
 nix build -L .#checks.x86_64-linux.integration
 nix build -L .#checks.x86_64-linux.installer
+nix build -L .#checks.x86_64-linux.installerInteractive
 nix build -L .#checks.x86_64-linux.keylime
 nix build -L .#checks.x86_64-linux.keylime-auto-enroll
 ```

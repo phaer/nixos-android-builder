@@ -28,7 +28,7 @@ nix run .#configure-disk-image -- sign --keystore ./keys --device *.raw
 sudo dd bs=1M status=progress if=*.raw of=/dev/sdX && sudo sync
 ```
 
-See the [User Guide](./docs/user-guide.md) for the full walkthrough including key generation, attestation server setup, and building Android.
+See the full manual via `nix build .#book-html` or `nix run .#preview-book`.
 
 ## Try in a VM
 
