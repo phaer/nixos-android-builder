@@ -197,7 +197,7 @@
         inherit attestation-ctl;
         inherit (measuredBoot) measure-boot-state report-measured-boot-state debug-measured-boot-state;
         configure-disk-image = diskInstaller.configure;
-        inherit (bookDocs) book-html build-book preview-book;
+        inherit (bookDocs) book-html build-book preview-book deploy-docs;
         default = image;
       };
 

@@ -12,6 +12,7 @@
   nixosOptionsDoc,
   nixos,
   self,
+  git,
 }:
 let
   # Quarto 1.9.37 expects pandoc 3.8.3; nixpkgs has 3.7.
@@ -141,7 +142,52 @@ let
       echo "Output in docs/_output/"
     '';
   };
+
+  # Deploy docs to gh-pages branch
+  deploy-docs = writeShellApplication {
+    name = "deploy-docs";
+    runtimeInputs = [ quarto git ];
+    text = ''
+      export QUARTO_PANDOC="${pandoc-bin}/bin/pandoc"
+      export QUARTO_CHROMIUM="${chromium}/bin/chromium"
+      export QUARTO_TYPST="${typst}/bin/typst"
+
+      REPO="$(git rev-parse --show-toplevel 2>/dev/null)"
+      WORKDIR=$(mktemp -d)
+      trap 'rm -rf "$WORKDIR"' EXIT
+
+      echo "Building docs..."
+      cp -a "$REPO/docs/." "$WORKDIR/"
+      cd "$WORKDIR"
+      sed -i "s|NIXOS_OPTIONS_JSON|${optionDocs}/share/doc/nixos/options.json|g" _quarto.yml
+      quarto render
+
+      echo "Deploying to gh-pages..."
+      DEPLOY=$(mktemp -d)
+      cd "$DEPLOY"
+      git init -b gh-pages
+      cp -a "$WORKDIR/_output/." .
+      # Move PDF into the site root for easy download
+      mkdir -p pdf
+      mv ./*.pdf pdf/ 2>/dev/null || true
+      touch .nojekyll
+      git add -A
+      git commit -m "docs: deploy $(date -I) from $(git -C "$REPO" rev-parse --short HEAD)"
+
+      REMOTE=$(git -C "$REPO" remote get-url origin 2>/dev/null || echo "")
+      if [ -z "$REMOTE" ]; then
+        echo "No remote found. Push manually:"
+        echo "  cd $DEPLOY && git remote add origin <url> && git push -f origin gh-pages"
+        # Don't clean up so user can push
+        trap - EXIT
+      else
+        git remote add origin "$REMOTE"
+        git push -f origin gh-pages
+        echo "Deployed to gh-pages. Enable GitHub Pages (Settings → Pages → Branch: gh-pages) if not already done."
+      fi
+    '';
+  };
 in
 {
-  inherit book-html build-book preview-book;
+  inherit book-html build-book preview-book deploy-docs;
 }
