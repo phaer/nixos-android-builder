@@ -1,7 +1,7 @@
 # Glossary {#sec-glossary}
 
 AK
-:   Attestation Key. A TPM-resident key used by the keylime agent to sign attestation quotes.
+:   Attestation Key. A TPM-resident key used by the Keylime agent to sign attestation quotes.
 
 
 AOSP

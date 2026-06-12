@@ -20,36 +20,36 @@ A custom NixOS system to build Android Open Source Project in an ephemeral, atte
 
 ## Quick Start
 
-```shell-session
-$ nix run .#create-signing-keys          # generate Secure Boot keys in ./keys/
-$ nix build .#image                       # build the disk image
-$ install -m 600 result/*.raw .           # copy out of the read-only nix store
-$ nix run .#configure-disk-image -- sign --keystore ./keys --device *.raw
-$ sudo dd bs=1M status=progress if=*.raw of=/dev/sdX && sudo sync
+```bash
+nix run .#create-signing-keys          # generate Secure Boot keys in ./keys/
+nix build .#image                       # build the disk image
+install -m 600 result/*.raw .           # copy out of the read-only nix store
+nix run .#configure-disk-image -- sign --keystore ./keys --device *.raw
+sudo dd bs=1M status=progress if=*.raw of=/dev/sdX && sudo sync
 ```
 
 See the [User Guide](./docs/user-guide.md) for the full walkthrough including key generation, attestation server setup, and building Android.
 
 ## Try in a VM
 
-```shell-session
-$ nix run .#run-vm
+```bash
+nix run .#run-vm
 ```
 
 ## Tests
 
-```shell-session
-$ nix flake check
+```bash
+nix flake check
 ```
 
 ## Documentation
 
 Build the manual:
 
-```shell-session
-$ nix build .#book-html        # HTML site in result/
-$ nix run .#build-book          # HTML + PDF to docs/_output/
-$ nix run .#preview-book        # live reload dev server
+```bash
+nix build .#book-html        # HTML site in result/
+nix run .#build-book          # HTML + PDF to docs/_output/
+nix run .#preview-book        # live reload dev server
 ```
 
 See also [CONTRIBUTING.md](./CONTRIBUTING.md) for development workflow and testing.

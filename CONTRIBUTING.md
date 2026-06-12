@@ -24,11 +24,11 @@
 
 ## Running Tests
 
-The repository ships NixOS VM tests that boot built images and verify the build environment, secure-boot enrollment, dm-verity, and more.
+The repository ships NixOS VM tests that boot built images and verify the build environment, Secure Boot enrollment, dm-verity, and more.
 
 Run the core integration test:
 
-```shell-session
+```bash
 $ nix build -L .#checks.x86_64-linux.integration
 ```
 
@@ -36,7 +36,7 @@ Tests are only re-run when inputs change. Pass `--keep-vm-state` to preserve VM 
 
 Additional tests cover the disk installer, keylime attestation, and auto-enrollment:
 
-```shell-session
+```bash
 $ nix build -L .#checks.x86_64-linux.installer
 $ nix build -L .#checks.x86_64-linux.installerInteractive
 $ nix build -L .#checks.x86_64-linux.keylime
@@ -72,7 +72,7 @@ modules/                      # NixOS modules (core of the project)
 ├── fhsenv.nix                # FHS compatibility layer
 ├── keylime.nix               # Keylime server (registrar/verifier)
 ├── keylime-agent.nix         # Keylime TPM attestation agent
-├── secure-boot.nix           # Secure Boot / UKI signing
+├── Secure Boot.nix           # Secure Boot / UKI signing
 ├── credential-storage.nix    # TPM-encrypted credential storage
 ├── yubikey-auth.nix          # YubiKey / U2F PAM authentication
 ├── unattended.nix            # Unattended build pipeline
@@ -82,7 +82,7 @@ packages/                     # Custom Nix packages
 ├── keylime/                  # Keylime server + measured boot policy
 ├── disk-installer/           # Disk image installer
 ├── fhsenv/                   # FHS compatibility wrapper
-├── secure-boot-scripts/      # Key generation, signing, enrollment
+├── Secure Boot-scripts/      # Key generation, signing, enrollment
 └── ...
 
 system-manager/               # Keylime server for non-NixOS hosts
