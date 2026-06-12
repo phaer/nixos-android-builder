@@ -1,0 +1,1067 @@
+[
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "NixOS Android Builder",
+    "section": "",
+    "text": "Preface\nThe NixOS Android Builder produces signed, ephemeral disk images for building AOSP. Each boot starts clean: the build partition is encrypted with a fresh random key and wiped on shutdown. A Keylime attestation server continuously verifies that builder machines are running unmodified software.",
+    "crumbs": [
+      "Preface"
+    ]
+  },
+  {
+    "objectID": "index.html#quick-start",
+    "href": "index.html#quick-start",
+    "title": "NixOS Android Builder",
+    "section": "Quick Start",
+    "text": "Quick Start\nnix run .#create-signing-keys          # generate Secure Boot keys\nnix build .#image                       # build the disk image\ninstall -m 600 result/*.raw .           # copy out of the nix store\nnix run .#configure-disk-image -- sign --keystore ./keys --device *.raw\nsudo dd bs=1M status=progress if=*.raw of=/dev/sdX && sudo sync\nOr try it in a VM:\nnix run .#run-vm",
+    "crumbs": [
+      "Preface"
+    ]
+  },
+  {
+    "objectID": "chapters/getting-started.html",
+    "href": "chapters/getting-started.html",
+    "title": "1  Getting Started",
+    "section": "",
+    "text": "1.1 Requirements",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Getting Started</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/getting-started.html#requirements",
+    "href": "chapters/getting-started.html#requirements",
+    "title": "1  Getting Started",
+    "section": "",
+    "text": "A local machine with Nix installed, building for x86_64-linux.\n\n~4 GB memory for evaluation\n~30 GB disk space for dependencies and images\n\nA USB mass storage device (~3 GB) to transfer the image.\nA target machine for building Android:\n\n~64 GB memory\n~250 GB free disk space\nUEFI with Secure Boot in Setup Mode\n\nA git checkout of this repository. Commands assume the repository root unless stated otherwise.\n(Optional) An attestation server running Keylime. See Chapter 7. Not required for Chapter 6.",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Getting Started</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/getting-started.html#generate-secure-boot-keys",
+    "href": "chapters/getting-started.html#generate-secure-boot-keys",
+    "title": "1  Getting Started",
+    "section": "1.2 Generate Secure Boot Keys",
+    "text": "1.2 Generate Secure Boot Keys\nThe create-signing-keys helper generates a PK/KEK/DB key set in keys/:\nnix run .#create-signing-keys\nThese keys are required for Secure Boot signing and enrollment. They must not be committed plain-text. Tools such as SOPS can manage them securely.",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Getting Started</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/building-images.html",
+    "href": "chapters/building-images.html",
+    "title": "2  Building & Signing Images",
+    "section": "",
+    "text": "2.1 Build\nBuild the disk image. Dependencies are fetched from cache.nixos.org; subsequent runs are cached.\nThe result is a raw disk image (~2.7 GB) with a full partition table and NixOS closure.",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Building & Signing Images</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/building-images.html#build",
+    "href": "chapters/building-images.html#build",
+    "title": "2  Building & Signing Images",
+    "section": "",
+    "text": "nix build --print-build-logs .#image\n\n\n\n\n\n\nTip\n\n\n\nnix-output-monitor gives better build progress. Install with nix shell nixpkgs#nom, then use nom build instead.",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Building & Signing Images</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/building-images.html#sign",
+    "href": "chapters/building-images.html#sign",
+    "title": "2  Building & Signing Images",
+    "section": "2.2 Sign",
+    "text": "2.2 Sign\nconfigure-disk-image sign signs the UKI and copies Secure Boot enrollment bundles. It runs outside the Nix sandbox to avoid leaking keys into /nix/store.\nCopy the image out of the read-only store, then sign:\ninstall -m 600 result/*.raw .\nnix run .#configure-disk-image -- sign --keystore ./keys --device *.raw",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Building & Signing Images</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/building-images.html#configure-attestation-server",
+    "href": "chapters/building-images.html#configure-attestation-server",
+    "title": "2  Building & Signing Images",
+    "section": "2.3 Configure Attestation Server",
+    "text": "2.3 Configure Attestation Server\nThe image needs to know how to reach the attestation server. This writes the server address and CA certificate to the ESP:\nnix run .#configure-disk-image -- set-attestation-server \\\n    --ip 10.0.0.1 \\\n    --ca-cert /path/to/ca-cert.pem \\\n    --device *.raw\nIf skipped, the keylime agent will fail to start on boot. See Section 8.8 for the JSON schema.\nSee Chapter 7 for deploying the server itself.",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Building & Signing Images</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/building-images.html#flash",
+    "href": "chapters/building-images.html#flash",
+    "title": "2  Building & Signing Images",
+    "section": "2.4 Flash",
+    "text": "2.4 Flash\nFlash the signed image to a USB stick or external drive:\nsudo dd bs=1M status=progress if=*.raw of=/dev/sdX\nsudo sync\nUse lsblk to identify the target device.\nEnable Secure Boot Setup Mode in the target machine’s firmware before first boot. This is needed for automatic key enrollment. After enrollment, Setup Mode is not needed again unless keys are rotated.",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Building & Signing Images</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/disk-installer.html",
+    "href": "chapters/disk-installer.html",
+    "title": "3  Disk Installer",
+    "section": "",
+    "text": "3.1 Build & Sign\nThe installer image contains a minimal ESP plus the builder image as payload. It boots and flashes the payload to a local disk.\nThe sign sub-command accepts flags:",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Disk Installer</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/disk-installer.html#build-sign",
+    "href": "chapters/disk-installer.html#build-sign",
+    "title": "3  Disk Installer",
+    "section": "",
+    "text": "nix build -L .#installer-image\ninstall -m 600 result/disk-installer.raw .\nnix run .#configure-disk-image -- sign --keystore ./keys --device disk-installer.raw\n\n\n--installer — sign only the installer UKI\n--payload — sign only the payload UKI\n--no-auto-enroll — skip copying Secure Boot enrollment bundles",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Disk Installer</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/disk-installer.html#configure-install-target",
+    "href": "chapters/disk-installer.html#configure-install-target",
+    "title": "3  Disk Installer",
+    "section": "3.2 Configure Install Target",
+    "text": "3.2 Configure Install Target\nInteractive (user selects disk at boot):\nnix run .#configure-disk-image -- set-target --target select --device disk-installer.raw\nAutomatic (no prompt):\nnix run .#configure-disk-image -- set-target --target /dev/vda --device disk-installer.raw",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Disk Installer</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/disk-installer.html#verify-configuration",
+    "href": "chapters/disk-installer.html#verify-configuration",
+    "title": "3  Disk Installer",
+    "section": "3.3 Verify Configuration",
+    "text": "3.3 Verify Configuration\nnix run .#configure-disk-image -- status --keystore ./keys --device disk-installer.raw",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Disk Installer</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/disk-installer.html#test-in-a-vm",
+    "href": "chapters/disk-installer.html#test-in-a-vm",
+    "title": "3  Disk Installer",
+    "section": "3.4 Test in a VM",
+    "text": "3.4 Test in a VM\nnix run .#installer-vm",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Disk Installer</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/running-builds.html",
+    "href": "chapters/running-builds.html",
+    "title": "4  Running Android Builds",
+    "section": "",
+    "text": "4.1 Fetch Source\nAfter booting, you get a shell with the Android build toolchain.\nThe scripts below (fetch-android, build-android, etc.) are reference implementations shipped as convenience wrappers. They demonstrate the intended workflow but can be replaced or extended for specific distribution needs.\nUses repo to clone AOSP to /var/lib/build/source. If multiple branches are configured via nixosAndroidBuilder.build.branches, select-branch presents a menu on boot.\nRun fetch-android --help for flags (manifest URL, branch, source directory, git identity).",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Running Android Builds</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/running-builds.html#fetch-source",
+    "href": "chapters/running-builds.html#fetch-source",
+    "title": "4  Running Android Builds",
+    "section": "",
+    "text": "fetch-android",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Running Android Builds</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/running-builds.html#build",
+    "href": "chapters/running-builds.html#build",
+    "title": "4  Running Android Builds",
+    "section": "4.2 Build",
+    "text": "4.2 Build\nbuild-android\nRun build-android --help for flags (lunch target, source directory).\nLower-level tools (lunch, m, ninja) are available after loading Android’s envsetup.sh:\ncd /var/lib/build/source\nsource build/envsetup.sh\nSee upstream documentation for details.",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Running Android Builds</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/running-builds.html#sbom-generation",
+    "href": "chapters/running-builds.html#sbom-generation",
+    "title": "4  Running Android Builds",
+    "section": "4.3 SBOM Generation",
+    "text": "4.3 SBOM Generation\nandroid-sbom\nGenerates a Software Bill of Materials in /var/lib/build/source/out/soong/sbom using upstream SBOM facilities.",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Running Android Builds</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/running-builds.html#source-measurement",
+    "href": "chapters/running-builds.html#source-measurement",
+    "title": "4  Running Android Builds",
+    "section": "4.4 Source Measurement",
+    "text": "4.4 Source Measurement\nandroid-measure-source\nHashes all files across all git repositories in the checkout, producing out/source_measurement.txt.",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Running Android Builds</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/running-builds.html#save-build-outputs",
+    "href": "chapters/running-builds.html#save-build-outputs",
+    "title": "4  Running Android Builds",
+    "section": "4.5 Save Build Outputs",
+    "text": "4.5 Save Build Outputs\nOutputs are in /var/lib/build/source/out — images in out/target/product, logs in error.log and verbose.log.gz.\nSince /var/lib/build is ephemeral, outputs are lost on shutdown. To persist them, set nixosAndroidBuilder.artifactStorage.enable = true. During boot, a second disk is selected for persistent storage at /var/lib/artifacts. It can also be pre-configured:\nnix run .#configure-disk-image -- set-storage --target /dev/sdb --device *.raw\nThe copy-android-outputs script copies outputs matching nixosAndroidBuilder.artifactStorage.contents to /var/lib/artifacts.",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Running Android Builds</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/running-builds.html#credential-storage",
+    "href": "chapters/running-builds.html#credential-storage",
+    "title": "4  Running Android Builds",
+    "section": "4.6 Credential Storage",
+    "text": "4.6 Credential Storage\nA TPM-backed credential store persists secrets across reboots (see Section 13.6).\necho 'my-secret-token' | credential-store add api-token\ncredential-store list\ncredential-store show api-token\ncredential-store remove api-token\nCredentials can also be added from a file:\ncredential-store add api-token ~/token.txt\nCredentials are bound to PCR 7 (Secure Boot policy) by default. See Chapter 14 for customization (e.g. adding PCR 11 binding).",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Running Android Builds</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/running-builds.html#inspect-pcr-state",
+    "href": "chapters/running-builds.html#inspect-pcr-state",
+    "title": "4  Running Android Builds",
+    "section": "4.7 Inspect PCR State",
+    "text": "4.7 Inspect PCR State\nTPM PCR values can be read from sysfs:\ncat /sys/class/tpm/tpm0/pcr-sha256/7\nOn boot, report-measured-boot-state sends the measured boot reference state to the attestation server automatically. For debugging:\nmeasure-boot-state generates the reference state from the UEFI event log:\nmeasure-boot-state -o /tmp/refstate.json\ndebug-measured-boot-state diagnoses attestation failures:\ndebug-measured-boot-state save                    # before reboot\ndebug-measured-boot-state                         # after reboot — auto-detects saved state\ndebug-measured-boot-state diagnose -r enrolled.json  # compare against enrolled state",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Running Android Builds</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/running-builds.html#reset-to-initial-state",
+    "href": "chapters/running-builds.html#reset-to-initial-state",
+    "title": "4  Running Android Builds",
+    "section": "4.8 Reset to Initial State",
+    "text": "4.8 Reset to Initial State\nReboot. The ephemeral encryption key is lost, rendering all build data inaccessible. The /var/lib/build partition is reformatted on next boot.\nsystemctl reboot",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Running Android Builds</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/running-builds.html#updates",
+    "href": "chapters/running-builds.html#updates",
+    "title": "4  Running Android Builds",
+    "section": "4.9 Updates",
+    "text": "4.9 Updates\nUpdate all dependencies by updating the pinned nixpkgs:\nnix flake update\nRebuild the image and run tests (see Chapter 18) to catch regressions.",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Running Android Builds</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/desktop.html",
+    "href": "chapters/desktop.html",
+    "title": "5  Desktop Variant",
+    "section": "",
+    "text": "5.1 Prerequisites\nA persistent NixOS workstation with optional GNOME, intended for physical hardware.",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Desktop Variant</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/desktop.html#prerequisites",
+    "href": "chapters/desktop.html#prerequisites",
+    "title": "5  Desktop Variant",
+    "section": "",
+    "text": "Nix installed on your local machine\nGit checkout of this repository\nUSB stick (≥ 4 GB)\nTarget machine with UEFI, Secure Boot support, and a disk to install to",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Desktop Variant</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/desktop.html#build",
+    "href": "chapters/desktop.html#build",
+    "title": "5  Desktop Variant",
+    "section": "5.2 Build",
+    "text": "5.2 Build\nShell (minimal) desktop:\nnix build -L .#desktop-installer-image\ninstall -m 600 result/disk-installer.raw desktop-installer.raw\nGNOME desktop:\nnix build -L .#desktop-gnome-installer-image\ninstall -m 600 result/disk-installer.raw desktop-installer.raw",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Desktop Variant</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/desktop.html#customise",
+    "href": "chapters/desktop.html#customise",
+    "title": "5  Desktop Variant",
+    "section": "5.3 Customise",
+    "text": "5.3 Customise\nEdit desktop-configuration.nix:\n\nSet YubiKey public keys in yubikeys.groupA (or clear for password auth)\nSet nixosAndroidBuilder.debug = false for production",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Desktop Variant</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/desktop.html#sign-flash",
+    "href": "chapters/desktop.html#sign-flash",
+    "title": "5  Desktop Variant",
+    "section": "5.4 Sign & Flash",
+    "text": "5.4 Sign & Flash\nnix run .#configure-disk-image -- sign --keystore ./keys --device desktop-installer.raw\nnix run .#configure-disk-image -- status --keystore ./keys --device desktop-installer.raw\nsudo dd bs=1M status=progress if=desktop-installer.raw of=/dev/sdX\nsudo sync\n\nBoth “Installer” and “Payload” show “✓ Signed and verified”",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Desktop Variant</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/desktop.html#prepare-target-uefi",
+    "href": "chapters/desktop.html#prepare-target-uefi",
+    "title": "5  Desktop Variant",
+    "section": "5.5 Prepare Target UEFI",
+    "text": "5.5 Prepare Target UEFI\n\nEnable Secure Boot\nPut Secure Boot into Setup Mode (clear existing keys)\nSet USB as first boot device\nSave and reboot",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Desktop Variant</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/desktop.html#install",
+    "href": "chapters/desktop.html#install",
+    "title": "5  Desktop Variant",
+    "section": "5.6 Install",
+    "text": "5.6 Install\n\nBoot from USB — installer appears on tty2\nSelect target disk (or auto-installs if pre-configured)\nWait for copy to complete\nRemove USB when prompted, press Enter to reboot",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Desktop Variant</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/desktop.html#first-boot",
+    "href": "chapters/desktop.html#first-boot",
+    "title": "5  Desktop Variant",
+    "section": "5.7 First Boot",
+    "text": "5.7 First Boot\nTwo automatic reboots:\n\nBoot 1: Secure Boot keys auto-enroll → automatic reboot\nBoot 2: systemd-repart grows root partition → normal boot",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Desktop Variant</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/desktop.html#verify",
+    "href": "chapters/desktop.html#verify",
+    "title": "5  Desktop Variant",
+    "section": "5.8 Verify",
+    "text": "5.8 Verify\n\ntuigreet login screen appears\nbootctl status shows Secure Boot: enabled (user)\ndf -h / shows root using the full disk\nNetwork is up (ip addr)\nData persists across systemctl reboot",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Desktop Variant</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/vm-testing.html",
+    "href": "chapters/vm-testing.html",
+    "title": "6  Virtual Machine Testing",
+    "section": "",
+    "text": "6.1 Builder VM\nTest the full setup in QEMU. Requires KVM (enable VT-x/AMD-V in firmware; verify with lsmod | grep kvm).\nCreates a writable image copy, signs it with test keys, and starts QEMU with Secure Boot and TPM. If attestation-server.json is present in the current directory, the keylime agent is configured from it (same format as /boot/attestation-server.json, see Section 8.8).\nSubsequent runs reuse the existing .raw file. Delete it to start from a clean image.",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Virtual Machine Testing</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/vm-testing.html#builder-vm",
+    "href": "chapters/vm-testing.html#builder-vm",
+    "title": "6  Virtual Machine Testing",
+    "section": "",
+    "text": "nix run .#run-vm",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Virtual Machine Testing</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/vm-testing.html#installer-vm",
+    "href": "chapters/vm-testing.html#installer-vm",
+    "title": "6  Virtual Machine Testing",
+    "section": "6.2 Installer VM",
+    "text": "6.2 Installer VM\nnix run .#installer-vm\nTests the Chapter 3 workflow in a VM.",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Virtual Machine Testing</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/vm-testing.html#exiting",
+    "href": "chapters/vm-testing.html#exiting",
+    "title": "6  Virtual Machine Testing",
+    "section": "6.3 Exiting",
+    "text": "6.3 Exiting\nsystemctl poweroff   # from within the VM\nOr close the QEMU window.",
+    "crumbs": [
+      "User Guide",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Virtual Machine Testing</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-server.html",
+    "href": "chapters/attestation-server.html",
+    "title": "7  Attestation Server Setup",
+    "section": "",
+    "text": "7.1 What It Runs\nThe system-manager/ directory turns a stock Linux machine (Ubuntu, Debian, etc.) into a Keylime attestation server — registrar, verifier, auto-enrollment daemon, and an optional attestation-gated git server.\nSystem-manager applies NixOS-style module configurations to non-NixOS hosts without replacing the OS.\nSee Chapter 8 for ports, data flow, and PKI details.",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Attestation Server Setup</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-server.html#what-it-runs",
+    "href": "chapters/attestation-server.html#what-it-runs",
+    "title": "7  Attestation Server Setup",
+    "section": "",
+    "text": "keylime-registrar — Accepts agent registrations (EK + AK identity)\nkeylime-verifier — Continuously attests enrolled agents via TPM quotes\nkeylime-auto-enroll — Bridges registration and verification; auto-enrolls agents\nkeylime-tls — Oneshot service; auto-generates a self-signed CA and mTLS PKI\nkeylime-git-nginx / keylime-git-auth (optional) — Attestation-gated git server (see Chapter 9)",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Attestation Server Setup</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-server.html#system-users-file-locations",
+    "href": "chapters/attestation-server.html#system-users-file-locations",
+    "title": "7  Attestation Server Setup",
+    "section": "7.2 System Users & File Locations",
+    "text": "7.2 System Users & File Locations\n\nkeylime user — runs all services, owns /var/lib/keylime\ntss group — TPM device access (/dev/tpmrm0)\n/var/lib/keylime/ — Keylime state (SQLite databases)\n/var/lib/keylime/tls/ — Auto-generated TLS PKI\n/etc/keylime/ — Configuration files (registrar.conf, verifier.conf, tenant.conf, ca.conf, logging.conf)",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Attestation Server Setup</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-server.html#module-structure",
+    "href": "chapters/attestation-server.html#module-structure",
+    "title": "7  Attestation Server Setup",
+    "section": "7.3 Module Structure",
+    "text": "7.3 Module Structure\nTwo Nix modules in system-manager/:\n\ntpm2.nix — udev rules and environment variables for TPM access (host kernel must have TPM support)\nkeylime.nix — all Keylime services; shared helpers from modules/lib/keylime-shared.nix\n\nWired in flake.nix:\nsystemConfigs.default = system-manager.lib.makeSystemConfig {\n  modules = [\n    ./system-manager/tpm2.nix\n    ./system-manager/keylime.nix\n    {\n      nixpkgs.hostPlatform = \"x86_64-linux\";\n      services.keylime = {\n        enable = true;\n        registrar.enable = true;\n        verifier.enable = true;\n        autoEnroll.enable = true;\n      };\n    }\n  ];\n};",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Attestation Server Setup</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-server.html#prerequisites",
+    "href": "chapters/attestation-server.html#prerequisites",
+    "title": "7  Attestation Server Setup",
+    "section": "7.4 Prerequisites",
+    "text": "7.4 Prerequisites\n\nA local machine with Nix installed (flakes enabled)\nA target Linux x86_64 machine reachable via SSH as root\nNetwork access from agents to the target on ports 8891, 8881, 8893\n\nNix does not need to be installed on the target.",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Attestation Server Setup</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-server.html#deploy",
+    "href": "chapters/attestation-server.html#deploy",
+    "title": "7  Attestation Server Setup",
+    "section": "7.5 Deploy",
+    "text": "7.5 Deploy\ngit clone &lt;repository-url&gt; nixos-android-builder\ncd nixos-android-builder\nnix run 'github:numtide/system-manager' -- \\\n  --target-host root@&lt;server-ip&gt; switch --flake .#default\nActivation creates the keylime/tss users, writes config to /etc/keylime/, generates the TLS PKI, and starts all services.",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Attestation Server Setup</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-server.html#verify",
+    "href": "chapters/attestation-server.html#verify",
+    "title": "7  Attestation Server Setup",
+    "section": "7.6 Verify",
+    "text": "7.6 Verify\nsystemctl status keylime-tls keylime-registrar keylime-verifier keylime-auto-enroll\nls -la /var/lib/keylime/tls/       # TLS certificates\ncurl -k https://127.0.0.1:8891/v2.5/agents/   # expect mTLS error — registrar is up",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Attestation Server Setup</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-server.html#open-firewall",
+    "href": "chapters/attestation-server.html#open-firewall",
+    "title": "7  Attestation Server Setup",
+    "section": "7.7 Open Firewall",
+    "text": "7.7 Open Firewall\nsudo ufw allow 8891/tcp   # Registrar (mTLS)\nsudo ufw allow 8881/tcp   # Verifier (mTLS)\nsudo ufw allow 8893/tcp   # Auto-enroll (server TLS, TOFU)\nsudo ufw allow 443/tcp    # Git server (mTLS, optional — only if gitServer.enable is set)",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Attestation Server Setup</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-server.html#distribute-ca-certificate",
+    "href": "chapters/attestation-server.html#distribute-ca-certificate",
+    "title": "7  Attestation Server Setup",
+    "section": "7.8 Distribute CA Certificate",
+    "text": "7.8 Distribute CA Certificate\nCopy /var/lib/keylime/tls/ca-cert.pem from the server. It is baked into agent images via configure-disk-image set-attestation-server (see Chapter 2).",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Attestation Server Setup</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-server.html#update",
+    "href": "chapters/attestation-server.html#update",
+    "title": "7  Attestation Server Setup",
+    "section": "7.9 Update",
+    "text": "7.9 Update\ngit pull\nnix run 'github:numtide/system-manager' -- \\\n  --target-host root@&lt;server-ip&gt; switch --flake .#default",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Attestation Server Setup</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-server.html#deactivate",
+    "href": "chapters/attestation-server.html#deactivate",
+    "title": "7  Attestation Server Setup",
+    "section": "7.10 Deactivate",
+    "text": "7.10 Deactivate\nOn the target:\n/nix/var/nix/profiles/system-manager/bin/deactivate\nStops managed services and removes config. Does not remove /var/lib/keylime state.",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Attestation Server Setup</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-protocol.html",
+    "href": "chapters/attestation-protocol.html",
+    "title": "8  Attestation Protocol",
+    "section": "",
+    "text": "8.1 Architecture\nPorts, data flow, PCR policy, and PKI reference.\ngraph LR\n    subgraph agent[\"Agent (Builder)\"]\n        ka[\"keylime-agent&lt;br/&gt;&lt;i&gt;Rust&lt;/i&gt;\"]\n        rmbs[\"report-measured-&lt;br/&gt;boot-state\"]\n    end\n    subgraph server[\"Attestation Server\"]\n        verifier[\"keylime-verifier :8881\"]\n        registrar[\"keylime-registrar :8891\"]\n        autoenroll[\"keylime-auto-enroll :8893\"]\n    end\n\n    ka -- \"mTLS\" --&gt; registrar\n    verifier &lt;-- \"mTLS\" --&gt; ka\n    rmbs -- \"server TLS (TOFU)\" --&gt; autoenroll\n\n\n\n\nFigure 8.1: Attestation architecture",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Attestation Protocol</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-protocol.html#sec-ports",
+    "href": "chapters/attestation-protocol.html#sec-ports",
+    "title": "8  Attestation Protocol",
+    "section": "8.2 Ports & Protocols",
+    "text": "8.2 Ports & Protocols\n\n\n\n\n\n\n\n\n\n\nPort\nService\nDirection\nProtocol\nPurpose\n\n\n\n\n8891\nRegistrar\nAgent → Server\nHTTPS (mTLS)\nAgent registration (EK + AK identity)\n\n\n8881\nVerifier\nServer ↔︎ Agent\nHTTPS (mTLS)\nTPM quote requests, enrollment via keylime_tenant\n\n\n8893\nAuto-enroll\nAgent → Server\nHTTPS (server TLS, TOFU)\nAgent POSTs measured boot reference state\n\n\n443\nGit server (nginx)\nAgent → Server\nHTTPS (mTLS)\nAttestation-gated git clone (optional)\n\n\n8895\nGit auth\nlocalhost\nHTTP\nAuth subrequest from nginx to keylime-git-auth (internal)",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Attestation Protocol</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-protocol.html#data-exchanged",
+    "href": "chapters/attestation-protocol.html#data-exchanged",
+    "title": "8  Attestation Protocol",
+    "section": "8.3 Data Exchanged",
+    "text": "8.3 Data Exchanged\nPort 8891 — Registrar: Agent POSTs its EK, AK, and UUID (SHA-256 of EK) on first boot. Stored in SQLite.\nPort 8881 — Verifier: Accepts enrollment (keylime_tenant -c add with --mb_refstate and uki policy). Periodically sends nonces, receives TPM quotes + event logs, replays through the policy.\nPort 8893 — Auto-enroll: Agent POSTs {\"uuid\": \"...\", \"measured_boot_state\": {...}}. Daemon matches against registrar entries and auto-enrolls.",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Attestation Protocol</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-protocol.html#full-boot-attestation-sequence",
+    "href": "chapters/attestation-protocol.html#full-boot-attestation-sequence",
+    "title": "8  Attestation Protocol",
+    "section": "8.4 Full Boot & Attestation Sequence",
+    "text": "8.4 Full Boot & Attestation Sequence\n\n\n\n\n\n\nsequenceDiagram\n    participant A as Agent\n    participant R as Registrar :8891\n    participant AE as Auto-Enroll :8893\n    participant V as Verifier :8881\n\n    Note over A: 1. UEFI measures firmware,&lt;br/&gt;SB keys, UKI into PCRs 0–11\n    Note over A: 2. systemd-pcrphase extends PCR 11\n\n    A-&gt;&gt;R: 3. Register (EK + AK + UUID)\n    R--&gt;&gt;R: 4. Store identity\n\n    A-&gt;&gt;AE: 5. POST measured boot refstate\n    AE--&gt;&gt;AE: 6. Store report by UUID\n\n    loop Poll interval\n        AE-&gt;&gt;R: 7a. List registered agents\n        AE-&gt;&gt;V: 7b. List enrolled agents\n        AE-&gt;&gt;V: 7c. keylime_tenant -c add\n    end\n\n    V-&gt;&gt;A: 8. Nonce + PCR selection\n    A-&gt;&gt;V: TPM quote + event log\n    Note over V: 9. Validate: AK signature,&lt;br/&gt;nonce, event log replay,&lt;br/&gt;PCR match (0,1,2,3,4,5,7)\n\n\n\n\nFigure 8.2: Boot and attestation sequence",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Attestation Protocol</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-protocol.html#measured-boot-reference-state",
+    "href": "chapters/attestation-protocol.html#measured-boot-reference-state",
+    "title": "8  Attestation Protocol",
+    "section": "8.5 Measured Boot Reference State",
+    "text": "8.5 Measured Boot Reference State\nGenerated by measure-boot-state from the UEFI binary event log:\n\n\n\nField\nSource PCR\nPins\n\n\n\n\nscrtm_and_bios\n0\nSCRTM version + firmware blob digests\n\n\npk\n7\nPlatform Key certificate(s)\n\n\nkek\n7\nKey Exchange Key certificate(s)\n\n\ndb\n7\nAllowed Signature Database entries\n\n\ndbx\n7\nForbidden Signature Database entries\n\n\nuki_digest\n4\nSHA-256 of the booted UKI binary",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Attestation Protocol</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-protocol.html#sec-pcr-policy",
+    "href": "chapters/attestation-protocol.html#sec-pcr-policy",
+    "title": "8  Attestation Protocol",
+    "section": "8.6 PCR Validation Policy",
+    "text": "8.6 PCR Validation Policy\n\n\n\n\n\n\n\n\nPCR\nContent\nPolicy\n\n\n\n\n0\nSCRTM, firmware blobs\nPinned to refstate\n\n\n1\nBIOS settings, boot variables\nAccepted\n\n\n2\nBoot services drivers\nAccepted\n\n\n3\nSeparator\nSeparator check\n\n\n4\nUKI application digest\nPinned to refstate\n\n\n5\nGPT partition table\nAccepted\n\n\n7\nSecure Boot keys (PK, KEK, db, dbx)\nPinned to refstate\n\n\n9\nsystemd-stub event tags\nAccepted (tags vary per UKI; NvPCR runtime extension not in UEFI log)\n\n\n11\nUKI PE sections + pcrphase\nAccepted (runtime extensions)\n\n\n\nPinned = event log digest must exactly match the enrolled reference state. Accepted = events are syntactically checked but any valid digest is allowed. Separator check = validates the EV_SEPARATOR event marking the boundary between pre-OS and OS-present measurements.\nPCRs 9 and 11 are excluded from event-log-vs-TPM replay comparison (they receive runtime extensions not in the UEFI log) but are included in the TPM quote.",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Attestation Protocol</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-protocol.html#sec-pki",
+    "href": "chapters/attestation-protocol.html#sec-pki",
+    "title": "8  Attestation Protocol",
+    "section": "8.7 TLS / PKI",
+    "text": "8.7 TLS / PKI\nAuto-generated on the server by keylime-tls.service. Stored in /var/lib/keylime/tls/:\n\n\n\n\n\n\n\n\nFile\nUsed by\nPurpose\n\n\n\n\nca-cert.pem\nAll\nRoot CA — distributed to agents\n\n\nserver-cert.pem / server-key.pem\nRegistrar, Verifier, Auto-enroll\nServer identity\n\n\nclient-cert.pem / client-key.pem\nVerifier, Auto-enroll, Tenant\nClient identity for mTLS",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Attestation Protocol</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-protocol.html#sec-agent-config",
+    "href": "chapters/attestation-protocol.html#sec-agent-config",
+    "title": "8  Attestation Protocol",
+    "section": "8.8 Agent Configuration",
+    "text": "8.8 Agent Configuration\n/boot/attestation-server.json (written to ESP at build time):\n{\n  \"ip\": \"10.0.0.1\",\n  \"port\": 8891,\n  \"verifier_port\": 8881,\n  \"ca_cert\": \"-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----\\n\"\n}\nAt boot, keylime-configure-agent reads this and patches /run/keylime/agent.conf.",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Attestation Protocol</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-git-server.html",
+    "href": "chapters/attestation-git-server.html",
+    "title": "9  Attestation-Gated Git Server",
+    "section": "",
+    "text": "9.1 How It Works\nThe git server lets attested builder machines clone repositories over HTTPS/mTLS. A machine that fails attestation, or has never been attested, cannot clone.\nsequenceDiagram\n    participant A as Agent\n    participant N as nginx :443\n    participant G as keylime-git-auth :8895\n    participant V as keylime-verifier :8881\n\n    A-&gt;&gt;N: git clone (mTLS client cert)\n    N-&gt;&gt;N: ssl_verify_client&lt;br/&gt;(keylime CA validates cert)\n    N-&gt;&gt;G: auth_request /verify?uuid=…\n    G-&gt;&gt;V: GET /v2.5/agents/{uuid}\n    alt attested (operational state allowed)\n        V--&gt;&gt;G: 200\n        G--&gt;&gt;N: 200 ALLOW\n        N--&gt;&gt;A: serve repo (static files)\n    else not attested / unknown\n        V--&gt;&gt;G: 404 or disallowed state\n        G--&gt;&gt;N: 403 DENY\n        N--&gt;&gt;A: clone rejected\n    end\n\n\n\n\nFigure 9.1: Git clone authentication flow\nIdentity. nginx enforces mTLS against the keylime CA. The agent UUID (SHA-256 of the TPM Endorsement Key) is the CN of the client certificate, so no separate credential is needed: a machine provisioned into keylime automatically has its git identity.\nAuthorization. keylime-git-auth is a small Python daemon on 127.0.0.1:8895. It queries the keylime verifier for the agent’s operational state and only allows requests from agents in a known-good state (START, SAVED, GET_QUOTE, GET_QUOTE_RETRY, PROVIDE_V, PROVIDE_V_RETRY). Everything else is denied, including states it does not recognise. If the verifier is unreachable, it returns 503 and nginx rejects the clone (fail-closed).\nGit transport. nginx serves the bare repo directory as static files (git dumb HTTP). No additional daemons are required. Run git update-server-info after each push, or install the provided post-receive hook, to keep the index files current.",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Attestation-Gated Git Server</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-git-server.html#managing-repositories",
+    "href": "chapters/attestation-git-server.html#managing-repositories",
+    "title": "9  Attestation-Gated Git Server",
+    "section": "9.2 Managing Repositories",
+    "text": "9.2 Managing Repositories\nRepositories are bare git repos in /var/lib/keylime-git/repos/.\nCreate a new repo:\ngit init --bare /var/lib/keylime-git/repos/my-repo.git\nchown -R keylime:keylime /var/lib/keylime-git/repos/my-repo.git\ngit -C /var/lib/keylime-git/repos/my-repo.git update-server-info\nln -s /etc/keylime-git/hooks/post-receive \\\n      /var/lib/keylime-git/repos/my-repo.git/hooks/post-receive\nMirror an existing repo:\ngit clone --bare https://github.com/example/repo.git \\\n    /var/lib/keylime-git/repos/repo.git\nchown -R keylime:keylime /var/lib/keylime-git/repos/repo.git\ngit -C /var/lib/keylime-git/repos/repo.git update-server-info\nln -s /etc/keylime-git/hooks/post-receive \\\n      /var/lib/keylime-git/repos/repo.git/hooks/post-receive\nThe post-receive hook runs git update-server-info automatically after every push so the index files stay current.",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Attestation-Gated Git Server</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-git-server.html#cloning-from-an-agent",
+    "href": "chapters/attestation-git-server.html#cloning-from-an-agent",
+    "title": "9  Attestation-Gated Git Server",
+    "section": "9.3 Cloning from an Agent",
+    "text": "9.3 Cloning from an Agent\nBuilder machines include the keylime-git-clone wrapper, which automatically configures git with the machine’s mTLS credentials:\nkeylime-git-clone https://&lt;server-ip&gt;/my-repo.git\nThis is equivalent to running git clone with the client certificate, key, and CA cert flags set. An optional destination directory can be appended:\nkeylime-git-clone https://&lt;server-ip&gt;/my-repo.git /path/to/dest\nThe credentials are provisioned automatically:\n\nClient cert & key are written to /run/keylime-git/ by report-measured-boot-state after successful attestation.\nCA cert is written to /run/keylime-git/ca-cert.pem by report-measured-boot-state from /boot/attestation-server.json.\n\nBoth paths are readable by the user account so keylime-git-clone works without elevated privileges. The key is scoped to this machine’s TPM identity and is only useful when paired with a passing attestation.\nCustom cert paths can be passed if needed:\nkeylime-git-clone --cert=/path/to/cert --key=/path/to/key --ca=/path/to/ca \\\n    https://&lt;server-ip&gt;/my-repo.git",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Attestation-Gated Git Server</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-git-server.html#verifying-the-gate",
+    "href": "chapters/attestation-git-server.html#verifying-the-gate",
+    "title": "9  Attestation-Gated Git Server",
+    "section": "9.4 Verifying the Gate",
+    "text": "9.4 Verifying the Gate\nCheck both services are running:\nsystemctl status keylime-git-nginx keylime-git-auth\nConfirm nginx rejects an unauthenticated request:\ncurl -k https://127.0.0.1:443/any-repo.git/info/refs\n# Expected: 400 No required SSL certificate was sent\nWatch the attestation gate in real time:\njournalctl -fu keylime-git-auth\n# Prints ALLOW / DENY with the agent UUID on every request",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Attestation-Gated Git Server</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/attestation-git-server.html#nix-options",
+    "href": "chapters/attestation-git-server.html#nix-options",
+    "title": "9  Attestation-Gated Git Server",
+    "section": "9.5 Nix Options",
+    "text": "9.5 Nix Options\n\n\n\n\n\n\n\n\nOption\nDefault\nDescription\n\n\n\n\nservices.keylime.gitServer.enable\nfalse\nEnable the git server\n\n\nservices.keylime.gitServer.port\n443\nnginx HTTPS listen port\n\n\nservices.keylime.gitServer.authPort\n8895\nAuth daemon localhost port\n\n\nservices.keylime.gitServer.repoDir\n/var/lib/keylime-git/repos\nBare repo root",
+    "crumbs": [
+      "Attestation",
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Attestation-Gated Git Server</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/design.html",
+    "href": "chapters/design.html",
+    "title": "10  Design Principles",
+    "section": "",
+    "text": "10.1 Limitations\nA reference implementation and proof-of-concept for offline, SLSA‑compliant AOSP builds. The system is modular — individual components (attestation, FHS environment, credential storage) can be adapted or replaced for specific distribution needs.\nCore properties:",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Design Principles</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/design.html#limitations",
+    "href": "chapters/design.html#limitations",
+    "title": "10  Design Principles",
+    "section": "",
+    "text": "aarch64 support — only x86_64 with UEFI is implemented.\nArtifact uploads — build artifacts can be persisted to a second disk but are not automatically uploaded to remote storage.\nConfiguration — adapting to custom AOSP distributions requires familiarity with NixOS modules. See Chapter 14.",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Design Principles</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/design.html#technologies",
+    "href": "chapters/design.html#technologies",
+    "title": "10  Design Principles",
+    "section": "10.2 Technologies",
+    "text": "10.2 Technologies\n\nNixOS / nixpkgs — declarative system configuration, reproducible builds\nsystemd — service orchestration, systemd-repart for disk images, systemd-creds for TPM-encrypted credentials\nLUKS + dm-verity — disk encryption (ephemeral + TPM2-bound) and read-only store integrity\nerofs — compressed read-only filesystem for the immutable store partition\nKeylime — TPM-based remote attestation (Rust agent, Python registrar/verifier)\nYubiKey / PAM — hardware-token authentication via pam_u2f\nUSBGuard — USB device blocking during unattended builds\nQEMU — VM-based testing\n\nAn SBOM for the builder closure can be generated:\nnix run github:tiiuae/sbomnix#sbomnix -- .#nixosConfigurations.nixos.toplevel",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Design Principles</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/design.html#deployment-topology",
+    "href": "chapters/design.html#deployment-topology",
+    "title": "10  Design Principles",
+    "section": "10.3 Deployment Topology",
+    "text": "10.3 Deployment Topology\n\n\n\n\n\n\ngraph LR\n    local[\"Local Machine&lt;br/&gt;&lt;i&gt;nix build, sign&lt;/i&gt;\"]\n    server[\"Attestation Server&lt;br/&gt;&lt;i&gt;registrar, verifier,&lt;br/&gt;auto-enroll, git (opt)&lt;/i&gt;\"]\n    builder[\"Builder Machine&lt;br/&gt;&lt;i&gt;keylime-agent, TPM 2.0&lt;/i&gt;\"]\n\n    local -- \"flash via USB\" --&gt; builder\n    builder -- \"register (EK)\" --&gt; server\n    server &lt;-- \"TPM quotes\" --&gt; builder\n\n\n\n\nFigure 10.1: Deployment topology\n\n\n\n\n\n\nThe local machine builds and signs disk images (requires only Nix).\nThe attestation server runs keylime services, optionally via system-manager on non-NixOS. See Chapter 7.\nThe builder machine boots the signed image, registers with the server, and runs AOSP builds.",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Design Principles</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/build-process.html",
+    "href": "chapters/build-process.html",
+    "title": "11  Build Process",
+    "section": "",
+    "text": "11.1 Steps\nThe disk image is assembled in multiple stages using systemd-repart (twice at build time, once at runtime).",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Build Process</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/build-process.html#steps",
+    "href": "chapters/build-process.html#steps",
+    "title": "11  Build Process",
+    "section": "",
+    "text": "FHS environment (Section 13.1): A derivation assembles all libraries and binaries into an FHS layout — glibc-vanilla (dynamic linker configured for /lib), bash (with FHS $PATH), and Android build dependencies.\nNixOS closure (system.build.toplevel): The full system including boot services, the FHS derivation, and all modules.\nIntermediate image (system.build.intermediateImage): First systemd-repart run. The store partition is populated with the NixOS closure. boot and store-verity remain empty.\nUKI: dm-verity hashes are calculated from the filled store partition. A Unified Kernel Image is built with kernel, initrd, and usrhash on the kernel command line.\nFinal image (system.build.finalImage): Second systemd-repart run. The store partition is copied, verity hashes are written, and the UKI is placed on the ESP.\nSign UKI: Outside the Nix sandbox, the UKI is extracted, signed with Secure Boot keys, and written back.\nSecure Boot bundles: *.auth files are copied to the ESP for automatic enrollment.\nThe signed image is ready to flash.",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Build Process</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/build-process.html#disk-layout",
+    "href": "chapters/build-process.html#disk-layout",
+    "title": "11  Build Process",
+    "section": "11.2 Disk Layout",
+    "text": "11.2 Disk Layout\nBuild-time (immutable):\n\n\n\nPartition\nLabel\nFormat\nMountpoint\n\n\n\n\n00‑esp\nboot\nvfat\n/boot\n\n\n10‑store‑verity\nstore-verity\ndm-verity hash\nn/a\n\n\n20‑store\nstore\nerofs\n/usr\n\n\n\nRuntime (created by systemd-repart on first boot):\n\n\n\n\n\n\n\n\n\n\nPartition\nLabel\nFormat\nMountpoint\nLifecycle\n\n\n\n\n31‑credentials\nvar-lib-credentials\nLUKS+ext4 (TPM2)\n/var/lib/credentials\nPersistent\n\n\n32‑keylime\nvar-lib-keylime\nLUKS+ext4 (TPM2)\n/var/lib/keylime\nPersistent\n\n\n40‑build\nvar-lib-build\nLUKS+ext4 (random key)\n/var/lib/build\nEphemeral\n\n\n\nThe root filesystem (/) is tmpfs (RAM only). There is no boot loader — the UKI is loaded directly by the firmware as an EFI application.",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Build Process</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/boot-sequence.html",
+    "href": "chapters/boot-sequence.html",
+    "title": "12  Boot Sequence",
+    "section": "",
+    "text": "12.1 Steps",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Boot Sequence</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/boot-sequence.html#steps",
+    "href": "chapters/boot-sequence.html#steps",
+    "title": "12  Boot Sequence",
+    "section": "",
+    "text": "UEFI boot: Firmware loads the UKI, verifying its signature if Secure Boot is active.\nSecure Boot check (ensure-secure-boot-enrollment.service):\n\nActive → continue\nSetup Mode → enroll certificates from ESP → reboot\nDisabled → halt with error\n\nEphemeral key (generate-disk-key.service): 64 bytes from /dev/urandom, never stored on disk.\nPartition setup (systemd-repart): On first boot, creates all mutable partitions. On subsequent boots, leaves persistent partitions untouched, factory-resets the ephemeral build partition with a fresh key.\nMount: Read-only /usr (dm-verity checked), bind-mounts for /bin and /lib (FHS), tmpfs at /, encrypted partitions for build data, credentials, and keylime state.\nSwitch to NixOS: Stage 2 boot completes.\nBuild: In unattended mode (Section 13.4), a configurable step sequence runs automatically. In interactive mode, fetch-android, build-android, and related tools are available at the shell (see Chapter 4).\nOutputs are in /var/lib/build/source/out. They are lost on shutdown unless artifact storage is enabled.",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Boot Sequence</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/components.html",
+    "href": "chapters/components.html",
+    "title": "13  Components",
+    "section": "",
+    "text": "13.1 Custom FHS Environment\nA derivation bundles all declared packages into /bin + /lib, bind-mounted at runtime. A custom glibc configures the dynamic linker for /lib; a bash with forFHSEnv puts /bin in $PATH.\npkgs.buildFHSEnv, nix-ld, and envfs were tried but don’t survive sandboxed bind-mounts without /nix/store.",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Components</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/components.html#sec-android-build-env",
+    "href": "chapters/components.html#sec-android-build-env",
+    "title": "13  Components",
+    "section": "13.2 Android Build Environment",
+    "text": "13.2 Android Build Environment\nThe android-build-env.nix module adds AOSP build dependencies to the FHS environment, plus reference wrapper scripts for the default workflow:\n\nfetch-android — clone the configured repo branch\nbuild-android — set lunch target and build\nandroid-sbom — generate SBOM via upstream facilities\nandroid-measure-source — hash all files for source measurement",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Components</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/components.html#sec-yubikey-auth",
+    "href": "chapters/components.html#sec-yubikey-auth",
+    "title": "13  Components",
+    "section": "13.3 YubiKey Authentication",
+    "text": "13.3 YubiKey Authentication\nThe yubikey-auth.nix module enforces hardware-token authentication via pam_u2f. Two key groups can be configured for dual-approval (two people must each touch their YubiKey). Password auth is disabled entirely.",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Components</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/components.html#sec-unattended",
+    "href": "chapters/components.html#sec-unattended",
+    "title": "13  Components",
+    "section": "13.4 Unattended Mode",
+    "text": "13.4 Unattended Mode\nWhen nixosAndroidBuilder.unattended.enable is set, a systemd service runs a configurable step sequence on tty2 after boot. Steps prefixed with root: run with superuser privileges. Default steps:\n\nroot:start-shell-if-yubikey-found — poll for YubiKey, allow operator interrupt\nselect-branch — choose AOSP branch (if multiple configured)\nfetch-android — clone sources\nbuild-android — build the lunch target\nandroid-sbom — generate SBOM\nandroid-measure-source — hash source files\ncopy-android-outputs — persist build artifacts\nroot:lock-var-lib-build — unmount build partition, destroy encryption key\nroot:disable-usb-guard — stop USBGuard, re-authorize USB devices\nroot:start-shell-and-shutdown — interactive shell, then poweroff\n\nUSBGuard blocks USB mass storage during builds to prevent data exfiltration.",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Components</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/components.html#sec-keylime",
+    "href": "chapters/components.html#sec-keylime",
+    "title": "13  Components",
+    "section": "13.5 Remote Attestation (Keylime)",
+    "text": "13.5 Remote Attestation (Keylime)\nThe Keylime agent is enabled by default on every builder image. It uses the push model — the agent periodically sends evidence to the verifier. Identity is derived from the TPM Endorsement Key; no pre-provisioned credentials are needed.\nThe agent’s Attestation Key is stored on the persistent /var/lib/keylime partition so re-registrations after reboot use the same key.\n\n13.5.1 Auto-Enrollment\nThe auto-enrollment daemon automates the agent → verifier enrollment:\n\n\n\n\n\n\n---\nconfig:\n  theme: neutral\n---\ngraph TB\n    subgraph server[\"Attestation Server\"]\n        registrar[\"Registrar :8891\"]\n        verifier[\"Verifier :8881\"]\n        daemon[\"Auto-Enroll :8893\"]\n        daemon -- polls --&gt; registrar\n        daemon -- enrolls --&gt; verifier\n    end\n\n    subgraph agent[\"Agent\"]\n        ka[\"keylime-agent\"]\n        rmbs[\"report-measured-\\nboot-state\"]\n    end\n\n    ka -- register --&gt; registrar\n    rmbs -- POST refstate --&gt; daemon\n    verifier -- attest --&gt; ka\n\n\n\n\nFigure 13.1: Auto-enrollment component diagram\n\n\n\n\n\nThe measured boot reference state is accepted on a trust-on-first-use basis — the agent self-reports before first attestation. After enrollment, the verifier replays every event log and validates every TPM quote, so false reports are caught immediately.\n\n\n13.5.2 Attestation Policy\nThe custom uki policy (in packages/keylime-measured-boot-policy/) pins security-critical PCRs (0, 4, 7 — firmware, UKI digest, Secure Boot keys) while accepting expected variability in others. See Section 8.6 for the full validation table.\n\n\n13.5.3 Tools\n\nattestation-ctl — query enrollment status, remove agents from verifier/registrar\nmeasure-boot-state — parse UEFI event log → reference state JSON\nreport-measured-boot-state — generate and POST reference state to auto-enrollment\ndebug-measured-boot-state — diagnose failures: replay event log, compare PCRs, diff refstates",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Components</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/components.html#sec-credential-storage",
+    "href": "chapters/components.html#sec-credential-storage",
+    "title": "13  Components",
+    "section": "13.6 Credential Storage",
+    "text": "13.6 Credential Storage\nTPM-backed persistent storage via systemd-creds, bound to PCR 7. Credentials are stored on the /var/lib/credentials LUKS partition and bind-mounted to /run/credstore.encrypted/ for automatic consumption by systemd services with LoadCredentialEncrypted=.\nSee Chapter 4 for usage of the credential-store command.",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Components</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/components.html#fatal-error-handling",
+    "href": "chapters/components.html#fatal-error-handling",
+    "title": "13  Components",
+    "section": "13.7 Fatal Error Handling",
+    "text": "13.7 Fatal Error Handling\nThe fatal-error.nix module overrides systemd’s emergency target with a dialog-based message box on tty2. Services write to /run/fatal-error on failure.",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Components</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/components.html#debug-mode",
+    "href": "chapters/components.html#debug-mode",
+    "title": "13  Components",
+    "section": "13.8 Debug Mode",
+    "text": "13.8 Debug Mode\nnixosAndroidBuilder.debug adds: unauthenticated emergency shell, extra packages (vim, htop, tmux, git), nix with flakes, empty passwords, passwordless sudo, verbose logging, debug shell on tty3. Not for production.",
+    "crumbs": [
+      "Architecture",
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Components</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/options-reference.html",
+    "href": "chapters/options-reference.html",
+    "title": "14  NixOS Options Reference",
+    "section": "",
+    "text": "Configure the builder in configuration.nix (or desktop-configuration.nix for the desktop variant). Some options have run-time equivalents — see fetch-android --help and build-android --help.\n\nnixosAndroidBuilder.artifactStorage.artifactDir\n\nType: absolute path\nDefault: \"/var/lib/artifacts\"\nDirectory where the persistent artifact storage is mounted.\n\nnixosAndroidBuilder.artifactStorage.contents\n\nType: list of string\nDefault: [\n  \"*\"\n]\nlist of files (or patterns) to copy from build outputs\n\nnixosAndroidBuilder.artifactStorage.diskLabel\n\nType: string\nDefault: \"artifacts\"\ndisk label that identifies the storage partition\n\nnixosAndroidBuilder.artifactStorage.enable\n\nType: boolean\nDefault: false\nWhether to enable Storing outputs in an unencrypted, persistent disk partition.\n\nnixosAndroidBuilder.build.branches\n\nType: list of string\nDefault: [\n  \"android-latest-release\"\n]\nList of valid branches that can be selected for building. If only one branch is specified, it will be selected automatically. If more than one branch is specified, a dialog menu will be shown for 30 seconds. First entry will be the default if no other one is selected.\n\nnixosAndroidBuilder.build.lunchTarget\n\nType: string\nDefault: \"aosp_cf_x86_64_only_phone-aosp_current-eng\"\nName of lunch target to build. Can be overriden at run-time by passing --lunch-target to build-android.\n\nnixosAndroidBuilder.build.repoManifestUrl\n\nType: string\nDefault: \"https://android.googlesource.com/platform/manifest\"\nURL of a repo manifest to fetch sources from. Can be overriden at run-time by passing --repo-manifest-url to fetch-android.\n\nnixosAndroidBuilder.build.sourceDir\n\nType: absolute path\nDefault: \"/var/lib/build/source\"\nDirectory where repo checkout is stored. Can be overriden at run-time by passing --source-dir to fetch-android and build-android.\n\nnixosAndroidBuilder.build.userEmail\n\nType: string\nDefault: \"ci@example.com\"\nEmail address used for repo/git operations. Can be overriden at run-time by passing --user-email to fetch-android.\n\nnixosAndroidBuilder.build.userName\n\nType: string\nDefault: \"CI User\"\nUser name used for repo/git operations. Can be overriden at run-time by passing --user-name to fetch-android.\n\nnixosAndroidBuilder.credentialStorage.credentialDir\n\nType: absolute path\nDefault: \"/var/lib/credentials\"\nDirectory where credentials are stored. This is the mount point of the dedicated credentials partition and will be bind-mounted to /run/credstore.encrypted/\n\nnixosAndroidBuilder.credentialStorage.enable\n\nType: boolean\nDefault: false\nWhether to enable persistent credential storage on a TPM2-bound LUKS partition.\n\nnixosAndroidBuilder.credentialStorage.encryptionFlags\n\nType: list of string\nDefault: [\n  \"--with-key=tpm2\"\n  \"--tpm2-pcrs=7\"\n]\nFlags to pass to systemd-creds encrypt. See man (1) systemd-creds\n\nnixosAndroidBuilder.credentialStorage.mountPoint\n\nType: absolute path\nDefault: \"/run/credstore.encrypted\"\nWhere to mount the credential directory. /run/credstore.encrypted/ is automatically searched by systemd for encrypted credentials\n\nnixosAndroidBuilder.debug\n\nType: boolean\nDefault: false\nWhether to enable image customizations for interactive access during run-time.\n\nnixosAndroidBuilder.fhsEnv.packages\n\nType: list of package\nDefault: [ ]\nPackages needed to build Android AOSP. This is mostly copied from AOSP documentation, but could probably be reduced further, as AOSP repos ship much of it in-tree (i.e. python3, jdk, etc)\n\nnixosAndroidBuilder.fhsEnv.pins\n\nType: list of package\nDefault: [ ]\nA sorted list of packages to add first, so that they “win” if there are collisions/conflicts during creation of the FHS env. Unresolved collisions will produce a warning in the build log.\n\nnixosAndroidBuilder.imageId\n\nType: string\nDefault: \"android-builder\"\nThe image identifier written to /image-id on the ESP. Defaults to “android-builder” and should not normally need to be changed. Kept separate from system.name so that test VMs can override system.name (which the NixOS test driver uses as the Python machine variable name) without corrupting the image-id that configure-disk-image uses to validate image type.\n\nnixosAndroidBuilder.unattended.enable\n\nType: boolean\nDefault: false\nWhether to enable unattended mode.\n\nnixosAndroidBuilder.unattended.steps\n\nType: list of string\nDefault: [\n  \"root:start-shell-if-yubikey-found\"\n  \"select-branch\"\n  \"fetch-android\"\n  \"build-android\"\n  \"android-sbom\"\n  \"android-measure-source\"\n  \"copy-android-outputs\"\n  \"root:lock-var-lib-build\"\n  \"root:disable-usb-guard\"\n  \"root:start-shell-and-shutdown\"\n]\nlist of shell commands to run unattended\n\nnixosAndroidBuilder.yubikeys.groupA\n\nType: list of string\nDefault: [ ]\nlist of u2f (i.e. yubikeys) public keys for pam, as output by pamu2fcfg\npamu2fcfg -N -i “pam://nixos-android-builder” -o “pam://nixos-android-builder” -u “user”\n\nnixosAndroidBuilder.yubikeys.groupB\n\nType: list of string\nDefault: [ ]\nlist of u2f (i.e. yubikeys) public keys for pam, as output by pamu2fcfg\npamu2fcfg -N -i “pam://nixos-android-builder” -o “pam://nixos-android-builder” -u “user”\n\nservices.keylime-agent.enable\n\nType: boolean\nDefault: false\nWhether to enable Keylime push model agent for TPM-based remote attestation.\n\nservices.keylime-agent.logLevel\n\nType: string\nDefault: \"keylime_push_model_agent=info,keylime=info\"\nRUST_LOG filter string for the agent. For example \"keylime_agent=debug,keylime=info\".\n\nservices.keylime-agent.package\n\nType: package\nDefault: &lt;derivation keylime-agent-0.2.9&gt;\nThe keylime-agent (Rust) package to use.\n\nservices.keylime-agent.settings\n\nType: attribute set of (string or signed integer or boolean or list of string)\nDefault: { }\nFreeform settings for agent.conf under the [agent] section. Keys should use snake_case INI names matching the Rust keylime-agent config. Values are merged over built-in defaults (rust-keylime v0.2.9).\nNote: registrar_ip, verifier_url, and CA cert paths are configured at boot from /boot/attestation-server.json (written by configure-disk-image set-attestation-server). Build-time overrides here will be replaced at runtime if that file exists.\n\nservices.keylime.autoEnroll.enable\n\nType: boolean\nDefault: false\nWhether to enable automatic enrollment of new Keylime agents with measured boot policy.\n\nservices.keylime.autoEnroll.enrollPort\n\nType: 16 bit unsigned integer; between 0 and 65535 (both inclusive)\nDefault: 8893\nHTTPS port for the measured boot report endpoint.\n\nservices.keylime.autoEnroll.pollInterval\n\nType: signed integer\nDefault: 10\nSeconds between polling the registrar for new agents.\n\nservices.keylime.enable\n\nType: boolean\nDefault: false\nWhether to enable Keylime TPM-based remote attestation server.\n\nservices.keylime.gitServer.authPort\n\nType: 16 bit unsigned integer; between 0 and 65535 (both inclusive)\nDefault: 8895\nLocalhost port for the attestation auth subrequest backend. Only reachable from nginx on the same host.\n\nservices.keylime.gitServer.enable\n\nType: boolean\nDefault: false\nWhether to enable attestation-gated git HTTP server.\n\nservices.keylime.gitServer.port\n\nType: 16 bit unsigned integer; between 0 and 65535 (both inclusive)\nDefault: 443\nHTTPS port nginx listens on for git clone requests.\n\nservices.keylime.gitServer.repoDir\n\nType: absolute path\nDefault: \"/var/lib/keylime-git/repos\"\nDirectory containing bare git repositories served to attested agents.\n\nservices.keylime.gitServer.repos\n\nType: list of string\nDefault: [ ]\nBare git repositories to create on first boot (without the .git suffix).\n\nservices.keylime.logLevel\n\nType: one of \"DEBUG\", \"INFO\", \"WARNING\", \"ERROR\", \"CRITICAL\"\nDefault: \"INFO\"\nLog level for keylime services.\n\nservices.keylime.logLevelOverrides\n\nType: attribute set of (one of \"DEBUG\", \"INFO\", \"WARNING\", \"ERROR\", \"CRITICAL\")\nDefault: {\n  \"keylime.authorization.manager\" = \"WARNING\";\n  \"keylime.web\" = \"WARNING\";\n}\nPer-logger log level overrides. Keys are Python logger qualnames (e.g. keylime.web), values are log levels.\nBy default, the noisy keylime.web and keylime.authorization.manager loggers are set to WARNING to suppress routine per-request INFO messages. Set to { } to restore the previous behaviour.\n\nservices.keylime.measuredBootPolicyPath\n\nType: absolute path\nDefault: \"/nix/store/13bjb1y1nr3w80vksxav2np7bbhkliq0-python3.13-keylime-measured-boot-policy-0.1.0/lib/python3.13/site-packages\"\nDirectory containing the measured boot policy Python module. Added to the verifier’s PYTHONPATH. The module must register a policy name matching measured_boot_policy_name in verifier.conf.\n\nservices.keylime.package\n\nType: package\nDefault: &lt;derivation keylime-7.14.1-unstable-2026-04-02&gt;\nThe keylime package to use.\n\nservices.keylime.registrar.enable\n\nType: boolean\nDefault: false\nWhether to enable Keylime registrar service.\n\nservices.keylime.registrar.settings\n\nType: attribute set of (string or signed integer or boolean or list of string or attribute set of (string or signed integer or boolean or list of string))\nDefault: { }\nSettings for registrar.conf [registrar] section.\n\nservices.keylime.tenant.settings\n\nType: attribute set of (string or signed integer or boolean or list of string or attribute set of (string or signed integer or boolean or list of string))\nDefault: { }\nSettings for tenant.conf [tenant] section.\n\nservices.keylime.tls.autoGenerate\n\nType: boolean\nDefault: true\nAutomatically generate a self-signed CA and mTLS certificates in /var/lib/keylime/tls/ on first activation. Existing certificates are never overwritten.\n\nservices.keylime.tls.certLifetime\n\nType: signed integer\nDefault: 365\nValidity period in days for generated certificates.\n\nservices.keylime.tls.subjectAlternativeNames\n\nType: list of string\nDefault: [ ]\nAdditional Subject Alternative Names for the server certificate. Host IPs are auto-discovered; use this for extra DNS names or IPs.\n\nservices.keylime.verifier.enable\n\nType: boolean\nDefault: false\nWhether to enable Keylime verifier service.\n\nservices.keylime.verifier.settings\n\nType: attribute set of (string or signed integer or boolean or list of string or attribute set of (string or signed integer or boolean or list of string))\nDefault: { }\nSettings for verifier.conf. A nested revocations attrset maps to the [revocations] INI section.",
+    "crumbs": [
+      "Reference",
+      "<span class='chapter-number'>14</span>  <span class='chapter-title'>NixOS Options Reference</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/troubleshooting.html",
+    "href": "chapters/troubleshooting.html",
+    "title": "15  Troubleshooting",
+    "section": "",
+    "text": "15.1 Secure Boot\n“Secure Boot is disabled” error on boot\nKeys won’t enroll\nEnsure Setup Mode, not User Mode with existing keys:\nBoot fails after key enrollment\nRe-sign with the correct keystore and verify:",
+    "crumbs": [
+      "Reference",
+      "<span class='chapter-number'>15</span>  <span class='chapter-title'>Troubleshooting</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/troubleshooting.html#secure-boot",
+    "href": "chapters/troubleshooting.html#secure-boot",
+    "title": "15  Troubleshooting",
+    "section": "",
+    "text": "Enter firmware setup (F2/F12/Del during POST)\nNavigate to Security → Secure Boot → Enable\nSave and reboot\n\n\n\n\nSecurity → Secure Boot → Key Management → Clear All Keys / Reset to Setup Mode\nSave and reboot\n\n\n\nnix run .#configure-disk-image -- status --keystore ./keys --device &lt;image&gt;",
+    "crumbs": [
+      "Reference",
+      "<span class='chapter-number'>15</span>  <span class='chapter-title'>Troubleshooting</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/troubleshooting.html#boot",
+    "href": "chapters/troubleshooting.html#boot",
+    "title": "15  Troubleshooting",
+    "section": "15.2 Boot",
+    "text": "15.2 Boot\n“dm-verity: Hash verification failed” — Store partition corrupted. Rebuild and reflash.\nDrops to emergency shell — Check journalctl -e. Common causes: disk too small (needs 250 GB), hardware compatibility.",
+    "crumbs": [
+      "Reference",
+      "<span class='chapter-number'>15</span>  <span class='chapter-title'>Troubleshooting</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/troubleshooting.html#android-build",
+    "href": "chapters/troubleshooting.html#android-build",
+    "title": "15  Troubleshooting",
+    "section": "15.3 Android Build",
+    "text": "15.3 Android Build\nfetch-android fails with network errors — For air-gapped environments:\nfetch-android --repo-manifest-url=https://your-internal-mirror/platform/manifest\nbuild-android fails with “command not found” — Verify FHS bind mounts:\nmount | grep -E '/bin|/lib'\nls -la /bin/bash /lib/ld-linux-x86-64.so.2\nBuild outputs disappeared after reboot — Enable artifact storage: set nixosAndroidBuilder.artifactStorage.enable = true. See Chapter 4.",
+    "crumbs": [
+      "Reference",
+      "<span class='chapter-number'>15</span>  <span class='chapter-title'>Troubleshooting</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/troubleshooting.html#attestation",
+    "href": "chapters/troubleshooting.html#attestation",
+    "title": "15  Troubleshooting",
+    "section": "15.4 Attestation",
+    "text": "15.4 Attestation\nAgent registers but is not enrolled (see Chapter 8 for ports and PKI) — Check journalctl -u keylime-auto-enroll. The daemon waits for both registration AND a measured boot report. Common causes:\n\nreport-measured-boot-state service failed (check journalctl -u report-measured-boot-state)\nmTLS certificate issues\nPort 8893 not reachable\n\nAgent enrolled but fails attestation — Delete enrollment and re-enroll:\nkeylime_tenant -c delete -u &lt;agent-uuid&gt; -v &lt;verifier-ip&gt; -vp 8881",
+    "crumbs": [
+      "Reference",
+      "<span class='chapter-number'>15</span>  <span class='chapter-title'>Troubleshooting</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/troubleshooting.html#vm-testing",
+    "href": "chapters/troubleshooting.html#vm-testing",
+    "title": "15  Troubleshooting",
+    "section": "15.5 VM Testing",
+    "text": "15.5 VM Testing\n“KVM not available” — Enable VT-x/AMD-V in BIOS. Verify: lsmod | grep kvm\nCan’t exit VM — systemctl poweroff or close the QEMU window.",
+    "crumbs": [
+      "Reference",
+      "<span class='chapter-number'>15</span>  <span class='chapter-title'>Troubleshooting</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/glossary.html",
+    "href": "chapters/glossary.html",
+    "title": "16  Glossary",
+    "section": "",
+    "text": "AK\n\nAttestation Key. A TPM-resident key used by the keylime agent to sign attestation quotes.\n\nAOSP\n\nAndroid Open Source Project. The publicly available source code for Android maintained by Google.\n\nAttestation\n\nThe process of a remote party (verifier) confirming that a machine is running expected software on genuine hardware, based on TPM-signed measurements.\n\ndm-verity\n\nA Linux kernel feature that provides transparent integrity checking of block devices using a Merkle tree.\n\nEFI/UEFI\n\nUnified Extensible Firmware Interface. The modern firmware interface between the operating system and hardware, replacing legacy BIOS.\n\nEK\n\nEndorsement Key. A unique, manufacturer-provisioned key in the TPM that serves as the device’s hardware identity. Used by the keylime agent to derive a stable UUID.\n\nerofs\n\nEnhanced Read-Only File System. A compressed, read-only filesystem used for the immutable store partition.\n\nESP\n\nEFI System Partition. A FAT-formatted partition containing files needed to boot.\n\nFHS\n\nFilesystem Hierarchy Standard. A standard defining the directory structure and contents of traditional Linux systems (e.g., /bin, /lib, /usr).\n\nFlake\n\nA Nix mechanism for defining reproducible projects with locked dependencies. This project is a flake (see flake.nix).\n\ninitrd\n\nInitial RAM Disk. A temporary root filesystem loaded into memory during boot, used to prepare the real root filesystem.\n\nkeylime_tenant\n\nKeylime’s upstream CLI tool for enrolling and managing agents with the verifier.\n\nKeylime\n\nAn open-source TPM-based remote attestation framework. Consists of an agent, registrar, and verifier.\n\nKVM\n\nKernel-based Virtual Machine. Linux kernel module for hardware-assisted virtualization.\n\nLUKS\n\nLinux Unified Key Setup. The standard system for Linux disk encryption.\n\nlunch\n\nAOSP’s build configuration selector. Chooses the target product, variant, and build type.\n\nmTLS\n\nMutual TLS. A TLS connection where both client and server authenticate with certificates. Used between keylime components.\n\nNvPCR\n\nNon-Volatile PCR anchoring. A systemd mechanism (systemd-tpm2-setup.service) that extends PCR 9 at runtime, not captured in the UEFI event log.\n\nPAM\n\nPluggable Authentication Modules. The Linux framework for pluggable authentication.\n\npam_u2f\n\nA PAM module for U2F/FIDO2 authentication with hardware tokens such as YubiKeys.\n\nQEMU\n\nA machine emulator and virtualizer. Used for VM-based testing of builder and installer images.\n\nNix\n\nA purely functional package manager and build system that enables reproducible, declarative builds.\n\nNixOS\n\nA Linux distribution built on Nix, where the entire system configuration is declared in Nix expressions.\n\nnixpkgs\n\nThe main repository of Nix packages, containing build instructions for tens of thousands of software packages.\n\nPCR\n\nPlatform Configuration Register. A set of SHA-256 registers inside the TPM that accumulate measurements of firmware, boot configuration, and software components. Used for attestation and credential binding.\n\nPK/KEK/DB\n\nPlatform Key, Key Exchange Key, and Signature Database. Keys used by UEFI Secure Boot to verify boot components.\n\nrepo\n\nGoogle’s tool for managing multiple Git repositories, used extensively in AOSP development.\n\nSBOM\n\nSoftware Bill of Materials. A formal inventory of all components and dependencies in a piece of software.\n\nSOPS\n\nSecrets OPerationS. A tool for encrypting/decrypting secrets files, supporting age, GPG, and cloud KMS backends.\n\nSCRTM\n\nStatic Root of Trust for Measurement. The initial firmware code that begins the TPM measurement chain at boot.\n\nSecure Boot\n\nA UEFI feature that ensures only cryptographically signed software can be booted.\n\nSetup Mode\n\nA Secure Boot state where custom keys can be enrolled. The firmware accepts new keys without signature verification.\n\nSLSA\n\nSupply-chain Levels for Software Artifacts. A tiered framework for verifying build artifact integrity and provenance.\n\nsystemd-creds\n\nA systemd mechanism for encrypting and decrypting credentials, optionally bound to the TPM.\n\nsystemd-pcrphase\n\nA systemd service that extends PCR 11 with boot phase strings (sysinit, ready, etc.) at runtime.\n\nsystemd-stub\n\nThe EFI stub embedded in a Unified Kernel Image. Measures UKI PE sections into PCR 11 and event tags into PCR 9.\n\nsystemd-repart\n\nA systemd tool for declaratively creating and managing disk partitions at build time and boot time.\n\nTOFU\n\nTrust on First Use. A security model where the first connection is accepted without verification; subsequent connections are validated against the initial state.\n\ntuigreet\n\nA TUI-based login greeter used by the desktop variant.\n\nTPM\n\nTrusted Platform Module. A dedicated security chip that provides hardware-based cryptographic functions and key storage.\n\nUKI\n\nUnified Kernel Image. A single EFI executable containing the Linux kernel, initrd, and boot parameters.\n\nsystem-manager\n\nA tool by numtide that applies NixOS-style module configurations to non-NixOS Linux distributions. Used to deploy the attestation server.\n\nUSBGuard\n\nA Linux framework for blocking unauthorized USB devices. Used during unattended builds to prevent data exfiltration.",
+    "crumbs": [
+      "Reference",
+      "<span class='chapter-number'>16</span>  <span class='chapter-title'>Glossary</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/demo-runbook.html",
+    "href": "chapters/demo-runbook.html",
+    "title": "17  Demo Runbook: Attestation-Gated Git",
+    "section": "",
+    "text": "17.1 What We’re Showing\nAudience: demo operator (presenting to executives / customers) Format: two machines side by side (~10 min)\nSee Chapter 9 for the technical reference.\nA builder machine can only clone the Android signing-keys repository if its TPM attestation is passing. Revoking via attestation-ctl locks it out instantly — no reboot, no certificate rotation, no firewall change.",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>17</span>  <span class='chapter-title'>Demo Runbook: Attestation-Gated Git</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/demo-runbook.html#pre-demo-prep",
+    "href": "chapters/demo-runbook.html#pre-demo-prep",
+    "title": "17  Demo Runbook: Attestation-Gated Git",
+    "section": "17.2 Pre-Demo Prep",
+    "text": "17.2 Pre-Demo Prep\n\n17.2.1 1. Populate demo repository on the server\ngit init --bare /var/lib/keylime-git/repos/android-signing-keys.git\n# seed with realistic content (README + dummy keys)\ngit -C /var/lib/keylime-git/repos/android-signing-keys.git update-server-info\nln -s /etc/keylime-git/hooks/post-receive \\\n      /var/lib/keylime-git/repos/android-signing-keys.git/hooks/post-receive\n\n\n17.2.2 2. Verify agent credentials\nClient cert and key are written to /run/keylime-git/ by report-measured-boot-state. The keylime-git-clone wrapper configures git automatically.\nPreflight:\nkeylime-git-clone https://&lt;server-ip&gt;/android-signing-keys.git /tmp/preflight\nls /tmp/preflight/keys/\nrm -rf /tmp/preflight\n\n\n17.2.3 3. Terminal layout\nServer — tmux, 3 panes:\n\nTop-left: ready for attestation-ctl\nTop-right: journalctl -fu keylime-git-auth (live ALLOW/DENY stream)\nBottom: ready for attestation-ctl remove &lt;uuid&gt;\n\nAgent — one clean pane at ~.\n\n\n17.2.4 4. Checklist (30 min before)\n\nAgent booted, attestation passing (attestation-ctl status shows PASS)\nPreflight clone succeeds\njournalctl -fu keylime-git-auth running\nBoth screens visible",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>17</span>  <span class='chapter-title'>Demo Runbook: Attestation-Gated Git</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/demo-runbook.html#live-script",
+    "href": "chapters/demo-runbook.html#live-script",
+    "title": "17  Demo Runbook: Attestation-Gated Git",
+    "section": "17.3 Live Script",
+    "text": "17.3 Live Script\n\n17.3.1 Act 1 — The problem (1 min, verbal)\n\n“This builder produces Android images signed with production keys. Those keys live in a git repo. How do you make sure only a legitimate, unmodified builder gets them?”\n\n\n\n17.3.2 Act 2 — Attestation status (2 min)\nattestation-ctl status\n\n“The server continuously verifies this machine’s firmware, bootloader, and OS via the TPM. It passed 12 seconds ago.”\n\n\n\n17.3.3 Act 3 — Attested clone (2 min)\nOn the agent:\nkeylime-git-clone https://&lt;server-ip&gt;/android-signing-keys.git\nls android-signing-keys/keys/\nServer log shows: ALLOW aabbccdd-… — agent is attested\n\n\n17.3.4 Act 4 — Revocation (3 min)\nOn the server:\nattestation-ctl remove &lt;uuid&gt;\nOn the agent:\nkeylime-git-clone https://&lt;server-ip&gt;/android-signing-keys.git /tmp/second\n# fatal: 403\nServer log shows: DENY aabbccdd-… — agent not enrolled\n\n“Same machine. Same certificate. Only the attestation status changed.”\n\n\n\n17.3.5 Act 5 — Q&A (2 min)\n\n\n\n\n\n\n\nQuestion\nAnswer\n\n\n\n\nStolen certificate?\nServer checks live attestation status on every request.\n\n\nFaked TPM / VM?\nEK certificate verified against manufacturer CA.\n\n\nHow often re-checked?\nEvery git request; verifier re-attests every 2 seconds.\n\n\nCan the builder push?\nNo — read-only from agent side.",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>17</span>  <span class='chapter-title'>Demo Runbook: Attestation-Gated Git</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/demo-runbook.html#recovery",
+    "href": "chapters/demo-runbook.html#recovery",
+    "title": "17  Demo Runbook: Attestation-Gated Git",
+    "section": "17.4 Recovery",
+    "text": "17.4 Recovery\nRe-enroll after demo:\nsystemctl restart keylime-auto-enroll   # on server\n# wait ~30 seconds\nattestation-ctl status",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>17</span>  <span class='chapter-title'>Demo Runbook: Attestation-Gated Git</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/contributing.html",
+    "href": "chapters/contributing.html",
+    "title": "18  Contributing",
+    "section": "",
+    "text": "18.1 Quick Reference",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>18</span>  <span class='chapter-title'>Contributing</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/contributing.html#quick-reference",
+    "href": "chapters/contributing.html#quick-reference",
+    "title": "18  Contributing",
+    "section": "",
+    "text": "Task\nCommand\n\n\n\n\nBuild disk image\nnix build .#image\n\n\nRun builder VM\nnix run .#run-vm\n\n\nRun desktop VM (GNOME)\nnix run .#run-desktop-gnome-vm\n\n\nRun all checks\nnix flake check\n\n\nFormat code\nnix fmt\n\n\nEnter dev shell\nnix develop\n\n\nBuild this manual\nnix run .#build-book",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>18</span>  <span class='chapter-title'>Contributing</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/contributing.html#development-workflow",
+    "href": "chapters/contributing.html#development-workflow",
+    "title": "18  Contributing",
+    "section": "18.2 Development Workflow",
+    "text": "18.2 Development Workflow\n\nEdit modules in modules/\nBuild: nix build .#image\nTest in VM: nix run .#run-vm\nRun checks: nix flake check\nFormat: nix fmt",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>18</span>  <span class='chapter-title'>Contributing</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/contributing.html#tests",
+    "href": "chapters/contributing.html#tests",
+    "title": "18  Contributing",
+    "section": "18.3 Tests",
+    "text": "18.3 Tests\nNixOS VM tests verify the build environment, Secure Boot, dm-verity, installer, and attestation:\nnix build -L .#checks.x86_64-linux.integration\nnix build -L .#checks.x86_64-linux.installer\nnix build -L .#checks.x86_64-linux.keylime\nnix build -L .#checks.x86_64-linux.keylime-auto-enroll\nTests are only re-run when inputs change. Pass --keep-vm-state to preserve VM state for iterative debugging.",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>18</span>  <span class='chapter-title'>Contributing</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/contributing.html#project-structure",
+    "href": "chapters/contributing.html#project-structure",
+    "title": "18  Contributing",
+    "section": "18.4 Project Structure",
+    "text": "18.4 Project Structure\nflake.nix                     # Flake definition\nconfiguration.nix             # Builder config (site-specific)\ndesktop-configuration.nix     # Desktop config (site-specific)\n\nmodules/                      # NixOS modules\n├── image.nix                 # Disk image layout (largest module)\n├── android-build-env.nix     # AOSP build toolchain\n├── fhsenv.nix                # FHS compatibility layer\n├── keylime.nix               # Keylime server\n├── keylime-agent.nix         # Keylime agent\n├── secure-boot.nix           # Secure Boot / UKI\n├── credential-storage.nix    # TPM credential storage\n├── yubikey-auth.nix          # YubiKey PAM\n├── unattended.nix            # Unattended build pipeline\n└── ...\n\npackages/                     # Custom Nix packages\nsystem-manager/               # Keylime server for non-NixOS\ntests/                        # NixOS integration tests\ndocs/                         # This manual (Quarto)",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>18</span>  <span class='chapter-title'>Contributing</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/contributing.html#security-notes",
+    "href": "chapters/contributing.html#security-notes",
+    "title": "18  Contributing",
+    "section": "18.5 Security Notes",
+    "text": "18.5 Security Notes\n\nNever commit keys — keys/ is gitignored\nUKI signing runs outside Nix to avoid leaking keys into /nix/store\nDebug mode gives unauthenticated root — production must disable it",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>18</span>  <span class='chapter-title'>Contributing</span>"
+    ]
+  }
+]
