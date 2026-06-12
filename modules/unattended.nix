@@ -7,6 +7,7 @@
 let
   cfg = config.nixosAndroidBuilder.unattended;
   user = config.users.users.user;
+  numGroups = builtins.length config.security.pam.multiparty.groups;
 
   disable-usb-guard = pkgs.writeShellScriptBin "disable-usb-guard" ''
     set -euo pipefail
@@ -43,9 +44,31 @@ let
     tput ed
     echo "NOTE: The system will turn off after exiting this shell"
     echo "Build outputs are in /var/lib/artifacts"
-    echo "Please touch your YubiKey to authenticate..."
+    echo "Insert both YubiKeys, then touch each one when prompted and enter its PIN."
     login user
     systemctl poweroff
+  '';
+
+  # Pre-build escape hatch: gives the operator 30s to insert *both*
+  # YubiKeys before the unattended pipeline starts. We only hand off
+  # to `login` once we see at least two YubiKey USB devices, because
+  # piv-multiparty requires co-presence and a partial set would fail
+  # auth — burning the operator's only chance to log in before the build.
+  start-shell-if-yubikey-found = pkgs.writeShellScriptBin "start-shell-if-yubikey-found" ''
+    set -euo pipefail
+    ELAPSED=0
+    echo "Insert all ${toString numGroups} YubiKeys in the next 30 seconds to start interactive shell"
+    while [ $ELAPSED -lt 30 ]; do
+      yk_count=$(lsusb | grep -ic 'yubikey' || true)
+      if [ "$yk_count" -ge ${toString numGroups} ]; then
+        tput sgr0
+        tput ed
+        echo "Found $yk_count YubiKeys. Touch each one when prompted and enter its PIN."
+        exec login user
+      fi
+      sleep 1
+      ELAPSED=$((ELAPSED + 1))
+    done
   '';
 in
 {
@@ -84,6 +107,7 @@ in
       disable-usb-guard
       lock-var-lib-build
       start-shell-and-shutdown
+      start-shell-if-yubikey-found
     ];
 
     # disable gettty on tty1 and 2 (logins on tty)
