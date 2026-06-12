@@ -105,10 +105,12 @@ Server log shows: `DENY aabbccdd-… — agent not enrolled`
 
 ## Recovery
 
-Re-enroll after demo:
+Re-enroll after demo. The agent must re-register (reboot it or restart `keylime-agent`):
 
 ```bash
-systemctl restart keylime-auto-enroll   # on server
-# wait ~30 seconds
+# On the agent — re-register with registrar and re-POST refstate
+systemctl reboot
+
+# On the server — wait for auto-enrollment (~30 seconds after agent boots)
 attestation-ctl status
 ```

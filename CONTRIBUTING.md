@@ -6,7 +6,7 @@
 |------|---------|
 | Build disk image | `nix build .#image` |
 | Run builder VM | `nix run .#run-vm` |
-| Run desktop VM (GNOME) | `nix run .#run-desktop-vm` |
+| Run desktop VM | `nix run .#run-desktop-vm` |
 | Run all checks | `nix flake check` |
 | Format code | `nix fmt` |
 | Enter dev shell | `nix develop` |

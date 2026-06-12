@@ -1,6 +1,6 @@
 # Desktop Variant {#sec-desktop}
 
-A persistent NixOS workstation with optional GNOME, intended for physical hardware.
+A persistent NixOS desktop, intended for physical hardware.
 
 ## Prerequisites
 
