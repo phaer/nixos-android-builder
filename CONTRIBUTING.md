@@ -4,13 +4,13 @@
 
 | Task | Command |
 |------|---------|
-| Build disk image | `nix build .#image#image` |
+| Build disk image | `nix build .#image` |
 | Run builder VM | `nix run .#run-vm` |
 | Run desktop VM (GNOME) | `nix run .#run-desktop-vm` |
 | Run all checks | `nix flake check` |
 | Format code | `nix fmt` |
 | Enter dev shell | `nix develop` |
-| Build docs (HTML) | `nix build .#image#book-html` |
+| Build docs (HTML) | `nix build .#book-html` |
 | Build docs (HTML+PDF) | `nix run .#build-book` |
 | Preview docs | `nix run .#preview-book` |
 
@@ -49,14 +49,14 @@ The `keylime-auto-enroll` test exercises the full auto-enrollment flow: agent re
 
 ```bash
 # Images
-nix build .#image#image                    # Builder image
-nix build .#image#installer-image          # Disk installer
-nix build .#image#desktop-installer-image  # Desktop installer
+nix build .#image                    # Builder image
+nix build .#installer-image          # Disk installer
+nix build .#desktop-installer-image  # Desktop installer
 
 # Individual packages
-nix build .#image#keylime
-nix build .#image#keylime-agent
-nix build .#image#attestation-ctl
+nix build .#keylime
+nix build .#keylime-agent
+nix build .#attestation-ctl
 ```
 
 ## Project Structure
@@ -95,7 +95,7 @@ docs/                         # Documentation (Pandoc → PDF)
 Docs are in `docs/chapters/` as Markdown/QMD, built into an HTML site + PDF book via [Quarto](https://quarto.org). Mermaid diagrams render client-side in HTML, via chromium for PDF (typst). NixOS options are auto-generated from module declarations via a Lua filter.
 
 ```bash
-nix build .#image#book-html        # hermetic HTML site → result/
+nix build .#book-html        # hermetic HTML site → result/
 nix run .#build-book          # HTML + PDF → docs/_output/
 nix run .#preview-book        # live reload
 ```

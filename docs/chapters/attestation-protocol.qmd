@@ -71,7 +71,7 @@ sequenceDiagram
 
     V->>A: 8. Nonce + PCR selection
     A->>V: TPM quote + event log
-    Note over V: 9. Validate: AK signature,<br/>nonce, event log replay,<br/>PCR match (0,1,2,3,4,5,7)
+    Note over V: 9. Validate: AK signature,<br/>nonce, event log replay,<br/>PCRs 0-7 (log) + 9,11 (quote)
 ```
 
 ## Measured Boot Reference State

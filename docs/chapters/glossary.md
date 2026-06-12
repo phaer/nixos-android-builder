@@ -3,7 +3,6 @@
 AK
 :   Attestation Key. A TPM-resident key used by the Keylime agent to sign attestation quotes.
 
-
 AOSP
 :   Android Open Source Project. The publicly available source code for Android maintained by Google.
 
@@ -44,12 +43,12 @@ initrd
 :   Initial RAM Disk. A temporary root filesystem loaded into memory during boot, used to prepare the real root filesystem.
 
 
-keylime_tenant
-:   Keylime's upstream CLI tool for enrolling and managing agents with the verifier.
-
-
 Keylime
 :   An open-source TPM-based remote attestation framework. Consists of an agent, registrar, and verifier.
+
+
+keylime_tenant
+:   Keylime's upstream CLI tool for enrolling and managing agents with the verifier.
 
 
 KVM
@@ -68,22 +67,6 @@ mTLS
 :   Mutual TLS. A TLS connection where both client and server authenticate with certificates. Used between keylime components.
 
 
-NvPCR
-:   Non-Volatile PCR anchoring. A systemd mechanism (`systemd-tpm2-setup.service`) that extends PCR 9 at runtime, not captured in the UEFI event log.
-
-
-PAM
-:   Pluggable Authentication Modules. The Linux framework for pluggable authentication.
-
-
-pam_u2f
-:   A PAM module for U2F/FIDO2 authentication with hardware tokens such as YubiKeys.
-
-
-QEMU
-:   A machine emulator and virtualizer. Used for VM-based testing of builder and installer images.
-
-
 Nix
 :   A purely functional package manager and build system that enables reproducible, declarative builds.
 
@@ -96,6 +79,18 @@ nixpkgs
 :   The main repository of Nix packages, containing build instructions for tens of thousands of software packages.
 
 
+NvPCR
+:   Non-Volatile PCR anchoring. A systemd mechanism (`systemd-tpm2-setup.service`) that extends PCR 9 at runtime, not captured in the UEFI event log.
+
+
+PAM
+:   Pluggable Authentication Modules. The Linux framework for pluggable authentication.
+
+
+pam_u2f
+:   A PAM module for U2F/FIDO2 authentication with hardware tokens such as YubiKeys.
+
+
 PCR
 :   Platform Configuration Register. A set of SHA-256 registers inside the TPM that accumulate measurements of firmware, boot configuration, and software components. Used for attestation and credential binding.
 
@@ -104,16 +99,16 @@ PK/KEK/DB
 :   Platform Key, Key Exchange Key, and Signature Database. Keys used by UEFI Secure Boot to verify boot components.
 
 
+QEMU
+:   A machine emulator and virtualizer. Used for VM-based testing of builder and installer images.
+
+
 repo
 :   Google's tool for managing multiple Git repositories, used extensively in AOSP development.
 
 
 SBOM
 :   Software Bill of Materials. A formal inventory of all components and dependencies in a piece of software.
-
-
-SOPS
-:   Secrets OPerationS. A tool for encrypting/decrypting secrets files, supporting age, GPG, and cloud KMS backends.
 
 
 SCRTM
@@ -132,6 +127,14 @@ SLSA
 :   Supply-chain Levels for Software Artifacts. A tiered framework for verifying build artifact integrity and provenance.
 
 
+SOPS
+:   Secrets OPerationS. A tool for encrypting/decrypting secrets files, supporting age, GPG, and cloud KMS backends.
+
+
+system-manager
+:   A tool by numtide that applies NixOS-style module configurations to non-NixOS Linux distributions. Used to deploy the attestation server.
+
+
 systemd-creds
 :   A systemd mechanism for encrypting and decrypting credentials, optionally bound to the TPM.
 
@@ -140,34 +143,30 @@ systemd-pcrphase
 :   A systemd service that extends PCR 11 with boot phase strings (`sysinit`, `ready`, etc.) at runtime.
 
 
+systemd-repart
+:   A systemd tool for declaratively creating and managing disk partitions at build time and boot time.
+
+
 systemd-stub
 :   The EFI stub embedded in a Unified Kernel Image. Measures UKI PE sections into PCR 11 and event tags into PCR 9.
 
 
 
 
-systemd-repart
-:   A systemd tool for declaratively creating and managing disk partitions at build time and boot time.
-
-
 TOFU
 :   Trust on First Use. A security model where the first connection is accepted without verification; subsequent connections are validated against the initial state.
-
-
-tuigreet
-:   A TUI-based login greeter used by the desktop variant.
 
 
 TPM
 :   Trusted Platform Module. A dedicated security chip that provides hardware-based cryptographic functions and key storage.
 
 
+tuigreet
+:   A TUI-based login greeter used by the desktop variant.
+
+
 UKI
 :   Unified Kernel Image. A single EFI executable containing the Linux kernel, initrd, and boot parameters.
-
-
-system-manager
-:   A tool by numtide that applies NixOS-style module configurations to non-NixOS Linux distributions. Used to deploy the attestation server.
 
 
 USBGuard

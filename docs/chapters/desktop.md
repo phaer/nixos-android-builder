@@ -11,17 +11,8 @@ A persistent NixOS workstation with optional GNOME, intended for physical hardwa
 
 ## Build
 
-Shell (minimal) desktop:
-
 ```bash
 nix build -L .#desktop-installer-image
-install -m 600 result/disk-installer.raw desktop-installer.raw
-```
-
-GNOME desktop:
-
-```bash
-nix build -L .#desktop-gnome-installer-image
 install -m 600 result/disk-installer.raw desktop-installer.raw
 ```
 
